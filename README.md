@@ -1,6 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SplitIt. 🧾
 
-## Getting Started
+**Bahagi bill cara tenang.**
+A modern, mobile-first Split Bill application built with a **Neo-Brutalism** design aesthetic. Designed to solve the headache of splitting complex receipts with friends, complete with tax calculations, discount distribution, and DuitNow QR integration.
+
+🔗 **Live Demo:** [https://splitit-kmlxly.vercel.app](https://splitit-kmlxly.vercel.app) *(Gantikan link sebenar jika ada)*
+
+## ✨ Features
+
+### v1.8.0 (Latest Build)
+- 🎨 **Neo-Brutalism UI:** High contrast, hard shadows, and bold typography. Supports Dark/Light mode.
+- 🧮 **Hybrid Splitting Logic:**
+  - **Kongsi Rata:** Equal split for simple meals.
+  - **Split Item:** Individual itemized entry.
+  - **Smart Tax/Discount:** Distribute tax/service charge proportionally or equally. Handles discounts logic flawlessly.
+- 💾 **Local Persistence:** Auto-saves all data (People, Bills, Payment Profiles) to device storage.
+- 💳 **Payment Profiles:** Store Bank Info & Upload **DuitNow QR** for each user.
+- ✅ **Settlement Tracker:** Mark debts as "PAID" or "UNPAID" visually.
+- 📸 **Share as Image:** Generate a beautiful receipt card image to share directly to WhatsApp/Telegram (powered by `html2canvas`).
+
+## 🛠 Tech Stack
+
+- **Framework:** [Next.js 14](https://nextjs.org/) (App Router)
+- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+- **Icons:** [Lucide React](https://lucide.dev/)
+- **Image Gen:** [html2canvas](https://html2canvas.hertzen.com/)
+- **Deployment:** Vercel
+
+## 🚀 Getting Started
 
 First, run the development server:
 
@@ -8,29 +34,3 @@ First, run the development server:
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
