@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import Image from "next/image";
+// Guna html2canvas untuk generate resit image
 import html2canvas from "html2canvas";
 import { 
   Moon, Sun, CheckCircle, Trash2, 
@@ -197,53 +197,48 @@ export default function SplitBillBrutalV2() {
   };
   const { netPeople, txs } = calculateSettlement(); const taxGap = getCalcStatus();
 
-  // --- NEW: SHARE AS IMAGE V2 (MOBILE OPTIMIZED) ---
+  // --- IMAGE GENERATION ---
   const handleShareImage = async () => {
     if (!receiptRef.current) return;
     setIsSharing(true);
-    
-    // Tunggu sekejap untuk pastikan DOM dah sedia/gambar load
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 200));
 
     try {
         const canvas = await html2canvas(receiptRef.current, {
-            // Gunakan warna background "container" supaya nampak macam card style
             backgroundColor: darkMode ? "#000000" : "#E5E7EB", 
-            scale: 2, // Scale 2 cukup untuk mobile, 3 mungkin crash kat phone low-ram
+            scale: 2, 
             useCORS: true,
             logging: false,
+            allowTaint: true,
         });
         
         canvas.toBlob(async (blob) => {
             if (blob) {
                 const file = new File([blob], `resit-${activeTransfer?.toName || 'splitit'}.png`, { type: "image/png" });
                 
-                // Cuba Native Share (Mobile)
                 if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
                         await navigator.share({
                             files: [file],
-                            // title/text kadang-kadang browser ignore bila ada file, tapi letak je
-                            title: 'SplitIt Receipt', 
+                            title: 'SplitIt Receipt',
                             text: `Bayaran kepada ${activeTransfer?.toName}`,
                         });
-                    } catch (error) {
-                        console.log("Share user cancelled or failed", error);
-                    }
+                    } catch (error) { console.log("Share cancelled", error); }
                 } else {
-                    // Fallback Desktop
                     const link = document.createElement('a');
                     link.href = canvas.toDataURL();
                     link.download = `resit-${activeTransfer?.toName}.png`;
                     link.click();
-                    alert("Gambar resit disimpan ke Gallery/Download!");
+                    alert("Gambar didownload! (Nota: Native Share perlu HTTPS/Vercel)");
                 }
+            } else {
+                alert("Gagal proses gambar.");
             }
             setIsSharing(false);
-        }, "image/png", 0.9); // Quality 90%
+        }, "image/png");
     } catch (err) {
-        console.error("Failed to generate image", err);
-        alert("Gagal generate gambar. Sila cuba screenshot manual.");
+        console.error(err);
+        alert("Error: Gagal generate gambar.");
         setIsSharing(false);
     }
   };
@@ -280,7 +275,7 @@ export default function SplitBillBrutalV2() {
             <div className="flex justify-between items-center">
                 <a href="/" className="flex items-center gap-3 cursor-pointer group">
                      <div className={`w-12 h-12 border-2 ${darkMode ? "border-white" : "border-black"} rounded-xl flex items-center justify-center overflow-hidden bg-white/10 backdrop-blur group-hover:scale-105 transition-transform`}>
-                        <Image src="/icon.png" width={40} height={40} alt="Logo" className="object-cover"/>
+                        <img src="/icon.png" width={40} height={40} alt="Logo" className="object-cover"/>
                      </div>
                      <div>
                         <h1 className="text-2xl font-black tracking-tight leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
@@ -294,7 +289,6 @@ export default function SplitBillBrutalV2() {
         </header>
 
         <main className="flex-1 p-6 flex flex-col gap-8 relative z-10">
-            
             {/* VIEW: DASHBOARD */}
             {mode === "DASHBOARD" && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -452,12 +446,12 @@ export default function SplitBillBrutalV2() {
                     {/* FOOTER */}
                     <div className="pt-8 pb-4 text-center">
                         <button onClick={() => { if(confirm("Reset semua data?")) { localStorage.clear(); window.location.reload(); }}} className={`flex items-center gap-2 mx-auto text-xs font-bold px-4 py-2 border-2 rounded-xl hover:bg-red-500 hover:text-white hover:border-black transition mb-4 ${darkMode ? "border-red-400 text-red-400" : "border-red-600 text-red-600"}`}><RotateCcw size={14}/> RESET DATA APP</button>
-                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v1.9.0 (Mobile & Social Ready)</p></div>
+                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v1.9.3 (Full Expanded Fix)</p></div>
                     </div>
                 </div>
             )}
 
-            {/* FORM VIEW */}
+            {/* FORM VIEW (FULL EXPANDED) */}
             {mode === "FORM" && (
                 <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
                     <div className="flex items-center gap-4 mb-8">
@@ -468,7 +462,6 @@ export default function SplitBillBrutalV2() {
                     </div>
 
                     <div className={`flex-1 space-y-8 overflow-y-auto pb-6 px-1 ${darkMode ? "scrollbar-thumb-white" : "scrollbar-thumb-black"} scrollbar-thin`}>
-                        {/* BASIC INFO */}
                         <div className={`${cardStyle} p-5 space-y-5 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
                             <div className="space-y-2">
                                 <label className="text-xs uppercase font-black tracking-wider opacity-70">Nama Kedai</label>
@@ -490,7 +483,6 @@ export default function SplitBillBrutalV2() {
                             </div>
                         </div>
 
-                        {/* MODE SELECTOR */}
                         <div className="grid grid-cols-2 gap-3">
                              <button onClick={() => setBillType("EQUAL")} className={`p-4 rounded-xl border-2 text-sm font-black uppercase tracking-wider transition-all flex flex-col items-center gap-2 ${billType === "EQUAL" ? (darkMode ? "border-green-400 bg-green-400/20 text-green-400" : "border-black bg-green-300 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]") : (darkMode ? "border-[#444] opacity-50 hover:opacity-100" : "border-black bg-white opacity-50 hover:opacity-100 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]")}`}>
                                 <span className="text-2xl">🍰</span> KONGSI RATA
@@ -500,7 +492,6 @@ export default function SplitBillBrutalV2() {
                              </button>
                         </div>
 
-                        {/* ITEMIZED */}
                         {billType === "ITEMIZED" && (
                             <div className="space-y-6 animate-in fade-in">
                                 <div className={`${cardStyle} p-5 space-y-4 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
@@ -516,7 +507,6 @@ export default function SplitBillBrutalV2() {
                                     ))}
                                 </div>
 
-                                {/* EXTRAS */}
                                 <div className={`${cardStyle} p-5 space-y-6 ${darkMode ? "bg-[#1E1E1E]" : "bg-violet-100"} ${shadowStyle}`}>
                                     <div className="flex gap-4">
                                         <div className="flex-1 space-y-2">
@@ -530,7 +520,6 @@ export default function SplitBillBrutalV2() {
                                     </div>
                                 </div>
 
-                                {/* CALC STATUS */}
                                 <div className={`p-5 border-2 rounded-xl ${shadowStyle} ${
                                     taxGap > 0.05 ? (darkMode ? "border-blue-400 bg-blue-400/10" : "border-black bg-blue-200") : 
                                     taxGap < -0.05 ? (darkMode ? "border-red-400 bg-red-400/10" : "border-black bg-red-200") : 
@@ -586,85 +575,55 @@ export default function SplitBillBrutalV2() {
                         <div className="space-y-4">
                             <div className="space-y-2"><label className="text-[10px] font-bold uppercase opacity-70">Nama Bank / E-Wallet</label><input placeholder="Maybank / TNG" value={people.find(p=>p.id===paymentProfileId)?.bankName || ""} onChange={e => updatePaymentProfile(paymentProfileId, e.target.value, people.find(p=>p.id===paymentProfileId)?.bankAccount || "", people.find(p=>p.id===paymentProfileId)?.qrImage || "")} className={inputStyle}/></div>
                             <div className="space-y-2"><label className="text-[10px] font-bold uppercase opacity-70">No. Akaun</label><input placeholder="1234567890" value={people.find(p=>p.id===paymentProfileId)?.bankAccount || ""} onChange={e => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", e.target.value, people.find(p=>p.id===paymentProfileId)?.qrImage || "")} className={`${inputStyle} font-mono`}/></div>
-                            <div className="space-y-2 pt-2 border-t border-dashed border-current border-opacity-30"><label className="text-[10px] font-bold uppercase opacity-70 block mb-2">DuitNow QR (Optional)</label><div className="flex items-center gap-3">{people.find(p=>p.id===paymentProfileId)?.qrImage ? (<div className="relative w-16 h-16 border-2 border-current rounded-lg overflow-hidden group"><Image src={people.find(p=>p.id===paymentProfileId)?.qrImage!} layout="fill" objectFit="cover" alt="QR"/><button onClick={() => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", people.find(p=>p.id===paymentProfileId)?.bankAccount || "", "")} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={16} className="text-white"/></button></div>) : (<div className="w-16 h-16 border-2 border-dashed border-current rounded-lg flex items-center justify-center opacity-30"><QrCode size={20}/></div>)}<label className={`flex-1 py-3 px-4 border-2 rounded-xl flex items-center justify-center gap-2 cursor-pointer font-bold uppercase text-[10px] hover:opacity-80 ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}><Upload size={14}/> Upload Image<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, paymentProfileId)}/></label></div></div>
+                            <div className="space-y-2 pt-2 border-t border-dashed border-current border-opacity-30"><label className="text-[10px] font-bold uppercase opacity-70 block mb-2">DuitNow QR (Optional)</label><div className="flex items-center gap-3">{people.find(p=>p.id===paymentProfileId)?.qrImage ? (<div className="relative w-16 h-16 border-2 border-current rounded-lg overflow-hidden group"><img src={people.find(p=>p.id===paymentProfileId)?.qrImage!} className="w-full h-full object-cover" alt="QR"/><button onClick={() => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", people.find(p=>p.id===paymentProfileId)?.bankAccount || "", "")} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={16} className="text-white"/></button></div>) : (<div className="w-16 h-16 border-2 border-dashed border-current rounded-lg flex items-center justify-center opacity-30"><QrCode size={20}/></div>)}<label className={`flex-1 py-3 px-4 border-2 rounded-xl flex items-center justify-center gap-2 cursor-pointer font-bold uppercase text-[10px] hover:opacity-80 ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}><Upload size={14}/> Upload Image<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, paymentProfileId)}/></label></div></div>
                         </div>
                         <button onClick={() => setShowPaymentModal(false)} className={`w-full py-3 mt-5 text-sm font-black uppercase rounded-xl border-2 ${darkMode ? "bg-green-400 text-black border-green-400" : "bg-green-400 text-black border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px]"}`}>SIMPAN PROFILE</button>
                     </div>
                 </div>
             )}
 
-            {/* MODAL: PAY TERMINAL (COMPACT & FRAMED FOR SHARING) */}
+            {/* MODAL: PAY TERMINAL (FIXED SOLID BG FOR BUTTONS) */}
             {showPayModal && activeTransfer && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                    <div className={`w-full max-w-[340px] rounded-2xl overflow-hidden ${darkMode ? "bg-[#1E1E1E] text-white" : "bg-white text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                    <div className={`w-full max-w-[340px] max-h-[85vh] flex flex-col rounded-2xl overflow-hidden ${darkMode ? "bg-[#1E1E1E] text-white" : "bg-white text-black"} shadow-2xl relative animate-in zoom-in-95`}>
                          
-                         {/* HEADER MODAL */}
-                         <div className="p-4 flex justify-between items-center border-b border-white/10">
+                         {/* HEADER */}
+                         <div className="p-4 flex-shrink-0 flex justify-between items-center border-b border-current border-opacity-10">
                             <span className="text-[10px] font-black uppercase tracking-widest opacity-50">SIAP UNTUK SHARE</span>
                             <button onClick={() => setShowPayModal(false)}><X size={20} className="opacity-50 hover:opacity-100"/></button>
                          </div>
 
-                         {/* CONTENT AREA (THIS GETS CAPTURED) */}
-                         <div ref={receiptRef} className={`p-8 flex items-center justify-center ${darkMode ? "bg-[#111]" : "bg-gray-200"}`}>
-                            {/* THE RECEIPT CARD ITSELF */}
-                            <div className={`w-full bg-white text-black p-5 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden`}>
-                                {/* Hole punch effect */}
+                         {/* CONTENT AREA */}
+                         <div className={`flex-1 overflow-y-auto p-6 flex flex-col items-center ${darkMode ? "bg-[#111]" : "bg-gray-200"}`}>
+                            <div ref={receiptRef} className={`w-full bg-white text-black p-5 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden`}>
                                 <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 w-4 h-4 bg-black rounded-full"></div>
-
                                 <div className="text-center border-b-2 border-dashed border-black/20 pb-4 mb-4">
                                     <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">TOTAL BAYARAN</p>
                                     <h2 className="text-3xl font-black font-mono">RM{activeTransfer.amount.toFixed(2)}</h2>
                                 </div>
-
                                 <div className="text-center mb-4">
                                     <p className="text-[9px] font-bold opacity-40 uppercase mb-1">KEPADA</p>
                                     <h3 className="text-xl font-black uppercase leading-none mb-2">{activeTransfer.toName}</h3>
                                     <p className="text-[9px] font-bold opacity-40 uppercase">{people.find(p=>p.id===activeTransfer.toId)?.bankName || "Unknown Bank"}</p>
                                 </div>
-
                                 {people.find(p=>p.id===activeTransfer.toId)?.qrImage ? (
                                     <div className="w-32 h-32 mx-auto border-2 border-black rounded-lg overflow-hidden mb-4">
-                                        <Image src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} layout="fill" objectFit="contain" alt="QR"/>
+                                        <img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} className="w-full h-full object-contain bg-white" alt="QR" crossOrigin="anonymous"/>
                                     </div>
                                 ) : (
-                                    <div className="w-full py-4 border-2 border-dashed border-black/20 rounded-lg flex flex-col items-center justify-center opacity-30 mb-4">
-                                        <QrCode size={24}/>
-                                        <span className="text-[8px] font-bold mt-1">NO QR</span>
-                                    </div>
+                                    <div className="w-full py-4 border-2 border-dashed border-black/20 rounded-lg flex flex-col items-center justify-center opacity-30 mb-4"><QrCode size={24}/><span className="text-[8px] font-bold mt-1">NO QR</span></div>
                                 )}
-
-                                <div className="bg-gray-100 p-2 rounded border border-black/10 text-center">
-                                    <p className="text-[8px] font-bold uppercase opacity-40 mb-1">NO AKAUN</p>
-                                    <p className="font-mono font-black text-sm tracking-wider">{people.find(p=>p.id===activeTransfer.toId)?.bankAccount || "Ask Member"}</p>
-                                </div>
-
-                                <div className="mt-4 pt-2 border-t-2 border-black/10 flex justify-between items-center opacity-40">
-                                    <span className="text-[8px] font-bold tracking-widest">SPLITIT.</span>
-                                    <span className="text-[8px] font-mono">{new Date().toLocaleDateString()}</span>
-                                </div>
+                                <div className="bg-gray-100 p-2 rounded border border-black/10 text-center"><p className="text-[8px] font-bold uppercase opacity-40 mb-1">NO AKAUN</p><p className="font-mono font-black text-sm tracking-wider">{people.find(p=>p.id===activeTransfer.toId)?.bankAccount || "Ask Member"}</p></div>
+                                <div className="mt-4 pt-2 border-t-2 border-black/10 flex justify-between items-center opacity-40"><span className="text-[8px] font-bold tracking-widest">SPLITIT.</span><span className="text-[8px] font-mono">{new Date().toLocaleDateString()}</span></div>
                             </div>
                          </div>
                          
-                         {/* ACTION BUTTONS */}
-                         <div className="p-4 space-y-3 bg-current bg-opacity-5">
+                         {/* FOOTER BUTTONS (NOW WITH SOLID BACKGROUND) */}
+                         <div className={`p-4 flex-shrink-0 space-y-3 border-t-2 ${darkMode ? "bg-black border-white/20" : "bg-white border-black/10"}`}>
                              <button onClick={handleShareImage} disabled={isSharing} className={`w-full py-3 text-xs font-bold uppercase rounded-xl border-2 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-gray-100"}`}>
-                                {isSharing ? <RotateCcw size={14} className="animate-spin"/> : <Share2 size={14}/>} 
-                                {isSharing ? "GENERATING..." : "SHARE GAMBAR RESIT"}
+                                {isSharing ? <RotateCcw size={14} className="animate-spin"/> : <Share2 size={14}/>} {isSharing ? "GENERATING..." : "SHARE GAMBAR RESIT"}
                              </button>
-
-                             <button 
-                                onClick={() => {
-                                    togglePaymentStatus(activeTransfer.fromId, activeTransfer.toId);
-                                    setShowPayModal(false);
-                                }} 
-                                className={`w-full py-3 text-xs font-black uppercase rounded-xl transition-all shadow-lg hover:shadow-none hover:translate-y-[2px] ${
-                                    paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`]
-                                    ? "bg-red-500 text-white" 
-                                    : "bg-green-500 text-black" 
-                                }`}
-                             >
-                                {paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "BATAL / MARK UNPAID" : "✅ DAH TRANSFER"}
-                             </button>
+                             <button onClick={() => {togglePaymentStatus(activeTransfer.fromId, activeTransfer.toId); setShowPayModal(false);}} className={`w-full py-3 text-xs font-black uppercase rounded-xl transition-all shadow-lg hover:shadow-none hover:translate-y-[2px] ${paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "bg-red-500 text-white" : "bg-green-500 text-black"}`}>{paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "BATAL / MARK UNPAID" : "✅ DAH TRANSFER"}</button>
                          </div>
                     </div>
                 </div>
