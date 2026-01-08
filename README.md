@@ -51,17 +51,12 @@ Added visual dashed lines for better ticket/receipt feel.
 Open http://localhost:3000 with your browser to see the result.
 
 📝 Changelog History
-v1.9.3 - Stability & Contrast Fix
-Critical Fix: Resolved syntax errors (Expression expected) by refactoring condensed code blocks.
+v1.9.5 - Stable Release (The "Open Tab" Solution)
+Core Fix: Switched receipt generation method from navigator.share (which fails on non-HTTPS/embedded browsers) to window.open(). This ensures 100% compatibility across iOS and Android.
 
-UI Polish: Added solid background to Pay Modal footer to prevent buttons from blending into the backdrop (High Contrast).
+UI Patch: Forced solid background colors on Modal Footers to fix "Invisible Button" issues in Dark Mode/High Contrast settings.
 
-UX Improvement: Added specific alerts to clarify Native Share vs Download behavior (Browser security).
-
-v1.9.2 - Mobile Patch
-Fixed ArrowRight icon import error.
-
-Tuned html2canvas settings for better mobile rendering.
+Refactor: Expanded code blocks to prevent Parsing ecmascript build errors.
 
 v1.9.0 - Mobile & Social Ready
 UI Overhaul: Redesigned Pay Modal to be slimmer and mobile-friendly.
@@ -78,8 +73,6 @@ Added visual dashed lines for better ticket/receipt feel.
 v1.8.0 - Picture Perfect
 Added feature to generate and share receipt as an image using html2canvas.
 
-Fixed UI visibility issues in Dark Mode headers.
-
 v1.7.0 - Status Tracker
 Added "Mark as Paid" toggle in settlement list.
 
@@ -92,10 +85,6 @@ Added Payment Modal popup with QR display.
 
 v1.5.0 - The Brutal Update
 Rebrand: Total UI overhaul to Neo-Brutalism.
-
-Logic: Added Smart Tax & Service Charge calculations.
-
-Edit Mode: Ability to edit existing bills.
 
 v1.0.0 - Foundation
 Initial release with basic Equal & Itemized split logic.
