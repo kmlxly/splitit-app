@@ -1,13 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-// Guna html2canvas untuk generate resit image
 import html2canvas from "html2canvas";
 import { 
   Moon, Sun, CheckCircle, Trash2, 
   Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X, 
   ChevronDown, ChevronUp, Receipt, Users, AlertCircle, 
-  CreditCard, QrCode, Upload, Wallet, Share2, ArrowRight
+  CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight
 } from "lucide-react";
 
 // --- TYPES ---
@@ -197,10 +196,12 @@ export default function SplitBillBrutalV2() {
   };
   const { netPeople, txs } = calculateSettlement(); const taxGap = getCalcStatus();
 
-  // --- IMAGE GENERATION ---
-  const handleShareImage = async () => {
+  // --- IMAGE GENERATION (V1.9.5: OPEN IN NEW TAB) ---
+  const handleOpenImage = async () => {
     if (!receiptRef.current) return;
     setIsSharing(true);
+    
+    // Tunggu render
     await new Promise(r => setTimeout(r, 200));
 
     try {
@@ -208,37 +209,31 @@ export default function SplitBillBrutalV2() {
             backgroundColor: darkMode ? "#000000" : "#E5E7EB", 
             scale: 2, 
             useCORS: true,
-            logging: false,
             allowTaint: true,
+            logging: false
         });
         
-        canvas.toBlob(async (blob) => {
+        canvas.toBlob((blob) => {
             if (blob) {
-                const file = new File([blob], `resit-${activeTransfer?.toName || 'splitit'}.png`, { type: "image/png" });
+                // Convert to URL
+                const url = URL.createObjectURL(blob);
                 
-                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                    try {
-                        await navigator.share({
-                            files: [file],
-                            title: 'SplitIt Receipt',
-                            text: `Bayaran kepada ${activeTransfer?.toName}`,
-                        });
-                    } catch (error) { console.log("Share cancelled", error); }
-                } else {
-                    const link = document.createElement('a');
-                    link.href = canvas.toDataURL();
-                    link.download = `resit-${activeTransfer?.toName}.png`;
-                    link.click();
-                    alert("Gambar didownload! (Nota: Native Share perlu HTTPS/Vercel)");
+                // Open New Tab
+                const newWindow = window.open(url, '_blank');
+                
+                // Backup alert if popup blocker stops it
+                if (!newWindow) {
+                    alert("Pop-up diblock! Sila benarkan pop-up untuk tengok resit.");
                 }
             } else {
                 alert("Gagal proses gambar.");
             }
             setIsSharing(false);
         }, "image/png");
+
     } catch (err) {
         console.error(err);
-        alert("Error: Gagal generate gambar.");
+        alert("Ralat Kritikal: Gagal generate gambar.");
         setIsSharing(false);
     }
   };
@@ -446,12 +441,12 @@ export default function SplitBillBrutalV2() {
                     {/* FOOTER */}
                     <div className="pt-8 pb-4 text-center">
                         <button onClick={() => { if(confirm("Reset semua data?")) { localStorage.clear(); window.location.reload(); }}} className={`flex items-center gap-2 mx-auto text-xs font-bold px-4 py-2 border-2 rounded-xl hover:bg-red-500 hover:text-white hover:border-black transition mb-4 ${darkMode ? "border-red-400 text-red-400" : "border-red-600 text-red-600"}`}><RotateCcw size={14}/> RESET DATA APP</button>
-                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v1.9.3 (Full Expanded Fix)</p></div>
+                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v1.9.5 (Open Tab Solution)</p></div>
                     </div>
                 </div>
             )}
 
-            {/* FORM VIEW (FULL EXPANDED) */}
+            {/* FORM VIEW (EXPANDED) */}
             {mode === "FORM" && (
                 <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
                     <div className="flex items-center gap-4 mb-8">
@@ -462,6 +457,8 @@ export default function SplitBillBrutalV2() {
                     </div>
 
                     <div className={`flex-1 space-y-8 overflow-y-auto pb-6 px-1 ${darkMode ? "scrollbar-thumb-white" : "scrollbar-thumb-black"} scrollbar-thin`}>
+                        
+                        {/* BASIC INFO */}
                         <div className={`${cardStyle} p-5 space-y-5 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
                             <div className="space-y-2">
                                 <label className="text-xs uppercase font-black tracking-wider opacity-70">Nama Kedai</label>
@@ -483,6 +480,7 @@ export default function SplitBillBrutalV2() {
                             </div>
                         </div>
 
+                        {/* MODE SELECTOR */}
                         <div className="grid grid-cols-2 gap-3">
                              <button onClick={() => setBillType("EQUAL")} className={`p-4 rounded-xl border-2 text-sm font-black uppercase tracking-wider transition-all flex flex-col items-center gap-2 ${billType === "EQUAL" ? (darkMode ? "border-green-400 bg-green-400/20 text-green-400" : "border-black bg-green-300 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]") : (darkMode ? "border-[#444] opacity-50 hover:opacity-100" : "border-black bg-white opacity-50 hover:opacity-100 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]")}`}>
                                 <span className="text-2xl">🍰</span> KONGSI RATA
@@ -492,6 +490,7 @@ export default function SplitBillBrutalV2() {
                              </button>
                         </div>
 
+                        {/* ITEMIZED */}
                         {billType === "ITEMIZED" && (
                             <div className="space-y-6 animate-in fade-in">
                                 <div className={`${cardStyle} p-5 space-y-4 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
@@ -507,6 +506,7 @@ export default function SplitBillBrutalV2() {
                                     ))}
                                 </div>
 
+                                {/* EXTRAS */}
                                 <div className={`${cardStyle} p-5 space-y-6 ${darkMode ? "bg-[#1E1E1E]" : "bg-violet-100"} ${shadowStyle}`}>
                                     <div className="flex gap-4">
                                         <div className="flex-1 space-y-2">
@@ -520,6 +520,7 @@ export default function SplitBillBrutalV2() {
                                     </div>
                                 </div>
 
+                                {/* CALC STATUS */}
                                 <div className={`p-5 border-2 rounded-xl ${shadowStyle} ${
                                     taxGap > 0.05 ? (darkMode ? "border-blue-400 bg-blue-400/10" : "border-black bg-blue-200") : 
                                     taxGap < -0.05 ? (darkMode ? "border-red-400 bg-red-400/10" : "border-black bg-red-200") : 
@@ -566,7 +567,7 @@ export default function SplitBillBrutalV2() {
                 </div>
             )}
             
-            {/* MODAL: PAYMENT PROFILE */}
+            {/* MODAL: PAYMENT PROFILE (SETUP) */}
             {showPaymentModal && paymentProfileId && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
                     <div className={`w-full max-w-[320px] p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative animate-in slide-in-from-bottom-10`}>
@@ -582,7 +583,7 @@ export default function SplitBillBrutalV2() {
                 </div>
             )}
 
-            {/* MODAL: PAY TERMINAL (FIXED SOLID BG FOR BUTTONS) */}
+            {/* MODAL: PAY TERMINAL (FIXED FOOTER & SOLID BACKGROUND) */}
             {showPayModal && activeTransfer && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                     <div className={`w-full max-w-[340px] max-h-[85vh] flex flex-col rounded-2xl overflow-hidden ${darkMode ? "bg-[#1E1E1E] text-white" : "bg-white text-black"} shadow-2xl relative animate-in zoom-in-95`}>
@@ -608,7 +609,7 @@ export default function SplitBillBrutalV2() {
                                 </div>
                                 {people.find(p=>p.id===activeTransfer.toId)?.qrImage ? (
                                     <div className="w-32 h-32 mx-auto border-2 border-black rounded-lg overflow-hidden mb-4">
-                                        <img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} className="w-full h-full object-contain bg-white" alt="QR" crossOrigin="anonymous"/>
+                                        <img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} className="w-full h-full object-contain bg-white" alt="QR"/>
                                     </div>
                                 ) : (
                                     <div className="w-full py-4 border-2 border-dashed border-black/20 rounded-lg flex flex-col items-center justify-center opacity-30 mb-4"><QrCode size={24}/><span className="text-[8px] font-bold mt-1">NO QR</span></div>
@@ -618,10 +619,10 @@ export default function SplitBillBrutalV2() {
                             </div>
                          </div>
                          
-                         {/* FOOTER BUTTONS (NOW WITH SOLID BACKGROUND) */}
+                         {/* FOOTER BUTTONS (SOLID BACKGROUND FIX) */}
                          <div className={`p-4 flex-shrink-0 space-y-3 border-t-2 ${darkMode ? "bg-black border-white/20" : "bg-white border-black/10"}`}>
-                             <button onClick={handleShareImage} disabled={isSharing} className={`w-full py-3 text-xs font-bold uppercase rounded-xl border-2 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-gray-100"}`}>
-                                {isSharing ? <RotateCcw size={14} className="animate-spin"/> : <Share2 size={14}/>} {isSharing ? "GENERATING..." : "SHARE GAMBAR RESIT"}
+                             <button onClick={handleOpenImage} disabled={isSharing} className={`w-full py-3 text-xs font-bold uppercase rounded-xl border-2 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-gray-100"}`}>
+                                {isSharing ? <RotateCcw size={14} className="animate-spin"/> : <ExternalLink size={14}/>} {isSharing ? "GENERATING..." : "BUKA GAMBAR RESIT"}
                              </button>
                              <button onClick={() => {togglePaymentStatus(activeTransfer.fromId, activeTransfer.toId); setShowPayModal(false);}} className={`w-full py-3 text-xs font-black uppercase rounded-xl transition-all shadow-lg hover:shadow-none hover:translate-y-[2px] ${paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "bg-red-500 text-white" : "bg-green-500 text-black"}`}>{paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "BATAL / MARK UNPAID" : "✅ DAH TRANSFER"}</button>
                          </div>
