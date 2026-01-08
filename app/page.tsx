@@ -2,88 +2,67 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { Moon, Sun, Users, Receipt, ArrowRight, CheckCircle, Trash2, Edit3, Save, AlertCircle, Edit2, Copy, Check, PieChart, Divide, ChevronDown, ChevronUp, Bike, RefreshCw } from "lucide-react";
+import { 
+  Moon, Sun, ArrowRight, CheckCircle, Trash2, 
+  Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X, 
+  ChevronDown, ChevronUp, Receipt, Users, AlertCircle
+} from "lucide-react";
 
 // --- TYPES ---
 type Person = { id: string; name: string };
 type BillType = "EQUAL" | "ITEMIZED";
-type TaxMethod = "PROPORTIONAL" | "EQUAL_SPLIT";
+type SplitMethod = "PROPORTIONAL" | "EQUAL_SPLIT";
 
 type BillDetail = {
   personId: string;
-  base: number;
-  tax: number;
-  misc: number;
-  total: number;
+  base: number; tax: number; misc: number; discount: number; total: number;
 };
 
 type Bill = {
-  id: string;
-  title: string;
-  type: BillType;
-  totalAmount: number;
-  paidBy: string;
-  details: BillDetail[];
-  itemsSubtotal?: number;
-  miscAmount?: number;
-  taxMethod?: TaxMethod;
+  id: string; title: string; type: BillType; totalAmount: number; paidBy: string;
+  details: BillDetail[]; itemsSubtotal: number; miscAmount: number; discountAmount: number;
+  taxMethod: SplitMethod; discountMethod: SplitMethod;
 };
 
-type Transfer = {
-  from: string;
-  to: string;
-  amount: number;
-};
+type Transfer = { from: string; to: string; amount: number; };
 
-export default function SplitBillPro() {
+export default function SplitBillBrutalV2() {
   // --- STATE ---
-  const [darkMode, setDarkMode] = useState(true);
-  const [isLoaded, setIsLoaded] = useState(false); // Untuk elak glitch masa loading
+  const [darkMode, setDarkMode] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   
-  // 1. Setup Orang (Default)
-  const [people, setPeople] = useState<Person[]>([
-    { id: "p1", name: "Aku" },
-    { id: "p2", name: "Member 1" },
-  ]);
-  const [newPersonName, setNewPersonName] = useState("");
-  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
-
-  // 2. Senarai Bill (History)
+  const [people, setPeople] = useState<Person[]>([{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }]);
   const [bills, setBills] = useState<Bill[]>([]);
 
-  // UI State
+  const [newPersonName, setNewPersonName] = useState("");
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [expandedBillId, setExpandedBillId] = useState<string | null>(null); 
   const [copied, setCopied] = useState(false);
 
-  // Form State
-  const [mode, setMode] = useState<"DASHBOARD" | "ADD_BILL">("DASHBOARD");
+  const [mode, setMode] = useState<"DASHBOARD" | "FORM">("DASHBOARD");
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
 
   const [billType, setBillType] = useState<BillType>("EQUAL");
   const [billTitle, setBillTitle] = useState("");
   const [billTotal, setBillTotal] = useState(""); 
   const [miscFee, setMiscFee] = useState(""); 
+  const [discountFee, setDiscountFee] = useState(""); 
   const [payerId, setPayerId] = useState("p1");
-  
   const [tempItems, setTempItems] = useState<{ personId: string; amount: number }[]>([]);
-  const [taxMethod, setTaxMethod] = useState<TaxMethod>("PROPORTIONAL");
+  const [taxMethod, setTaxMethod] = useState<SplitMethod>("PROPORTIONAL");
+  const [discountMethod, setDiscountMethod] = useState<SplitMethod>("PROPORTIONAL");
 
-  // --- LOCAL STORAGE LOGIC (THE BRAIN) ---
-  
-  // 1. Load Data bila apps mula-mula buka
+  // --- STORAGE & INIT ---
   useEffect(() => {
     const savedPeople = localStorage.getItem("splitit_people");
     const savedBills = localStorage.getItem("splitit_bills");
     const savedMode = localStorage.getItem("splitit_darkmode");
-
     if (savedPeople) setPeople(JSON.parse(savedPeople));
     if (savedBills) setBills(JSON.parse(savedBills));
     if (savedMode) setDarkMode(savedMode === "true");
-    
-    setIsLoaded(true); // Tanda dah siap loading
+    setIsLoaded(true);
   }, []);
 
-  // 2. Auto-Save bila ada perubahan
   useEffect(() => {
     if (isLoaded) {
         localStorage.setItem("splitit_people", JSON.stringify(people));
@@ -92,499 +71,444 @@ export default function SplitBillPro() {
     }
   }, [people, bills, darkMode, isLoaded]);
 
-  // 3. Function Reset untuk start sesi baru
-  const resetAllData = () => {
-    if (confirm("Reset semua data? Data 'Geng Lepak' dan 'Bill' akan hilang.")) {
-        setPeople([{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }]);
-        setBills([]);
-        localStorage.removeItem("splitit_people");
-        localStorage.removeItem("splitit_bills");
-    }
-  }
-
-  // --- LOGIC HELPER ---
-
+  // --- LOGIC FUNCTIONS ---
   const addPerson = () => {
-    if (!newPersonName) return;
+    if (!newPersonName.trim()) return;
     setPeople([...people, { id: `p${Date.now()}`, name: newPersonName }]);
     setNewPersonName("");
   };
-
   const updatePersonName = (id: string, newName: string) => {
     setPeople(people.map(p => p.id === id ? { ...p, name: newName } : p));
   };
-
   const deletePerson = (id: string) => {
-    const isInvolved = bills.some(b => 
-      b.paidBy === id || b.details.some(d => d.personId === id)
-    );
-    if (isInvolved) {
-      alert("Tak boleh buang member ni sebab ada rekod bill.");
-      return;
+    if (bills.some(b => b.paidBy === id || b.details.some(d => d.personId === id))) {
+      alert("Member ni ada rekod dalam bill."); return;
     }
-    setPeople(people.filter(p => p.id !== id));
-    setEditingPersonId(null);
+    setPeople(people.filter(p => p.id !== id)); setEditingPersonId(null);
   };
-
-  const handleEditBill = (bill: Bill) => {
-    setEditingBillId(bill.id); 
-    setBillTitle(bill.title);
-    setBillTotal(String(bill.totalAmount));
-    setBillType(bill.type);
-    setPayerId(bill.paidBy);
-    setMiscFee(bill.miscAmount ? String(bill.miscAmount) : "");
-    
-    if (bill.type === "ITEMIZED") {
-        const rawItems = bill.details.map(d => ({ personId: d.personId, amount: d.base }));
-        setTempItems(rawItems); 
-        if(bill.taxMethod) setTaxMethod(bill.taxMethod);
-    } else {
-        setTempItems([]);
-    }
-    setMode("ADD_BILL");
+  const startEditBill = (bill: Bill) => {
+    setEditingBillId(bill.id); setBillTitle(bill.title); setBillTotal(String(bill.totalAmount));
+    setBillType(bill.type); setPayerId(bill.paidBy);
+    setMiscFee(bill.miscAmount > 0 ? String(bill.miscAmount) : "");
+    setDiscountFee(bill.discountAmount > 0 ? String(bill.discountAmount) : "");
+    setTaxMethod(bill.taxMethod); setDiscountMethod(bill.discountMethod);
+    if (bill.type === "ITEMIZED") setTempItems(bill.details.map(d => ({ personId: d.personId, amount: d.base })));
+    else setTempItems([]);
+    setMode("FORM");
   };
-
+  const resetForm = () => {
+    setEditingBillId(null); setBillTitle(""); setBillTotal(""); setBillType("EQUAL");
+    setMiscFee(""); setDiscountFee(""); setTempItems([]);
+    setTaxMethod("PROPORTIONAL"); setDiscountMethod("PROPORTIONAL"); setMode("DASHBOARD");
+  };
   const saveBill = () => {
     if (!billTitle || !billTotal) return;
     const grandTotal = parseFloat(billTotal);
-    const miscTotal = parseFloat(miscFee) || 0; 
-    
+    const miscTotal = parseFloat(miscFee) || 0;
+    const discountTotal = parseFloat(discountFee) || 0;
     let calculatedDetails: BillDetail[] = [];
     let itemsSubtotal = 0;
 
     if (billType === "EQUAL") {
-      const splitAmount = grandTotal / people.length;
-      calculatedDetails = people.map((p) => ({ 
-          personId: p.id, 
-          base: splitAmount, 
-          tax: 0, 
-          misc: 0,
-          total: splitAmount 
-      }));
+      const splitAmt = grandTotal / people.length;
+      calculatedDetails = people.map(p => ({ personId: p.id, base: splitAmt, tax: 0, misc: 0, discount: 0, total: splitAmt }));
       itemsSubtotal = grandTotal;
-
     } else {
-      itemsSubtotal = tempItems.reduce((sum, item) => sum + item.amount, 0);
-      const taxTotal = grandTotal - (itemsSubtotal + miscTotal);
-      const miscPerPerson = miscTotal / people.length;
+      itemsSubtotal = tempItems.reduce((sum, i) => sum + i.amount, 0);
+      const rawTax = grandTotal - (itemsSubtotal + miscTotal) + discountTotal;
+      const taxTotal = rawTax > 0.05 ? rawTax : 0;
+      const miscPerHead = miscTotal / people.length;
 
       calculatedDetails = people.map(p => {
-          const userItem = tempItems.find(i => i.personId === p.id);
-          const base = userItem ? userItem.amount : 0;
-          let taxPortion = 0;
-          if (taxTotal > 0.01) {
-              if (taxMethod === "PROPORTIONAL") {
-                  if (itemsSubtotal > 0) {
-                      taxPortion = (base / itemsSubtotal) * taxTotal;
-                  } else {
-                      taxPortion = taxTotal / people.length;
-                  }
-              } else {
-                  taxPortion = taxTotal / people.length;
-              }
-          }
-          return {
-              personId: p.id,
-              base: base,
-              tax: taxPortion,
-              misc: miscPerPerson,
-              total: base + taxPortion + miscPerPerson
-          };
-      });
-    }
-
-    const billData: Bill = {
-      id: editingBillId || `b${Date.now()}`,
-      title: billTitle,
-      type: billType,
-      totalAmount: grandTotal,
-      itemsSubtotal: itemsSubtotal,
-      miscAmount: miscTotal,
-      paidBy: payerId,
-      details: calculatedDetails,
-      taxMethod: billType === "ITEMIZED" ? taxMethod : undefined
-    };
-
-    if (editingBillId) {
-        setBills(bills.map(b => b.id === editingBillId ? billData : b));
-    } else {
-        setBills([...bills, billData]);
-    }
-    
-    setMode("DASHBOARD");
-    setEditingBillId(null);
-    setBillTitle("");
-    setBillTotal("");
-    setMiscFee("");
-    setTempItems([]);
-    setTaxMethod("PROPORTIONAL");
-  };
-
-  const cancelEdit = () => {
-      setMode("DASHBOARD");
-      setEditingBillId(null);
-      setBillTitle("");
-      setBillTotal("");
-      setMiscFee("");
-      setTempItems([]);
-      setTaxMethod("PROPORTIONAL");
-  }
-
-  const deleteBill = (id: string) => {
-    if(confirm("Confirm delete bill ni?")) setBills(bills.filter(b => b.id !== id));
-  }
-
-  const updateItemizedAmount = (pId: string, val: string) => {
-    const amt = parseFloat(val) || 0;
-    const existing = tempItems.find(i => i.personId === pId);
-    if (existing) {
-      setTempItems(tempItems.map(i => i.personId === pId ? { ...i, amount: amt } : i));
-    } else {
-      setTempItems([...tempItems, { personId: pId, amount: amt }]);
-    }
-  };
-
-  const getAllocatedTotal = () => tempItems.reduce((sum, item) => sum + item.amount, 0);
-  
-  const getRemainingTax = () => {
-      const total = parseFloat(billTotal) || 0;
-      const misc = parseFloat(miscFee) || 0;
-      const items = getAllocatedTotal();
-      return total - items - misc;
-  }
-
-  const calculateFinalSettlement = () => {
-    let balances: Record<string, number> = {};
-    people.forEach(p => balances[p.id] = 0);
-
-    bills.forEach(bill => {
-      if (balances[bill.paidBy] !== undefined) balances[bill.paidBy] += bill.totalAmount;
-      bill.details.forEach(d => {
-        if (balances[d.personId] !== undefined) balances[d.personId] -= d.total;
-      });
-    });
-
-    const peopleWithNet = people.map(p => ({
-      ...p,
-      net: balances[p.id] || 0,
-      totalConsumed: bills.reduce((sum, b) => {
-        const detail = b.details.find(d => d.personId === p.id);
-        return sum + (detail ? detail.total : 0);
-      }, 0)
-    }));
-
-    let debtors = peopleWithNet.filter(p => p.net < -0.01).map(p => ({ ...p, net: Math.abs(p.net) }));
-    let creditors = peopleWithNet.filter(p => p.net > 0.01).map(p => ({ ...p, net: p.net }));
-    let transfers: Transfer[] = [];
-
-    debtors.sort((a, b) => b.net - a.net);
-    creditors.sort((a, b) => b.net - a.net);
-
-    let i = 0, j = 0;
-    while (i < debtors.length && j < creditors.length) {
-        let debtor = debtors[i];
-        let creditor = creditors[j];
-        let amount = Math.min(debtor.net, creditor.net);
-
-        if (amount > 0.01) {
-            transfers.push({ from: debtor.name, to: creditor.name, amount: amount });
+        const item = tempItems.find(i => i.personId === p.id);
+        const base = item ? item.amount : 0;
+        let taxShare = 0;
+        if (taxTotal > 0) {
+            taxShare = taxMethod === "PROPORTIONAL" && itemsSubtotal > 0 ? (base / itemsSubtotal) * taxTotal : taxTotal / people.length;
         }
-        debtors[i].net -= amount;
-        creditors[j].net -= amount;
-        if (debtors[i].net < 0.01) i++;
-        if (creditors[j].net < 0.01) j++;
+        let discountShare = 0;
+        if (discountTotal > 0) {
+            discountShare = discountMethod === "PROPORTIONAL" && itemsSubtotal > 0 ? (base / itemsSubtotal) * discountTotal : discountTotal / people.length;
+        }
+        return { personId: p.id, base: base, tax: taxShare, misc: miscPerHead, discount: discountShare, total: base + taxShare + miscPerHead - discountShare };
+      });
     }
-
-    return { peopleWithNet, transfers };
+    const newBill: Bill = {
+        id: editingBillId || `b${Date.now()}`, title: billTitle, type: billType, totalAmount: grandTotal, paidBy: payerId, details: calculatedDetails, itemsSubtotal, miscAmount: miscTotal, discountAmount: discountTotal, taxMethod, discountMethod
+    };
+    if (editingBillId) setBills(bills.map(b => b.id === editingBillId ? newBill : b));
+    else setBills([newBill, ...bills]);
+    resetForm();
   };
-
-  const { peopleWithNet, transfers } = calculateFinalSettlement();
-  const remainingTax = getRemainingTax();
-
-  const copyToClipboard = () => {
-    let text = "📋 *SplitIt. Summary*\n";
-    text += "by kmlxly\n\n";
-    transfers.forEach(t => {
-        text += `👉 ${t.from} transfer ${t.to}: RM${t.amount.toFixed(2)}\n`;
+  const deleteBill = (id: string) => { if(confirm("Padam resit ni?")) setBills(bills.filter(b => b.id !== id)); };
+  const updateItemAmount = (pid: string, val: string) => {
+    const amt = parseFloat(val) || 0; const exist = tempItems.find(i => i.personId === pid);
+    if (exist) setTempItems(tempItems.map(i => i.personId === pid ? {...i, amount: amt} : i));
+    else setTempItems([...tempItems, { personId: pid, amount: amt }]);
+  };
+  const getAllocated = () => tempItems.reduce((a, b) => a + b.amount, 0);
+  const getCalcStatus = () => {
+    const total = parseFloat(billTotal) || 0; const misc = parseFloat(miscFee) || 0; const disc = parseFloat(discountFee) || 0; const items = getAllocated();
+    return total - (items + misc - disc);
+  };
+  const calculateSettlement = () => {
+    let bal: Record<string, number> = {}; people.forEach(p => bal[p.id] = 0);
+    bills.forEach(b => {
+        bal[b.paidBy] += b.totalAmount;
+        b.details.forEach(d => { bal[d.personId] -= d.total; });
     });
-    text += "\nGenerate by SplitIt. by kmlxly";
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
+    const netPeople = people.map(p => ({ ...p, net: bal[p.id] || 0 }));
+    let debtors = netPeople.filter(p => p.net < -0.01).map(p => ({...p, net: Math.abs(p.net)})).sort((a,b) => b.net - a.net);
+    let creditors = netPeople.filter(p => p.net > 0.01).sort((a,b) => b.net - a.net);
+    let txs: Transfer[] = []; let i=0, j=0;
+    while(i < debtors.length && j < creditors.length) {
+        let amt = Math.min(debtors[i].net, creditors[j].net);
+        if (amt > 0.01) txs.push({ from: debtors[i].name, to: creditors[j].name, amount: amt });
+        debtors[i].net -= amt; creditors[j].net -= amt;
+        if (debtors[i].net < 0.01) i++; if (creditors[j].net < 0.01) j++;
+    }
+    return { netPeople, txs };
+  };
+  const { netPeople, txs } = calculateSettlement(); const taxGap = getCalcStatus();
 
-  // --- UI START ---
-  // Elak glitch: kalau belum loaded, jangan render content lagi (optional)
-  if (!isLoaded) return <div className="min-h-screen bg-slate-900"/>;
+  // --- BRUTAL STYLES (PLAIN) ---
+  const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-200 text-black";
+  
+  const cardStyle = `${darkMode ? "bg-[#1E1E1E] border-white" : "bg-white border-black"} border-2 rounded-2xl`;
+  const shadowStyle = darkMode ? "" : "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]";
+  const buttonBase = `border-2 font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"} ${shadowStyle} hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]`;
+  const inputStyle = `w-full p-3 rounded-xl bg-transparent border-2 outline-none font-bold transition-all focus:ring-0 ${darkMode ? "border-white focus:border-lime-300 placeholder:text-white/50" : "border-black focus:border-blue-500 placeholder:text-black/50"}`;
+
+  // --- RENDER ---
+  if (!isLoaded) return <div className="min-h-screen bg-gray-200"/>;
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 font-sans ${darkMode ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-800"}`}>
-      
-      {/* PERFORMANCE FIX: Static Background, No Blur on Blob */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-         <div className={`absolute -top-20 -right-20 w-80 h-80 rounded-full opacity-20 ${darkMode ? "bg-purple-900" : "bg-purple-200"}`}></div>
-         <div className={`absolute top-40 -left-20 w-80 h-80 rounded-full opacity-20 ${darkMode ? "bg-blue-900" : "bg-blue-200"}`}></div>
-      </div>
-
-      <main className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col p-4">
+    <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
+      <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
         
-        {/* BRAND HEADER */}
-        <div className="flex justify-between items-center py-6 mb-2">
-          <div className="flex items-center gap-3">
-            <div className="relative w-12 h-12 shadow-lg rounded-full overflow-hidden border border-white/10">
-                <Image src="/icon.png" alt="SplitIt Logo" width={48} height={48} className="object-cover"/>
-            </div>
-            <div>
-                <h1 className="text-3xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 leading-none">SplitIt.</h1>
-                <p className="text-[10px] font-bold tracking-widest uppercase opacity-40 text-slate-500 mt-0.5">by kmlxly</p>
-            </div>
-          </div>
-          <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/10 hover:bg-white/20 transition">
-            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-        </div>
-
-        {/* --- VIEW: DASHBOARD --- */}
-        {mode === "DASHBOARD" && (
-          <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 flex-1">
-            
-            {/* GENG LEPAK */}
-            <div className={`p-4 rounded-3xl border backdrop-blur-md transition-all ${darkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200 shadow-sm"}`}>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-sm font-bold uppercase tracking-widest opacity-70 flex items-center gap-2"><Users size={14}/> Geng Lepak</h2>
-              </div>
-              
-              <div className="flex flex-wrap gap-2 mb-3">
-                {people.map(p => (
-                  <div key={p.id}>
-                    {editingPersonId === p.id ? (
-                        <div className={`flex items-center gap-1 p-1 rounded-xl border animate-in zoom-in-95 duration-200 ${darkMode ? "bg-black/40 border-blue-500" : "bg-white border-blue-500 shadow-md"}`}>
-                            <input 
-                                autoFocus
-                                value={p.name}
-                                onChange={(e) => updatePersonName(p.id, e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && setEditingPersonId(null)}
-                                className={`w-24 text-sm px-2 bg-transparent outline-none font-bold ${darkMode ? "text-white" : "text-slate-800"}`}
-                            />
-                            <button onClick={() => deletePerson(p.id)} className="p-1.5 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition"><Trash2 size={14}/></button>
-                            <button onClick={() => setEditingPersonId(null)} className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white transition"><Check size={14}/></button>
-                        </div>
-                    ) : (
-                        <button onClick={() => setEditingPersonId(p.id)} className={`px-4 py-2 rounded-xl text-base font-bold border transition active:scale-95 flex items-center gap-2 ${darkMode ? "bg-slate-800/50 border-slate-700 hover:bg-slate-800" : "bg-slate-50 border-slate-200 hover:bg-slate-100"}`}>
-                            <div className={`w-2 h-2 rounded-full ${darkMode ? "bg-blue-400" : "bg-blue-500"}`}></div>
-                            {p.name}
-                        </button>
-                    )}
-                  </div>
-                ))}
-                
-                <div className={`flex items-center gap-1 p-1 pl-3 rounded-xl border ${darkMode ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200"}`}>
-                    <input value={newPersonName} onChange={e => setNewPersonName(e.target.value)} onKeyDown={e => e.key === "Enter" && addPerson()} placeholder="Tambah..." className="w-20 bg-transparent text-sm outline-none"/>
-                    <button onClick={addPerson} className="p-1.5 bg-blue-600 rounded-lg text-white hover:bg-blue-500 transition"><ArrowRight size={14}/></button>
-                </div>
-              </div>
-            </div>
-
-            {/* BILL HISTORY */}
-            <div className="space-y-3">
-              <div className="flex justify-between items-end">
-                <h2 className="text-sm font-bold uppercase tracking-widest opacity-70">Sejarah Bill</h2>
-                <span className="text-xs opacity-50">{bills.length} resit</span>
-              </div>
-              {bills.length === 0 ? (
-                <div className="text-center py-8 opacity-40 border-2 border-dashed rounded-3xl border-slate-600"><p className="text-sm">Belum ada bill.</p></div>
-              ) : (
-                bills.map(bill => (
-                  <div key={bill.id} className={`rounded-2xl border relative overflow-hidden transition-all duration-300 ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-200 shadow-sm"}`}>
-                    <div className="p-4 flex justify-between items-center cursor-pointer" onClick={() => setExpandedBillId(expandedBillId === bill.id ? null : bill.id)}>
-                        <div>
-                          <h3 className="font-bold flex items-center gap-2">
-                            {bill.title} 
-                            {bill.type === "ITEMIZED" && bill.taxMethod === "PROPORTIONAL" && <span className="text-[8px] px-1 py-0.5 rounded border border-white/20 opacity-50">% TAX</span>}
-                            {bill.type === "ITEMIZED" && bill.taxMethod === "EQUAL_SPLIT" && <span className="text-[8px] px-1 py-0.5 rounded border border-white/20 opacity-50">= TAX</span>}
-                          </h3>
-                          <div className="text-xs opacity-60 flex gap-2 mt-1">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${bill.type === "EQUAL" ? "bg-emerald-500/20 text-emerald-400" : "bg-orange-500/20 text-orange-400"}`}>{bill.type === "EQUAL" ? "KONGSI" : "ASING"}</span>
-                            <span>Bayar: {people.find(p => p.id === bill.paidBy)?.name || "Deleted"}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className="font-mono font-bold text-lg">RM{bill.totalAmount.toFixed(2)}</span>
-                            {expandedBillId === bill.id ? <ChevronUp size={18} className="opacity-50"/> : <ChevronDown size={18} className="opacity-50"/>}
-                        </div>
-                    </div>
-                    {expandedBillId === bill.id && (
-                        <div className={`p-4 border-t text-sm ${darkMode ? "bg-black/20 border-white/10" : "bg-slate-50 border-slate-100"}`}>
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-4 text-[10px] uppercase opacity-50 font-bold mb-1">
-                                    <div className="col-span-1">Nama</div>
-                                    <div className="text-right">Makan</div>
-                                    <div className="text-right">Tax+Caj</div>
-                                    <div className="text-right">Total</div>
-                                </div>
-                                {bill.details.map((d, idx) => (
-                                    <div key={idx} className="grid grid-cols-4 items-center border-b border-dashed border-white/5 pb-1 last:border-0">
-                                        <div className="col-span-1 font-medium truncate">{people.find(p=>p.id === d.personId)?.name || "Deleted"}</div>
-                                        <div className="text-right opacity-70 text-xs">{d.base > 0 ? d.base.toFixed(2) : "-"}</div>
-                                        <div className="text-right opacity-50 text-[10px]">{(d.tax + d.misc) > 0 ? `+${(d.tax + d.misc).toFixed(2)}` : "-"}</div>
-                                        <div className="text-right font-bold font-mono">{d.total.toFixed(2)}</div>
-                                    </div>
-                                ))}
-                                <div className="flex justify-end gap-2 mt-4 pt-2 border-t border-white/10">
-                                    <button onClick={(e) => { e.stopPropagation(); handleEditBill(bill); }} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg flex items-center gap-1 text-xs"><Edit2 size={14}/> Edit</button>
-                                    <button onClick={(e) => { e.stopPropagation(); deleteBill(bill.id); }} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg flex items-center gap-1 text-xs"><Trash2 size={14}/> Delete</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                  </div>
-                ))
-              )}
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                <button onClick={() => { setBillType("EQUAL"); setMode("ADD_BILL"); setEditingBillId(null); setBillTitle(""); setBillTotal(""); setMiscFee(""); }} className="py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 transition-transform active:scale-95"><Users size={16}/> Split Rata</button>
-                <button onClick={() => { setBillType("ITEMIZED"); setMode("ADD_BILL"); setEditingBillId(null); setBillTitle(""); setBillTotal(""); setMiscFee(""); }} className="py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 transition-transform active:scale-95"><Receipt size={16}/> Split Item</button>
-              </div>
-            </div>
-
-            {/* SETTLEMENT SECTION */}
-            {bills.length > 0 && (
-              <div className={`mt-4 p-5 rounded-3xl border-t-4 border-t-purple-500 shadow-2xl ${darkMode ? "bg-slate-800" : "bg-white"}`}>
-                <h2 className="text-lg font-black mb-4 flex items-center gap-2 text-purple-400"><CheckCircle size={20}/> Keputusan Akhir</h2>
-                <div className="space-y-2 mb-6 opacity-80">
-                  {peopleWithNet.map(p => (
-                    <div key={p.id} className="flex justify-between items-center text-xs border-b border-dashed border-white/10 pb-1 last:border-0">
-                      <span>{p.name} (Total Guna: RM{p.totalConsumed.toFixed(2)})</span>
-                      <span className={p.net > 0 ? "text-emerald-400" : p.net < 0 ? "text-red-400" : "text-slate-500"}>{p.net > 0 ? `+RM${p.net.toFixed(2)}` : p.net < 0 ? `-RM${Math.abs(p.net).toFixed(2)}` : "0.00"}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="bg-black/10 -mx-5 -mb-5 p-5 rounded-b-3xl border-t border-white/10">
-                  <div className="flex justify-between items-center mb-3">
-                    <p className="text-xs uppercase tracking-widest opacity-50 font-bold">Transfer Yang Perlu Dibuat</p>
-                    {transfers.length > 0 && (
-                        <button onClick={copyToClipboard} className="flex items-center gap-1 text-[10px] px-2 py-1 bg-white/10 hover:bg-white/20 rounded border border-white/20 transition-all">
-                            {copied ? <Check size={10}/> : <Copy size={10}/>} {copied ? "Disalin!" : "Salin List"}
-                        </button>
-                    )}
-                  </div>
-                  {transfers.length > 0 ? (
-                    <div className="space-y-2">
-                        {transfers.map((t, idx) => (
-                            <div key={idx} className={`p-3 rounded-xl flex justify-between items-center shadow-lg ${darkMode ? "bg-slate-700" : "bg-white"}`}>
-                                <div className="flex items-center gap-2">
-                                    <div className="text-right">
-                                        <div className="text-xs font-bold text-red-400">{t.from}</div>
-                                        <div className="text-[10px] opacity-50">transfer ke</div>
-                                    </div>
-                                    <ArrowRight size={14} className="opacity-30"/>
-                                    <div className="text-left">
-                                        <div className="text-xs font-bold text-emerald-400">{t.to}</div>
-                                    </div>
-                                </div>
-                                <div className="font-mono font-bold text-lg">RM{t.amount.toFixed(2)}</div>
-                            </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4">
-                        <CheckCircle size={30} className="mx-auto mb-2 text-emerald-500 opacity-50"/>
-                        <p className="text-xs italic opacity-50">Semua akaun dah settle! Tiada hutang.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* FOOTER & RESET */}
-            <div className="text-center opacity-40 text-[10px] py-8 space-y-1">
-                <p className="font-bold">SplitIt. by kmlxly</p>
-                <p className="italic opacity-70">Bahagi bill cara tenang.</p>
-                <button onClick={resetAllData} className="mt-4 flex items-center gap-1 mx-auto text-red-400 hover:text-red-300 transition opacity-50 hover:opacity-100">
-                    <RefreshCw size={10}/> Reset Semua Data
+        {/* HEADER (UPDATED ALIGNMENT) */}
+        <header className={`p-6 border-b-2 relative z-10 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
+            <div className="flex justify-between items-center">
+                <a href="/" className="flex items-center gap-4 cursor-pointer group">
+                     {/* Box Logo: Fixed size */}
+                     <div className={`w-12 h-12 border-2 ${darkMode ? "border-white" : "border-black"} rounded-xl flex items-center justify-center overflow-hidden bg-white/10 backdrop-blur group-hover:scale-105 transition-transform flex-shrink-0`}>
+                        <Image src="/icon.png" width={40} height={40} alt="Logo" className="object-cover"/>
+                     </div>
+                     
+                     {/* Text Block: Adjusted line-height for better centering */}
+                     <div className="flex flex-col justify-center h-12">
+                        <h1 className="text-2xl font-black tracking-tighter leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
+                        <p className="text-[10px] uppercase tracking-widest font-bold opacity-60">by kmlxly</p>
+                     </div>
+                </a>
+                <button onClick={() => setDarkMode(!darkMode)} className={`p-2 ${buttonBase}`}>
+                    {darkMode ? <Sun size={20}/> : <Moon size={20}/>}
                 </button>
             </div>
-          </div>
-        )}
+        </header>
 
-        {/* --- VIEW: ADD/EDIT BILL FORM --- */}
-        {mode === "ADD_BILL" && (
-          <div className="flex flex-col h-full animate-in slide-in-from-right-8 fade-in">
-            <div className="flex items-center gap-4 mb-6">
-              <button onClick={cancelEdit} className="p-2 rounded-xl bg-white/10 hover:bg-white/20"><ArrowRight size={20} className="rotate-180"/></button>
-              <h2 className="text-xl font-bold">{editingBillId ? "Edit Bill" : "Tambah Bill"} {billType === "EQUAL" ? "Kongsi" : "Asing"}</h2>
-            </div>
-
-            <div className={`flex-1 overflow-y-auto p-1 space-y-6`}>
-              <div className="space-y-2">
-                <label className="text-xs opacity-60 uppercase font-bold">Nama Kedai / Tajuk</label>
-                <input autoFocus value={billTitle} onChange={e => setBillTitle(e.target.value)} placeholder="Cth: Mamak Bistro" className={`w-full p-4 rounded-2xl text-base font-bold outline-none ${darkMode ? "bg-white/5" : "bg-white border"}`}/>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs opacity-60 uppercase font-bold">Total Resit (RM)</label>
-                <input type="number" value={billTotal} onChange={e => setBillTotal(e.target.value)} placeholder="0.00" className={`w-full p-4 rounded-2xl text-3xl font-black outline-none ${darkMode ? "bg-white/5" : "bg-white border"}`}/>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs opacity-60 uppercase font-bold">Siapa Tukang Bayar?</label>
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {people.map(p => (
-                    <button key={p.id} onClick={() => setPayerId(p.id)} className={`whitespace-nowrap px-4 py-2 rounded-xl text-sm font-bold border transition ${payerId === p.id ? "bg-emerald-500 border-emerald-500 text-white" : "border-white/20 opacity-60"}`}>{p.name}</button>
-                  ))}
-                </div>
-              </div>
-
-              {billType === "ITEMIZED" && (
-                <div className="space-y-4 pt-4 border-t border-white/10 animate-in fade-in">
-                   
-                   <div className={`p-4 rounded-2xl border transition-colors duration-300 ${remainingTax === 0 ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400" : remainingTax < 0 ? "bg-red-500/10 border-red-500/50 text-red-400" : "bg-blue-500/10 border-blue-500/50 text-blue-400"}`}>
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                {remainingTax === 0 ? <Check size={14}/> : <AlertCircle size={14}/>}
-                                {remainingTax > 0 ? "TAX / SERVICE CHARGE" : remainingTax < 0 ? "TERLEBIH AGIH" : "SEMPURNA"}
-                            </span>
-                            <span className="text-xl font-mono font-bold">{remainingTax < 0 ? "-" : ""}RM{Math.abs(remainingTax).toFixed(2)}</span>
+        <main className="flex-1 p-6 flex flex-col gap-8 relative z-10">
+            
+            {/* VIEW: DASHBOARD */}
+            {mode === "DASHBOARD" && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    
+                    {/* SECTION: GENG LEPAK */}
+                    <section className={`${cardStyle} p-5 ${darkMode ? "" : "bg-violet-100"} ${shadowStyle}`}>
+                        <div className="flex items-center justify-between mb-4">
+                             <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><Users size={16}/> Geng Lepak</h2>
                         </div>
-                        {remainingTax > 0.05 && (
-                             <div className="flex gap-1 bg-black/20 p-1 rounded-xl">
-                                <button onClick={() => setTaxMethod("PROPORTIONAL")} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${taxMethod === "PROPORTIONAL" ? "bg-white text-blue-600 shadow-sm" : "opacity-50 hover:opacity-100"}`}><PieChart size={12}/> Ikut % Makan</button>
-                                <button onClick={() => setTaxMethod("EQUAL_SPLIT")} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${taxMethod === "EQUAL_SPLIT" ? "bg-white text-blue-600 shadow-sm" : "opacity-50 hover:opacity-100"}`}><Divide size={12}/> Kongsi Rata</button>
-                             </div>
+                        <div className="flex flex-wrap gap-2">
+                            {people.map(p => (
+                                editingPersonId === p.id ? (
+                                    <div key={p.id} className={`flex items-center border-2 rounded-xl p-1 gap-1 ${darkMode ? "border-blue-400 bg-blue-400/20" : "border-blue-600 bg-blue-100"}`}>
+                                        <input autoFocus value={p.name} onChange={e => updatePersonName(p.id, e.target.value)} onKeyDown={e => e.key === "Enter" && setEditingPersonId(null)} className="bg-transparent outline-none text-sm font-bold px-2 w-24"/>
+                                        <button onClick={() => deletePerson(p.id)} className={`p-1.5 rounded-lg ${darkMode ? "text-red-400 hover:bg-red-400/20" : "text-red-600 hover:bg-red-200"}`}><Trash2 size={14}/></button>
+                                        <button onClick={() => setEditingPersonId(null)} className={`p-1.5 rounded-lg ${darkMode ? "text-green-400 hover:bg-green-400/20" : "text-green-600 hover:bg-green-200"}`}><Check size={14}/></button>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        key={p.id} 
+                                        onClick={() => setEditingPersonId(p.id)} 
+                                        className={`group relative px-6 py-2 text-sm font-bold border-2 rounded-xl transition-all hover:shadow-none overflow-hidden ${darkMode ? "border-white bg-[#333] hover:bg-[#444]" : "border-black bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}
+                                    >
+                                        <span className="block transition-transform duration-300 group-hover:-translate-x-3">{p.name}</span>
+                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-10 group-hover:translate-x-[-12px] transition-transform duration-300 ease-out">
+                                            <Edit3 size={16} className="fill-yellow-400 text-black stroke-[2.5px]" />
+                                        </div>
+                                    </button>
+                                )
+                            ))}
+                            <div className={`flex items-center border-2 rounded-xl px-3 py-2 ${darkMode ? "border-white bg-[#333]" : "border-black bg-white"}`}>
+                                <input value={newPersonName} onChange={e => setNewPersonName(e.target.value)} onKeyDown={e => e.key === "Enter" && addPerson()} placeholder="Tambah..." className={`bg-transparent font-bold outline-none text-sm w-20 ${darkMode ? "placeholder:text-white/50" : "placeholder:text-black/50"}`}/>
+                                <button onClick={addPerson} className={`p-1 rounded-full ${darkMode ? "bg-white text-black" : "bg-black text-white"} ml-2 hover:scale-110 transition`}><Plus size={14}/></button>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* SECTION: BILLS */}
+                    <section>
+                        <div className="flex items-center justify-between mb-4">
+                             <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><Receipt size={16}/> Resit / Bill</h2>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {bills.length === 0 ? (
+                                <button onClick={() => {resetForm(); setMode("FORM")}} className={`w-full p-8 border-2 border-dashed rounded-2xl text-center opacity-60 hover:opacity-100 hover:border-solid transition flex flex-col items-center gap-2 ${darkMode ? "border-white" : "border-black"}`}>
+                                    <Plus size={32} className="mb-2"/>
+                                    <p className="text-base font-bold">Tiada rekod. Tambah bill pertama!</p>
+                                </button>
+                            ) : (
+                                <>
+                                {bills.map(bill => (
+                                    <div key={bill.id} className={`${cardStyle} ${shadowStyle} overflow-hidden transition-all`}>
+                                        <div onClick={() => setExpandedBillId(expandedBillId === bill.id ? null : bill.id)} className={`p-5 cursor-pointer flex justify-between items-center ${darkMode ? "hover:bg-[#333]" : "hover:bg-gray-50"}`}>
+                                            <div>
+                                                <h3 className="font-black text-lg uppercase truncate">{bill.title}</h3>
+                                                <div className="flex gap-2 mt-1">
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${bill.type === "EQUAL" ? (darkMode ? "border-green-400 text-green-400" : "border-green-600 text-green-700 bg-green-100") : (darkMode ? "border-blue-400 text-blue-400" : "border-blue-600 text-blue-700 bg-blue-100")}`}>{bill.type === "EQUAL" ? "KONGSI RATA" : "SPLIT ITEM"}</span>
+                                                    <span className="text-[10px] font-bold opacity-70 self-center">Bayar: {people.find(p=>p.id === bill.paidBy)?.name}</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="font-mono font-black text-xl">RM{bill.totalAmount.toFixed(2)}</div>
+                                                {expandedBillId === bill.id ? <ChevronUp size={20} className="ml-auto mt-1"/> : <ChevronDown size={20} className="ml-auto mt-1"/>}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* EXPANDED DETAIL */}
+                                        {expandedBillId === bill.id && (
+                                            <div className={`text-sm border-t-2 p-5 space-y-3 ${darkMode ? "border-white bg-[#1a1a1a]" : "border-black bg-gray-50"}`}>
+                                                <div className="grid grid-cols-4 text-[10px] uppercase font-bold opacity-50 mb-2">
+                                                    <div className="col-span-2">Nama & Detail</div>
+                                                    <div className="text-right col-span-2">Total</div>
+                                                </div>
+                                                {bill.details.map(d => (
+                                                    <div key={d.personId} className="flex justify-between items-center py-2 border-b border-dashed border-current border-opacity-20 last:border-0">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold">{people.find(p=>p.id === d.personId)?.name}</span>
+                                                            {bill.type === "ITEMIZED" && (
+                                                                <div className="flex flex-wrap gap-x-2 text-[9px] opacity-60 font-mono mt-0.5">
+                                                                    <span>Makan:{d.base.toFixed(2)}</span>
+                                                                    {(d.misc + d.tax) > 0 && <span>+Caj:{(d.misc + d.tax).toFixed(2)}</span>}
+                                                                    {d.discount > 0 && <span className={darkMode ? "text-green-400" : "text-green-700"}>-Disc:{d.discount.toFixed(2)}</span>}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <span className="font-mono font-black text-base">RM{d.total.toFixed(2)}</span>
+                                                    </div>
+                                                ))}
+                                                <div className="flex gap-3 pt-4 mt-2 justify-end">
+                                                    <button onClick={() => startEditBill(bill)} className={`px-4 py-2 border-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${darkMode ? "border-blue-400 text-blue-400 hover:bg-blue-400 hover:text-black" : "border-blue-600 text-blue-700 bg-blue-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-blue-600 hover:text-white hover:border-black"}`}><Edit3 size={14}/> EDIT</button>
+                                                    <button onClick={() => deleteBill(bill.id)} className={`px-4 py-2 border-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${darkMode ? "border-red-400 text-red-400 hover:bg-red-400 hover:text-black" : "border-red-600 text-red-700 bg-red-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-red-600 hover:text-white hover:border-black"}`}><Trash2 size={14}/> DELETE</button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                <button onClick={() => {resetForm(); setMode("FORM")}} className={`w-full py-4 ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"} mt-4 text-sm uppercase tracking-wider`}>
+                                    <Plus size={18}/> Tambah Bill Lagi
+                                </button>
+                                </>
+                            )}
+                        </div>
+                    </section>
+
+                    {/* SECTION: SETTLEMENT (FIXED ICON COLOR) */}
+                    {bills.length > 0 && (
+                        <section className={`${cardStyle} p-6 ${shadowStyle} ${darkMode ? "bg-[#222]" : "bg-lime-200"}`}>
+                            {/* FIX: Force white color in dark mode directly */}
+                            <h2 className="text-lg font-black mb-6 flex items-center gap-2 uppercase">
+                                <CheckCircle size={24} className={`${darkMode ? "text-white" : "text-black"}`}/> Final Settlement
+                            </h2>
+                            
+                            {/* Summary Cards */}
+                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                {netPeople.map(p => (
+                                    <div key={p.id} className={`p-4 border-2 rounded-xl flex flex-col gap-1 ${darkMode ? "border-white bg-[#333]" : "border-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"}`}>
+                                        <span className="text-xs font-bold uppercase opacity-70">{p.name}</span>
+                                        <span className={`text-lg font-mono font-black ${p.net > 0 ? (darkMode ? "text-green-400" : "text-green-600") : p.net < 0 ? (darkMode ? "text-red-400" : "text-red-600") : "opacity-50"}`}>
+                                            {p.net > 0 ? "+" : ""}{p.net.toFixed(2)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Transfer List */}
+                            <div className={`p-5 rounded-xl border-2 ${darkMode ? "bg-[#121212] border-white" : "bg-white border-black"}`}>
+                                <div className="flex justify-between items-center mb-4 pb-2 border-b-2 border-current border-opacity-10">
+                                    <span className="text-[10px] uppercase tracking-widest font-black opacity-50">Senarai Transfer</span>
+                                    {txs.length > 0 && (
+                                        <button onClick={() => {
+                                            const text = txs.map(t => `${t.from} -> ${t.to}: RM${t.amount.toFixed(2)}`).join("\n");
+                                            navigator.clipboard.writeText(`*SplitIt. Settlement*\n\n${text}`);
+                                            setCopied(true); setTimeout(() => setCopied(false), 2000);
+                                        }} className={`text-[10px] font-bold flex items-center gap-1 px-2 py-1 border-2 rounded hover:translate-x-[1px] hover:translate-y-[1px] transition-all ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"}`}>
+                                            {copied ? <Check size={12}/> : <Copy size={12}/>} {copied ? "COPIED!" : "COPY"}
+                                        </button>
+                                    )}
+                                </div>
+                                {txs.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-4 opacity-50 gap-2">
+                                        <CheckCircle size={24}/>
+                                        <p className="text-xs font-bold uppercase">Semua setel! Tiada hutang.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {txs.map((t, i) => (
+                                            <div key={i} className="flex justify-between items-center font-mono text-sm py-2 border-b border-dashed border-current border-opacity-20 last:border-0">
+                                                <div className="flex items-center gap-2 font-bold">
+                                                    <span className={darkMode ? "text-red-400" : "text-red-600"}>{t.from}</span>
+                                                    <ArrowRight size={14} className="opacity-50"/>
+                                                    <span className={darkMode ? "text-green-400" : "text-green-600"}>{t.to}</span>
+                                                </div>
+                                                <span className="font-black text-base">RM{t.amount.toFixed(2)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* FOOTER */}
+                    <div className="pt-8 pb-4 text-center">
+                        <button onClick={() => { if(confirm("Reset semua data?")) { localStorage.clear(); window.location.reload(); }}} className={`flex items-center gap-2 mx-auto text-xs font-bold px-4 py-2 border-2 rounded-xl hover:bg-red-500 hover:text-white hover:border-black transition mb-4 ${darkMode ? "border-red-400 text-red-400" : "border-red-600 text-red-600"}`}>
+                            <RotateCcw size={14}/> RESET DATA APP
+                        </button>
+                        <div className="opacity-40">
+                             <p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p>
+                             <p className="text-[9px] font-mono mt-1">v1.5.4 (Fixed Polish)</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* VIEW: FORM (ADD/EDIT) */}
+            {mode === "FORM" && (
+                <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
+                    <div className="flex items-center gap-4 mb-8">
+                        <button onClick={resetForm} className={`p-3 rounded-xl ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"}`}>
+                            <ArrowRight size={20} className="rotate-180"/>
+                        </button>
+                        <h2 className="text-2xl font-black uppercase tracking-tight">{editingBillId ? "Kemaskini Bill" : "Tambah Bill Baru"}</h2>
+                    </div>
+
+                    <div className={`flex-1 space-y-8 overflow-y-auto pb-6 px-1 ${darkMode ? "scrollbar-thumb-white" : "scrollbar-thumb-black"} scrollbar-thin`}>
+                        {/* BASIC INFO CARD */}
+                        <div className={`${cardStyle} p-5 space-y-5 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
+                            <div className="space-y-2">
+                                <label className="text-xs uppercase font-black tracking-wider opacity-70">Nama Kedai</label>
+                                <input value={billTitle} onChange={e => setBillTitle(e.target.value)} placeholder="Contoh: Mamak Bistro" className={inputStyle}/>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs uppercase font-black tracking-wider opacity-70">Total Resit (RM)</label>
+                                <input type="number" value={billTotal} onChange={e => setBillTotal(e.target.value)} placeholder="0.00" className={`${inputStyle} text-2xl font-black font-mono`}/>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs uppercase font-black tracking-wider opacity-70">Tukang Bayar</label>
+                                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+                                    {people.map(p => (
+                                        <button key={p.id} onClick={() => setPayerId(p.id)} className={`px-4 py-3 rounded-xl text-sm font-bold border-2 whitespace-nowrap transition-all ${payerId === p.id ? (darkMode ? "bg-white text-black border-white shadow-[2px_2px_0px_0px_#ffffff50]" : "bg-black text-white border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]") : (darkMode ? "border-[#444] text-gray-400 hover:border-white" : "border-gray-300 text-gray-500 hover:border-black hover:text-black hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]")}`}>
+                                            {p.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* MODE SELECTOR WITH BRUTAL EMOJIS */}
+                        <div className="grid grid-cols-2 gap-3">
+                             <button onClick={() => setBillType("EQUAL")} className={`p-4 rounded-xl border-2 text-sm font-black uppercase tracking-wider transition-all flex flex-col items-center gap-2 ${billType === "EQUAL" ? (darkMode ? "border-green-400 bg-green-400/20 text-green-400" : "border-black bg-green-300 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]") : (darkMode ? "border-[#444] opacity-50 hover:opacity-100" : "border-black bg-white opacity-50 hover:opacity-100 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]")}`}>
+                                <span className="text-2xl">🍰</span>
+                                KONGSI RATA
+                             </button>
+                             <button onClick={() => setBillType("ITEMIZED")} className={`p-4 rounded-xl border-2 text-sm font-black uppercase tracking-wider transition-all flex flex-col items-center gap-2 ${billType === "ITEMIZED" ? (darkMode ? "border-blue-400 bg-blue-400/20 text-blue-400" : "border-black bg-blue-300 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]") : (darkMode ? "border-[#444] opacity-50 hover:opacity-100" : "border-black bg-white opacity-50 hover:opacity-100 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]")}`}>
+                                <span className="text-2xl">🧾</span>
+                                SPLIT ITEM
+                             </button>
+                        </div>
+
+                        {/* ITEMIZED INPUTS */}
+                        {billType === "ITEMIZED" && (
+                            <div className="space-y-6 animate-in fade-in">
+                                <div className={`${cardStyle} p-5 space-y-4 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
+                                    <p className="text-xs uppercase font-black tracking-wider opacity-70 mb-4">Harga Makanan (Subtotal)</p>
+                                    {people.map(p => (
+                                        <div key={p.id} className="flex items-center gap-4">
+                                            <span className="w-24 text-sm font-bold truncate opacity-80">{p.name}</span>
+                                            <div className="relative flex-1">
+                                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold opacity-50`}>RM</span>
+                                                <input type="number" placeholder="0.00" value={tempItems.find(i=>i.personId===p.id)?.amount || ""} onChange={e => updateItemAmount(p.id, e.target.value)} className={`${inputStyle} pl-10 font-mono text-lg`}/>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* EXTRAS: FIXED FEE & DISCOUNT */}
+                                <div className={`${cardStyle} p-5 space-y-6 ${darkMode ? "bg-[#1E1E1E]" : "bg-violet-100"} ${shadowStyle}`}>
+                                    <div className="flex gap-4">
+                                        <div className="flex-1 space-y-2">
+                                            <label className="text-xs uppercase font-black opacity-70 flex items-center gap-2"><Bike size={16}/> Caj Tetap</label>
+                                            <input type="number" placeholder="0.00" value={miscFee} onChange={e => setMiscFee(e.target.value)} className={`${inputStyle} font-mono`}/>
+                                        </div>
+                                        <div className="flex-1 space-y-2">
+                                            <label className="text-xs uppercase font-black opacity-70 flex items-center gap-2"><Tag size={16}/> Diskaun</label>
+                                            <input type="number" placeholder="0.00" value={discountFee} onChange={e => setDiscountFee(e.target.value)} className={`${inputStyle} font-mono ${darkMode ? "focus:border-green-400" : "focus:border-green-500"}`}/>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CALCULATION STATUS (BRUTAL STYLE) */}
+                                <div className={`p-5 border-2 rounded-xl ${shadowStyle} ${
+                                    taxGap > 0.05 ? (darkMode ? "border-blue-400 bg-blue-400/10" : "border-black bg-blue-200") : 
+                                    taxGap < -0.05 ? (darkMode ? "border-red-400 bg-red-400/10" : "border-black bg-red-200") : 
+                                    (darkMode ? "border-green-400 bg-green-400/10" : "border-black bg-green-200")
+                                }`}>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <span className="text-xs uppercase font-black tracking-widest flex items-center gap-2">
+                                            {taxGap > 0.05 ? <AlertCircle size={16}/> : taxGap < -0.05 ? <X size={16}/> : <CheckCircle size={16}/>}
+                                            {taxGap > 0.05 ? "BAKI (TAX/SERVIS)" : taxGap < -0.05 ? "TERLEBIH KIRA!" : "NGAM-NGAM!"}
+                                        </span>
+                                        <span className="font-mono font-black text-xl">{taxGap < 0 ? "-" : ""}RM{Math.abs(taxGap).toFixed(2)}</span>
+                                    </div>
+
+                                    {/* TOGGLES FOR TAX & DISCOUNT */}
+                                    {(taxGap > 0.05 || parseFloat(discountFee) > 0) && (
+                                        <div className={`space-y-3 mt-4 pt-4 border-t-2 border-current ${darkMode ? "border-opacity-30" : "border-black"}`}>
+                                            {taxGap > 0.05 && (
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold opacity-70">Cara Agih Tax:</span>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => setTaxMethod("PROPORTIONAL")} className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border-2 transition-all ${taxMethod === "PROPORTIONAL" ? (darkMode ? "bg-blue-400 text-black border-blue-400" : "bg-black text-white border-black shadow-[2px_2px_0px_0px_#000]") : "border-current opacity-50 hover:opacity-100"}`}>% MAKAN</button>
+                                                        <button onClick={() => setTaxMethod("EQUAL_SPLIT")} className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border-2 transition-all ${taxMethod === "EQUAL_SPLIT" ? (darkMode ? "bg-blue-400 text-black border-blue-400" : "bg-black text-white border-black shadow-[2px_2px_0px_0px_#000]") : "border-current opacity-50 hover:opacity-100"}`}>SAMA RATA</button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {parseFloat(discountFee) > 0 && (
+                                                 <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold opacity-70">Cara Agih Diskaun:</span>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => setDiscountMethod("PROPORTIONAL")} className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border-2 transition-all ${discountMethod === "PROPORTIONAL" ? (darkMode ? "bg-green-400 text-black border-green-400" : "bg-black text-white border-black shadow-[2px_2px_0px_0px_#000]") : "border-current opacity-50 hover:opacity-100"}`}>% MAKAN</button>
+                                                        <button onClick={() => setDiscountMethod("EQUAL_SPLIT")} className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border-2 transition-all ${discountMethod === "EQUAL_SPLIT" ? (darkMode ? "bg-green-400 text-black border-green-400" : "bg-black text-white border-black shadow-[2px_2px_0px_0px_#000]") : "border-current opacity-50 hover:opacity-100"}`}>SAMA RATA</button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         )}
-                   </div>
-                   
-                   <div className="space-y-2">
-                    <p className="text-xs opacity-50 px-2 uppercase font-bold">Harga Makanan (Subtotal)</p>
-                    {people.map(p => {
-                       const currentVal = tempItems.find(i => i.personId === p.id)?.amount || "";
-                       return (
-                         <div key={p.id} className="flex items-center gap-3">
-                           <span className="w-24 text-sm font-medium truncate">{p.name}</span>
-                           <div className="flex-1 relative">
-                             <span className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50 text-xs">RM</span>
-                             <input type="number" placeholder="0.00" value={currentVal} onChange={(e) => updateItemizedAmount(p.id, e.target.value)} className={`w-full pl-8 pr-4 py-3 text-base rounded-xl outline-none transition-all ${darkMode ? "bg-white/5 focus:bg-white/10" : "bg-slate-100 focus:bg-white focus:shadow-md"}`}/>
-                           </div>
-                         </div>
-                       )
-                    })}
-                   </div>
+                    </div>
 
-                   <div className="space-y-2 pt-2 border-t border-dashed border-white/10">
-                        <label className="text-xs opacity-60 uppercase font-bold flex items-center gap-2"><Bike size={14}/> Caj Tetap (Delivery/Deposit)</label>
-                        <div className="relative">
-                             <span className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50 text-sm">RM</span>
-                             <input type="number" placeholder="0.00" value={miscFee} onChange={(e) => setMiscFee(e.target.value)} className={`w-full pl-10 pr-4 py-3 rounded-xl text-base outline-none font-bold ${darkMode ? "bg-white/5 border border-white/10 focus:border-blue-500" : "bg-slate-100 border border-slate-200 focus:border-blue-500"}`}/>
-                        </div>
-                        <p className="text-[10px] opacity-50 px-1">Nilai ni akan dibahagi sama rata kepada semua orang.</p>
-                   </div>
+                    <button disabled={!billTitle || !billTotal || (billType === "ITEMIZED" && taxGap < -0.1)} onClick={saveBill} className={`w-full py-5 rounded-xl text-sm font-black uppercase tracking-widest border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none ${darkMode ? "bg-white text-black border-white hover:bg-gray-200" : "bg-lime-300 text-black border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]"}`}>
+                        {editingBillId ? "KEMASKINI BILL SEKARANG" : "SIMPAN BILL NI"}
+                    </button>
                 </div>
-              )}
-            </div>
-
-            <button onClick={saveBill} disabled={!billTitle || !billTotal || (billType === "ITEMIZED" && remainingTax < -0.1)} className="mt-4 w-full py-4 rounded-2xl bg-white text-black font-bold text-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition">
-              {editingBillId ? "Kemaskini Bill" : "Simpan Bill"}
-            </button>
-          </div>
-        )}
-      </main>
+            )}
+            
+        </main>
+      </div>
     </div>
   );
 }

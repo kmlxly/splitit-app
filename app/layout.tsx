@@ -4,7 +4,6 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
-// 1. Ini bahagian Metadata (Tajuk & Icon)
 export const metadata: Metadata = {
   title: "SplitIt. by kmlxly",
   description: "Bahagi bill cara tenang dan moden.",
@@ -13,13 +12,13 @@ export const metadata: Metadata = {
   },
 };
 
-// 2. Ini bahagian Viewport (Zoom Setting) - Kena ASING dari Metadata
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false, // Ini yang halang auto-zoom bila taip
-  themeColor: "#0f172a", // Warna bar phone (optional, nampak kemas)
+  userScalable: false,
+  // TUKAR SINI: Warna hitam 'Brutalism' (#191919) supaya bar phone nampak seamless
+  themeColor: "#191919", 
 };
 
 export default function RootLayout({
@@ -28,8 +27,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="ms">
+      <body className={`${inter.className} bg-[#191919]`}>{children}</body>
     </html>
   );
 }
