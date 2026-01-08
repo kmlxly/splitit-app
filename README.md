@@ -36,21 +36,6 @@ yarn dev
 Open http://localhost:3000 with your browser to see the result.
 
 📝 Changelog History
-v1.9.0 - Mobile & Social Ready
-UI Overhaul: Redesigned Pay Modal to be slimmer and mobile-friendly.
-
-Social Share: Added background frame & padding to receipt screenshots for better aesthetics when sharing to WhatsApp/IG.
-
-Bugfix: Adjusted html2canvas scaling to fix rendering issues on mobile devices.
-
-v1.8.1 - Mobile Layout Fix
-Fixed alignment issues in receipt view (vertical layout for mobile safety).
-
-Added visual dashed lines for better ticket/receipt feel.
-
-Open http://localhost:3000 with your browser to see the result.
-
-📝 Changelog History
 v1.9.5 - Stable Release (The "Open Tab" Solution)
 Core Fix: Switched receipt generation method from navigator.share (which fails on non-HTTPS/embedded browsers) to window.open(). This ensures 100% compatibility across iOS and Android.
 
