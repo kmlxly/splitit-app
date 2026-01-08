@@ -1,30 +1,29 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import html2canvas from "html2canvas"; // WAJIB INSTALL NI
 import { 
   Moon, Sun, ArrowRight, CheckCircle, Trash2, 
   Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X, 
-  ChevronDown, ChevronUp, Receipt, Users, AlertCircle
+  ChevronDown, ChevronUp, Receipt, Users, AlertCircle, 
+  CreditCard, QrCode, Upload, Wallet, Share2, Download
 } from "lucide-react";
 
 // --- TYPES ---
-type Person = { id: string; name: string };
+type Person = { 
+  id: string; name: string; 
+  bankName?: string; bankAccount?: string; qrImage?: string; 
+};
 type BillType = "EQUAL" | "ITEMIZED";
 type SplitMethod = "PROPORTIONAL" | "EQUAL_SPLIT";
-
-type BillDetail = {
-  personId: string;
-  base: number; tax: number; misc: number; discount: number; total: number;
-};
-
+type BillDetail = { personId: string; base: number; tax: number; misc: number; discount: number; total: number; };
 type Bill = {
   id: string; title: string; type: BillType; totalAmount: number; paidBy: string;
   details: BillDetail[]; itemsSubtotal: number; miscAmount: number; discountAmount: number;
   taxMethod: SplitMethod; discountMethod: SplitMethod;
 };
-
-type Transfer = { from: string; to: string; amount: number; };
+type Transfer = { fromId: string; toId: string; fromName: string; toName: string; amount: number; };
 
 export default function SplitBillBrutalV2() {
   // --- STATE ---
@@ -33,15 +32,28 @@ export default function SplitBillBrutalV2() {
   
   const [people, setPeople] = useState<Person[]>([{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }]);
   const [bills, setBills] = useState<Bill[]>([]);
+  
+  const [paidStatus, setPaidStatus] = useState<Record<string, boolean>>({});
 
+  // UI States
   const [newPersonName, setNewPersonName] = useState("");
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [expandedBillId, setExpandedBillId] = useState<string | null>(null); 
   const [copied, setCopied] = useState(false);
-
   const [mode, setMode] = useState<"DASHBOARD" | "FORM">("DASHBOARD");
-  const [editingBillId, setEditingBillId] = useState<string | null>(null);
+  
+  // Modals
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentProfileId, setPaymentProfileId] = useState<string | null>(null);
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [activeTransfer, setActiveTransfer] = useState<Transfer | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  
+  // Ref for Receipt Card (To take screenshot)
+  const receiptRef = useRef<HTMLDivElement>(null);
 
+  // Form Inputs
+  const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [billType, setBillType] = useState<BillType>("EQUAL");
   const [billTitle, setBillTitle] = useState("");
   const [billTotal, setBillTotal] = useState(""); 
@@ -57,9 +69,12 @@ export default function SplitBillBrutalV2() {
     const savedPeople = localStorage.getItem("splitit_people");
     const savedBills = localStorage.getItem("splitit_bills");
     const savedMode = localStorage.getItem("splitit_darkmode");
+    const savedStatus = localStorage.getItem("splitit_paid_status");
+
     if (savedPeople) setPeople(JSON.parse(savedPeople));
     if (savedBills) setBills(JSON.parse(savedBills));
     if (savedMode) setDarkMode(savedMode === "true");
+    if (savedStatus) setPaidStatus(JSON.parse(savedStatus));
     setIsLoaded(true);
   }, []);
 
@@ -68,8 +83,9 @@ export default function SplitBillBrutalV2() {
         localStorage.setItem("splitit_people", JSON.stringify(people));
         localStorage.setItem("splitit_bills", JSON.stringify(bills));
         localStorage.setItem("splitit_darkmode", String(darkMode));
+        localStorage.setItem("splitit_paid_status", JSON.stringify(paidStatus));
     }
-  }, [people, bills, darkMode, isLoaded]);
+  }, [people, bills, darkMode, paidStatus, isLoaded]);
 
   // --- LOGIC FUNCTIONS ---
   const addPerson = () => {
@@ -80,12 +96,21 @@ export default function SplitBillBrutalV2() {
   const updatePersonName = (id: string, newName: string) => {
     setPeople(people.map(p => p.id === id ? { ...p, name: newName } : p));
   };
+  const updatePaymentProfile = (id: string, bankName: string, acc: string, qr: string) => {
+    setPeople(people.map(p => p.id === id ? { ...p, bankName, bankAccount: acc, qrImage: qr } : p));
+  };
   const deletePerson = (id: string) => {
     if (bills.some(b => b.paidBy === id || b.details.some(d => d.personId === id))) {
       alert("Member ni ada rekod dalam bill."); return;
     }
     setPeople(people.filter(p => p.id !== id)); setEditingPersonId(null);
   };
+  
+  const togglePaymentStatus = (fromId: string, toId: string) => {
+    const key = `${fromId}-${toId}`;
+    setPaidStatus(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const startEditBill = (bill: Bill) => {
     setEditingBillId(bill.id); setBillTitle(bill.title); setBillTotal(String(bill.totalAmount));
     setBillType(bill.type); setPayerId(bill.paidBy);
@@ -151,6 +176,7 @@ export default function SplitBillBrutalV2() {
     const total = parseFloat(billTotal) || 0; const misc = parseFloat(miscFee) || 0; const disc = parseFloat(discountFee) || 0; const items = getAllocated();
     return total - (items + misc - disc);
   };
+  
   const calculateSettlement = () => {
     let bal: Record<string, number> = {}; people.forEach(p => bal[p.id] = 0);
     bills.forEach(b => {
@@ -163,7 +189,7 @@ export default function SplitBillBrutalV2() {
     let txs: Transfer[] = []; let i=0, j=0;
     while(i < debtors.length && j < creditors.length) {
         let amt = Math.min(debtors[i].net, creditors[j].net);
-        if (amt > 0.01) txs.push({ from: debtors[i].name, to: creditors[j].name, amount: amt });
+        if (amt > 0.01) txs.push({ fromId: debtors[i].id, fromName: debtors[i].name, toId: creditors[j].id, toName: creditors[j].name, amount: amt });
         debtors[i].net -= amt; creditors[j].net -= amt;
         if (debtors[i].net < 0.01) i++; if (creditors[j].net < 0.01) j++;
     }
@@ -171,9 +197,65 @@ export default function SplitBillBrutalV2() {
   };
   const { netPeople, txs } = calculateSettlement(); const taxGap = getCalcStatus();
 
-  // --- BRUTAL STYLES (PLAIN) ---
+  // --- NEW: SHARE AS IMAGE FUNCTION ---
+  const handleShareImage = async () => {
+    if (!receiptRef.current) return;
+    setIsSharing(true);
+    
+    try {
+        // Capture specific element
+        const canvas = await html2canvas(receiptRef.current, {
+            backgroundColor: darkMode ? "#1E1E1E" : "#FFFFFF",
+            scale: 2, // Better quality
+        });
+        
+        canvas.toBlob(async (blob) => {
+            if (blob) {
+                const file = new File([blob], "resit-splitit.png", { type: "image/png" });
+                
+                // Check if device supports sharing files (Mobile)
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'SplitIt Receipt',
+                            text: 'Bayaran weh!',
+                        });
+                    } catch (error) {
+                        console.log("Share skipped", error);
+                    }
+                } else {
+                    // Fallback for Desktop: Download image
+                    const link = document.createElement('a');
+                    link.href = canvas.toDataURL();
+                    link.download = 'resit-splitit.png';
+                    link.click();
+                    alert("Gambar resit telah didownload!");
+                }
+            }
+            setIsSharing(false);
+        });
+    } catch (err) {
+        console.error("Failed to generate image", err);
+        setIsSharing(false);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, pid: string) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1000000) { alert("File besar sangat bos! Sila guna gambar < 1MB."); return; }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const p = people.find(per => per.id === pid);
+        if(p) updatePaymentProfile(pid, p.bankName || "", p.bankAccount || "", reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // --- BRUTAL STYLES ---
   const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-200 text-black";
-  
   const cardStyle = `${darkMode ? "bg-[#1E1E1E] border-white" : "bg-white border-black"} border-2 rounded-2xl`;
   const shadowStyle = darkMode ? "" : "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]";
   const buttonBase = `border-2 font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"} ${shadowStyle} hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]`;
@@ -186,19 +268,16 @@ export default function SplitBillBrutalV2() {
     <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
       <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
         
-        {/* HEADER (UPDATED ALIGNMENT) */}
+        {/* HEADER */}
         <header className={`p-6 border-b-2 relative z-10 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
             <div className="flex justify-between items-center">
-                <a href="/" className="flex items-center gap-4 cursor-pointer group">
-                     {/* Box Logo: Fixed size */}
-                     <div className={`w-12 h-12 border-2 ${darkMode ? "border-white" : "border-black"} rounded-xl flex items-center justify-center overflow-hidden bg-white/10 backdrop-blur group-hover:scale-105 transition-transform flex-shrink-0`}>
+                <a href="/" className="flex items-center gap-3 cursor-pointer group">
+                     <div className={`w-12 h-12 border-2 ${darkMode ? "border-white" : "border-black"} rounded-xl flex items-center justify-center overflow-hidden bg-white/10 backdrop-blur group-hover:scale-105 transition-transform`}>
                         <Image src="/icon.png" width={40} height={40} alt="Logo" className="object-cover"/>
                      </div>
-                     
-                     {/* Text Block: Adjusted line-height for better centering */}
-                     <div className="flex flex-col justify-center h-12">
-                        <h1 className="text-2xl font-black tracking-tighter leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
-                        <p className="text-[10px] uppercase tracking-widest font-bold opacity-60">by kmlxly</p>
+                     <div>
+                        <h1 className="text-2xl font-black tracking-tight leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
+                        <p className="text-[10px] uppercase tracking-widest font-bold mt-1 opacity-70">by kmlxly</p>
                      </div>
                 </a>
                 <button onClick={() => setDarkMode(!darkMode)} className={`p-2 ${buttonBase}`}>
@@ -220,24 +299,27 @@ export default function SplitBillBrutalV2() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {people.map(p => (
-                                editingPersonId === p.id ? (
-                                    <div key={p.id} className={`flex items-center border-2 rounded-xl p-1 gap-1 ${darkMode ? "border-blue-400 bg-blue-400/20" : "border-blue-600 bg-blue-100"}`}>
-                                        <input autoFocus value={p.name} onChange={e => updatePersonName(p.id, e.target.value)} onKeyDown={e => e.key === "Enter" && setEditingPersonId(null)} className="bg-transparent outline-none text-sm font-bold px-2 w-24"/>
-                                        <button onClick={() => deletePerson(p.id)} className={`p-1.5 rounded-lg ${darkMode ? "text-red-400 hover:bg-red-400/20" : "text-red-600 hover:bg-red-200"}`}><Trash2 size={14}/></button>
-                                        <button onClick={() => setEditingPersonId(null)} className={`p-1.5 rounded-lg ${darkMode ? "text-green-400 hover:bg-green-400/20" : "text-green-600 hover:bg-green-200"}`}><Check size={14}/></button>
-                                    </div>
-                                ) : (
-                                    <button 
-                                        key={p.id} 
-                                        onClick={() => setEditingPersonId(p.id)} 
-                                        className={`group relative px-6 py-2 text-sm font-bold border-2 rounded-xl transition-all hover:shadow-none overflow-hidden ${darkMode ? "border-white bg-[#333] hover:bg-[#444]" : "border-black bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}
-                                    >
-                                        <span className="block transition-transform duration-300 group-hover:-translate-x-3">{p.name}</span>
-                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-10 group-hover:translate-x-[-12px] transition-transform duration-300 ease-out">
-                                            <Edit3 size={16} className="fill-yellow-400 text-black stroke-[2.5px]" />
+                                <div key={p.id} className="relative">
+                                    {editingPersonId === p.id ? (
+                                        <div className={`flex items-center border-2 rounded-xl p-1 gap-1 ${darkMode ? "border-blue-400 bg-blue-400/20" : "border-blue-600 bg-blue-100"}`}>
+                                            <input autoFocus value={p.name} onChange={e => updatePersonName(p.id, e.target.value)} onKeyDown={e => e.key === "Enter" && setEditingPersonId(null)} className="bg-transparent outline-none text-sm font-bold px-2 w-24"/>
+                                            <button onClick={() => deletePerson(p.id)} className={`p-1.5 rounded-lg ${darkMode ? "text-red-400 hover:bg-red-400/20" : "text-red-600 hover:bg-red-200"}`}><Trash2 size={14}/></button>
+                                            <button onClick={() => setEditingPersonId(null)} className={`p-1.5 rounded-lg ${darkMode ? "text-green-400 hover:bg-green-400/20" : "text-green-600 hover:bg-green-200"}`}><Check size={14}/></button>
                                         </div>
-                                    </button>
-                                )
+                                    ) : (
+                                        <div className="flex gap-1">
+                                            <button onClick={() => setEditingPersonId(p.id)} className={`group relative px-6 py-2 text-sm font-bold border-2 rounded-xl transition-all hover:shadow-none overflow-hidden ${darkMode ? "border-white bg-[#333] hover:bg-[#444]" : "border-black bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}>
+                                                <span className="block transition-transform duration-300 group-hover:-translate-x-3">{p.name}</span>
+                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-10 group-hover:translate-x-[-12px] transition-transform duration-300 ease-out">
+                                                    <Edit3 size={16} className="fill-yellow-400 text-black stroke-[2.5px]" />
+                                                </div>
+                                            </button>
+                                            <button onClick={() => {setPaymentProfileId(p.id); setShowPaymentModal(true)}} className={`p-2 border-2 rounded-xl flex items-center justify-center transition-all active:scale-95 ${p.bankAccount ? (darkMode ? "bg-green-400 text-black border-green-400" : "bg-green-400 text-black border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]") : (darkMode ? "border-white/20 text-white/20 hover:border-white hover:text-white" : "border-black/20 text-black/20 hover:border-black hover:text-black")}`}>
+                                                <Wallet size={16}/>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             ))}
                             <div className={`flex items-center border-2 rounded-xl px-3 py-2 ${darkMode ? "border-white bg-[#333]" : "border-black bg-white"}`}>
                                 <input value={newPersonName} onChange={e => setNewPersonName(e.target.value)} onKeyDown={e => e.key === "Enter" && addPerson()} placeholder="Tambah..." className={`bg-transparent font-bold outline-none text-sm w-20 ${darkMode ? "placeholder:text-white/50" : "placeholder:text-black/50"}`}/>
@@ -251,7 +333,6 @@ export default function SplitBillBrutalV2() {
                         <div className="flex items-center justify-between mb-4">
                              <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><Receipt size={16}/> Resit / Bill</h2>
                         </div>
-                        
                         <div className="space-y-4">
                             {bills.length === 0 ? (
                                 <button onClick={() => {resetForm(); setMode("FORM")}} className={`w-full p-8 border-2 border-dashed rounded-2xl text-center opacity-60 hover:opacity-100 hover:border-solid transition flex flex-col items-center gap-2 ${darkMode ? "border-white" : "border-black"}`}>
@@ -275,96 +356,87 @@ export default function SplitBillBrutalV2() {
                                                 {expandedBillId === bill.id ? <ChevronUp size={20} className="ml-auto mt-1"/> : <ChevronDown size={20} className="ml-auto mt-1"/>}
                                             </div>
                                         </div>
-                                        
-                                        {/* EXPANDED DETAIL */}
                                         {expandedBillId === bill.id && (
                                             <div className={`text-sm border-t-2 p-5 space-y-3 ${darkMode ? "border-white bg-[#1a1a1a]" : "border-black bg-gray-50"}`}>
-                                                <div className="grid grid-cols-4 text-[10px] uppercase font-bold opacity-50 mb-2">
-                                                    <div className="col-span-2">Nama & Detail</div>
-                                                    <div className="text-right col-span-2">Total</div>
-                                                </div>
                                                 {bill.details.map(d => (
                                                     <div key={d.personId} className="flex justify-between items-center py-2 border-b border-dashed border-current border-opacity-20 last:border-0">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold">{people.find(p=>p.id === d.personId)?.name}</span>
-                                                            {bill.type === "ITEMIZED" && (
-                                                                <div className="flex flex-wrap gap-x-2 text-[9px] opacity-60 font-mono mt-0.5">
-                                                                    <span>Makan:{d.base.toFixed(2)}</span>
-                                                                    {(d.misc + d.tax) > 0 && <span>+Caj:{(d.misc + d.tax).toFixed(2)}</span>}
-                                                                    {d.discount > 0 && <span className={darkMode ? "text-green-400" : "text-green-700"}>-Disc:{d.discount.toFixed(2)}</span>}
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                        <span className="font-bold">{people.find(p=>p.id === d.personId)?.name}</span>
                                                         <span className="font-mono font-black text-base">RM{d.total.toFixed(2)}</span>
                                                     </div>
                                                 ))}
                                                 <div className="flex gap-3 pt-4 mt-2 justify-end">
-                                                    <button onClick={() => startEditBill(bill)} className={`px-4 py-2 border-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${darkMode ? "border-blue-400 text-blue-400 hover:bg-blue-400 hover:text-black" : "border-blue-600 text-blue-700 bg-blue-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-blue-600 hover:text-white hover:border-black"}`}><Edit3 size={14}/> EDIT</button>
-                                                    <button onClick={() => deleteBill(bill.id)} className={`px-4 py-2 border-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${darkMode ? "border-red-400 text-red-400 hover:bg-red-400 hover:text-black" : "border-red-600 text-red-700 bg-red-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-red-600 hover:text-white hover:border-black"}`}><Trash2 size={14}/> DELETE</button>
+                                                    <button onClick={() => startEditBill(bill)} className={`px-4 py-2 border-2 rounded-xl text-xs font-bold flex items-center gap-2 ${darkMode ? "border-blue-400 text-blue-400 hover:bg-blue-400 hover:text-black" : "border-blue-600 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-black"}`}><Edit3 size={14}/> EDIT</button>
+                                                    <button onClick={() => deleteBill(bill.id)} className={`px-4 py-2 border-2 rounded-xl text-xs font-bold flex items-center gap-2 ${darkMode ? "border-red-400 text-red-400 hover:bg-red-400 hover:text-black" : "border-red-600 text-red-700 bg-red-50 hover:bg-red-600 hover:text-white hover:border-black"}`}><Trash2 size={14}/> DELETE</button>
                                                 </div>
                                             </div>
                                         )}
                                     </div>
                                 ))}
-                                <button onClick={() => {resetForm(); setMode("FORM")}} className={`w-full py-4 ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"} mt-4 text-sm uppercase tracking-wider`}>
-                                    <Plus size={18}/> Tambah Bill Lagi
-                                </button>
+                                <button onClick={() => {resetForm(); setMode("FORM")}} className={`w-full py-4 ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"} mt-4 text-sm uppercase tracking-wider`}><Plus size={18}/> Tambah Bill Lagi</button>
                                 </>
                             )}
                         </div>
                     </section>
 
-                    {/* SECTION: SETTLEMENT (FIXED ICON COLOR) */}
+                    {/* SECTION: SETTLEMENT PRO MAX */}
                     {bills.length > 0 && (
                         <section className={`${cardStyle} p-6 ${shadowStyle} ${darkMode ? "bg-[#222]" : "bg-lime-200"}`}>
-                            {/* FIX: Force white color in dark mode directly */}
                             <h2 className="text-lg font-black mb-6 flex items-center gap-2 uppercase">
-                                <CheckCircle size={24} className={`${darkMode ? "text-white" : "text-black"}`}/> Final Settlement
+                                <CheckCircle size={24} className={darkMode ? "text-white" : "text-black"}/> Final Settlement
                             </h2>
-                            
-                            {/* Summary Cards */}
                             <div className="grid grid-cols-2 gap-3 mb-6">
                                 {netPeople.map(p => (
                                     <div key={p.id} className={`p-4 border-2 rounded-xl flex flex-col gap-1 ${darkMode ? "border-white bg-[#333]" : "border-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"}`}>
                                         <span className="text-xs font-bold uppercase opacity-70">{p.name}</span>
-                                        <span className={`text-lg font-mono font-black ${p.net > 0 ? (darkMode ? "text-green-400" : "text-green-600") : p.net < 0 ? (darkMode ? "text-red-400" : "text-red-600") : "opacity-50"}`}>
-                                            {p.net > 0 ? "+" : ""}{p.net.toFixed(2)}
-                                        </span>
+                                        <span className={`text-lg font-mono font-black ${p.net > 0 ? (darkMode ? "text-green-400" : "text-green-600") : p.net < 0 ? (darkMode ? "text-red-400" : "text-red-600") : "opacity-50"}`}>{p.net > 0 ? "+" : ""}{p.net.toFixed(2)}</span>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Transfer List */}
-                            <div className={`p-5 rounded-xl border-2 ${darkMode ? "bg-[#121212] border-white" : "bg-white border-black"}`}>
-                                <div className="flex justify-between items-center mb-4 pb-2 border-b-2 border-current border-opacity-10">
-                                    <span className="text-[10px] uppercase tracking-widest font-black opacity-50">Senarai Transfer</span>
+                            {/* FIXED VISIBILITY: REMOVED BG-CURRENT, USED SOLID COLORS */}
+                            <div className={`rounded-xl border-2 overflow-hidden ${darkMode ? "bg-[#121212] border-white" : "bg-white border-black"}`}>
+                                <div className={`p-4 flex justify-between items-center border-b-2 ${darkMode ? "bg-white/10 border-white/20" : "bg-gray-100 border-black/10"}`}>
+                                    <span className={`text-[10px] uppercase tracking-widest font-black opacity-60 ${darkMode ? "text-white" : "text-black"}`}>Senarai Transfer</span>
                                     {txs.length > 0 && (
                                         <button onClick={() => {
-                                            const text = txs.map(t => `${t.from} -> ${t.to}: RM${t.amount.toFixed(2)}`).join("\n");
-                                            navigator.clipboard.writeText(`*SplitIt. Settlement*\n\n${text}`);
+                                            const text = txs.map(t => `${t.fromName} -> ${t.toName}: RM${t.amount.toFixed(2)} ${paidStatus[`${t.fromId}-${t.toId}`] ? '✅' : '❌'}`).join("\n");
+                                            navigator.clipboard.writeText(`*SplitIt. by kmlxly*\n\n${text}\n\n*Settled? Use SplitIt.*`);
                                             setCopied(true); setTimeout(() => setCopied(false), 2000);
                                         }} className={`text-[10px] font-bold flex items-center gap-1 px-2 py-1 border-2 rounded hover:translate-x-[1px] hover:translate-y-[1px] transition-all ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"}`}>
-                                            {copied ? <Check size={12}/> : <Copy size={12}/>} {copied ? "COPIED!" : "COPY"}
+                                            {copied ? <Check size={12}/> : <Copy size={12}/>} {copied ? "COPIED!" : "COPY ALL"}
                                         </button>
                                     )}
                                 </div>
                                 {txs.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-4 opacity-50 gap-2">
-                                        <CheckCircle size={24}/>
-                                        <p className="text-xs font-bold uppercase">Semua setel! Tiada hutang.</p>
-                                    </div>
+                                    <div className="flex flex-col items-center justify-center py-8 opacity-50 gap-2"><CheckCircle size={24}/><p className="text-xs font-bold uppercase">Semua setel! Tiada hutang.</p></div>
                                 ) : (
-                                    <div className="space-y-3">
-                                        {txs.map((t, i) => (
-                                            <div key={i} className="flex justify-between items-center font-mono text-sm py-2 border-b border-dashed border-current border-opacity-20 last:border-0">
-                                                <div className="flex items-center gap-2 font-bold">
-                                                    <span className={darkMode ? "text-red-400" : "text-red-600"}>{t.from}</span>
-                                                    <ArrowRight size={14} className="opacity-50"/>
-                                                    <span className={darkMode ? "text-green-400" : "text-green-600"}>{t.to}</span>
+                                    <div className="divide-y-2 divide-current divide-dashed divide-opacity-10">
+                                        {txs.map((t, i) => {
+                                            const isPaid = paidStatus[`${t.fromId}-${t.toId}`];
+                                            return (
+                                                <div key={i} className={`flex justify-between items-center font-mono text-sm p-4 transition-colors ${isPaid ? (darkMode ? "bg-green-900/20" : "bg-green-100") : ""}`}>
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-2 font-bold">
+                                                            <span className={isPaid ? "opacity-50 line-through decoration-2" : (darkMode ? "text-red-400" : "text-red-600")}>{t.fromName}</span>
+                                                            <ArrowRight size={14} className="opacity-50"/>
+                                                            <span className={isPaid ? "opacity-50" : (darkMode ? "text-green-400" : "text-green-600")}>{t.toName}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border border-current opacity-70 ${isPaid ? "text-green-600 border-green-600" : ""}`}>{isPaid ? "PAID" : "UNPAID"}</span>
+                                                            <span className="text-[10px] opacity-50">RM{t.amount.toFixed(2)}</span>
+                                                        </div>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => {setActiveTransfer(t); setShowPayModal(true)}}
+                                                        className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-lg border-2 flex items-center gap-2 transition-all ${isPaid 
+                                                            ? (darkMode ? "bg-transparent border-green-500 text-green-500 hover:bg-green-500/20" : "bg-white border-green-600 text-green-600 hover:bg-green-50") 
+                                                            : (darkMode ? "bg-white text-black hover:bg-green-400" : "bg-black text-white hover:bg-green-500 hover:border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]")}`}
+                                                    >
+                                                        {isPaid ? <Check size={12}/> : <CreditCard size={12}/>} {isPaid ? "DONE" : "BAYAR"}
+                                                    </button>
                                                 </div>
-                                                <span className="font-black text-base">RM{t.amount.toFixed(2)}</span>
-                                            </div>
-                                        ))}
+                                            )
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -373,18 +445,13 @@ export default function SplitBillBrutalV2() {
 
                     {/* FOOTER */}
                     <div className="pt-8 pb-4 text-center">
-                        <button onClick={() => { if(confirm("Reset semua data?")) { localStorage.clear(); window.location.reload(); }}} className={`flex items-center gap-2 mx-auto text-xs font-bold px-4 py-2 border-2 rounded-xl hover:bg-red-500 hover:text-white hover:border-black transition mb-4 ${darkMode ? "border-red-400 text-red-400" : "border-red-600 text-red-600"}`}>
-                            <RotateCcw size={14}/> RESET DATA APP
-                        </button>
-                        <div className="opacity-40">
-                             <p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p>
-                             <p className="text-[9px] font-mono mt-1">v1.5.4 (Fixed Polish)</p>
-                        </div>
+                        <button onClick={() => { if(confirm("Reset semua data?")) { localStorage.clear(); window.location.reload(); }}} className={`flex items-center gap-2 mx-auto text-xs font-bold px-4 py-2 border-2 rounded-xl hover:bg-red-500 hover:text-white hover:border-black transition mb-4 ${darkMode ? "border-red-400 text-red-400" : "border-red-600 text-red-600"}`}><RotateCcw size={14}/> RESET DATA APP</button>
+                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v1.8.0 (Picture Perfect)</p></div>
                     </div>
                 </div>
             )}
 
-            {/* VIEW: FORM (ADD/EDIT) */}
+            {/* FORM VIEW (FULL CODE) */}
             {mode === "FORM" && (
                 <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
                     <div className="flex items-center gap-4 mb-8">
@@ -395,7 +462,7 @@ export default function SplitBillBrutalV2() {
                     </div>
 
                     <div className={`flex-1 space-y-8 overflow-y-auto pb-6 px-1 ${darkMode ? "scrollbar-thumb-white" : "scrollbar-thumb-black"} scrollbar-thin`}>
-                        {/* BASIC INFO CARD */}
+                        {/* BASIC INFO */}
                         <div className={`${cardStyle} p-5 space-y-5 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
                             <div className="space-y-2">
                                 <label className="text-xs uppercase font-black tracking-wider opacity-70">Nama Kedai</label>
@@ -417,19 +484,17 @@ export default function SplitBillBrutalV2() {
                             </div>
                         </div>
 
-                        {/* MODE SELECTOR WITH BRUTAL EMOJIS */}
+                        {/* MODE SELECTOR */}
                         <div className="grid grid-cols-2 gap-3">
                              <button onClick={() => setBillType("EQUAL")} className={`p-4 rounded-xl border-2 text-sm font-black uppercase tracking-wider transition-all flex flex-col items-center gap-2 ${billType === "EQUAL" ? (darkMode ? "border-green-400 bg-green-400/20 text-green-400" : "border-black bg-green-300 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]") : (darkMode ? "border-[#444] opacity-50 hover:opacity-100" : "border-black bg-white opacity-50 hover:opacity-100 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]")}`}>
-                                <span className="text-2xl">🍰</span>
-                                KONGSI RATA
+                                <span className="text-2xl">🍰</span> KONGSI RATA
                              </button>
                              <button onClick={() => setBillType("ITEMIZED")} className={`p-4 rounded-xl border-2 text-sm font-black uppercase tracking-wider transition-all flex flex-col items-center gap-2 ${billType === "ITEMIZED" ? (darkMode ? "border-blue-400 bg-blue-400/20 text-blue-400" : "border-black bg-blue-300 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]") : (darkMode ? "border-[#444] opacity-50 hover:opacity-100" : "border-black bg-white opacity-50 hover:opacity-100 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]")}`}>
-                                <span className="text-2xl">🧾</span>
-                                SPLIT ITEM
+                                <span className="text-2xl">🧾</span> SPLIT ITEM
                              </button>
                         </div>
 
-                        {/* ITEMIZED INPUTS */}
+                        {/* ITEMIZED */}
                         {billType === "ITEMIZED" && (
                             <div className="space-y-6 animate-in fade-in">
                                 <div className={`${cardStyle} p-5 space-y-4 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
@@ -445,7 +510,7 @@ export default function SplitBillBrutalV2() {
                                     ))}
                                 </div>
 
-                                {/* EXTRAS: FIXED FEE & DISCOUNT */}
+                                {/* EXTRAS */}
                                 <div className={`${cardStyle} p-5 space-y-6 ${darkMode ? "bg-[#1E1E1E]" : "bg-violet-100"} ${shadowStyle}`}>
                                     <div className="flex gap-4">
                                         <div className="flex-1 space-y-2">
@@ -459,7 +524,7 @@ export default function SplitBillBrutalV2() {
                                     </div>
                                 </div>
 
-                                {/* CALCULATION STATUS (BRUTAL STYLE) */}
+                                {/* CALC STATUS */}
                                 <div className={`p-5 border-2 rounded-xl ${shadowStyle} ${
                                     taxGap > 0.05 ? (darkMode ? "border-blue-400 bg-blue-400/10" : "border-black bg-blue-200") : 
                                     taxGap < -0.05 ? (darkMode ? "border-red-400 bg-red-400/10" : "border-black bg-red-200") : 
@@ -473,7 +538,6 @@ export default function SplitBillBrutalV2() {
                                         <span className="font-mono font-black text-xl">{taxGap < 0 ? "-" : ""}RM{Math.abs(taxGap).toFixed(2)}</span>
                                     </div>
 
-                                    {/* TOGGLES FOR TAX & DISCOUNT */}
                                     {(taxGap > 0.05 || parseFloat(discountFee) > 0) && (
                                         <div className={`space-y-3 mt-4 pt-4 border-t-2 border-current ${darkMode ? "border-opacity-30" : "border-black"}`}>
                                             {taxGap > 0.05 && (
@@ -500,10 +564,97 @@ export default function SplitBillBrutalV2() {
                             </div>
                         )}
                     </div>
-
+                    
                     <button disabled={!billTitle || !billTotal || (billType === "ITEMIZED" && taxGap < -0.1)} onClick={saveBill} className={`w-full py-5 rounded-xl text-sm font-black uppercase tracking-widest border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none ${darkMode ? "bg-white text-black border-white hover:bg-gray-200" : "bg-lime-300 text-black border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]"}`}>
                         {editingBillId ? "KEMASKINI BILL SEKARANG" : "SIMPAN BILL NI"}
                     </button>
+                </div>
+            )}
+            
+            {/* MODAL: PAYMENT PROFILE */}
+            {showPaymentModal && paymentProfileId && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                    <div className={`w-full max-w-sm p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative animate-in slide-in-from-bottom-10`}>
+                        <button onClick={() => setShowPaymentModal(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20}/></button>
+                        <h3 className="text-xl font-black uppercase mb-6 flex items-center gap-2"><Wallet size={24}/> Payment Profile</h3>
+                        <div className="space-y-4">
+                            <div className="space-y-2"><label className="text-xs font-bold uppercase opacity-70">Nama Bank / E-Wallet</label><input placeholder="Contoh: Maybank / TNG" value={people.find(p=>p.id===paymentProfileId)?.bankName || ""} onChange={e => updatePaymentProfile(paymentProfileId, e.target.value, people.find(p=>p.id===paymentProfileId)?.bankAccount || "", people.find(p=>p.id===paymentProfileId)?.qrImage || "")} className={inputStyle}/></div>
+                            <div className="space-y-2"><label className="text-xs font-bold uppercase opacity-70">No. Akaun / DuitNow ID</label><input placeholder="1234567890" value={people.find(p=>p.id===paymentProfileId)?.bankAccount || ""} onChange={e => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", e.target.value, people.find(p=>p.id===paymentProfileId)?.qrImage || "")} className={`${inputStyle} font-mono`}/></div>
+                            <div className="space-y-2 pt-2 border-t border-dashed border-current border-opacity-30"><label className="text-xs font-bold uppercase opacity-70 block mb-2">Upload DuitNow QR (Optional)</label><div className="flex items-center gap-4">{people.find(p=>p.id===paymentProfileId)?.qrImage ? (<div className="relative w-20 h-20 border-2 border-current rounded-lg overflow-hidden group"><Image src={people.find(p=>p.id===paymentProfileId)?.qrImage!} layout="fill" objectFit="cover" alt="QR"/><button onClick={() => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", people.find(p=>p.id===paymentProfileId)?.bankAccount || "", "")} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={20} className="text-white"/></button></div>) : (<div className="w-20 h-20 border-2 border-dashed border-current rounded-lg flex items-center justify-center opacity-30"><QrCode size={24}/></div>)}<label className={`flex-1 py-3 px-4 border-2 rounded-xl flex items-center justify-center gap-2 cursor-pointer font-bold uppercase text-xs hover:opacity-80 ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}><Upload size={16}/> Upload Image<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, paymentProfileId)}/></label></div><p className="text-[10px] opacity-50 mt-1">*Sila guna screenshot/gambar kecil (&lt;1MB) supaya tak berat.</p></div>
+                        </div>
+                        <button onClick={() => setShowPaymentModal(false)} className={`w-full py-4 mt-6 font-black uppercase rounded-xl border-2 ${darkMode ? "bg-green-400 text-black border-green-400" : "bg-green-400 text-black border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]"}`}>SIMPAN PROFILE</button>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: PAY TERMINAL (WITH IMAGE SHARE) */}
+            {showPayModal && activeTransfer && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                    <div className={`w-full max-w-sm p-8 rounded-2xl border-2 text-center ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} relative animate-in zoom-in-95`}>
+                         <button onClick={() => setShowPayModal(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={24}/></button>
+                         
+                         {/* CARD TO SCREENSHOT */}
+                         <div ref={receiptRef} className={`p-6 rounded-xl border-2 mb-6 text-left ${darkMode ? "bg-[#121212] border-white" : "bg-white border-black"}`}>
+                            <div className="flex justify-between items-start mb-4">
+                                <div>
+                                    <p className="text-[10px] font-black uppercase opacity-50 tracking-widest mb-1">BUTIRAN PEMBAYARAN</p>
+                                    <h2 className="text-2xl font-black uppercase">{activeTransfer.toName}</h2>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black uppercase opacity-50 tracking-widest mb-1">JUMLAH</p>
+                                    <h2 className="text-2xl font-mono font-black">RM{activeTransfer.amount.toFixed(2)}</h2>
+                                </div>
+                            </div>
+
+                            <p className="text-[10px] font-bold opacity-50 mb-4 uppercase">BANK: {people.find(p=>p.id===activeTransfer.toId)?.bankName || "Unknown Bank"}</p>
+
+                            {people.find(p=>p.id===activeTransfer.toId)?.qrImage ? (
+                                <div className="w-full aspect-square border-2 border-current rounded-lg overflow-hidden relative mb-4">
+                                    <Image src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} layout="fill" objectFit="contain" alt="QR" className="bg-white"/>
+                                </div>
+                            ) : (
+                                <div className="w-full aspect-square border-2 border-dashed border-current opacity-20 rounded-lg flex items-center justify-center flex-col mb-4">
+                                    <QrCode size={40}/>
+                                    <span className="text-[10px] mt-2 font-bold">NO QR</span>
+                                </div>
+                            )}
+
+                            <div className={`p-3 rounded-lg border-2 ${darkMode ? "bg-black border-white/20" : "bg-gray-50 border-black/10"}`}>
+                                <p className="text-[9px] font-bold uppercase opacity-50 mb-1">NO AKAUN</p>
+                                <div className="flex justify-between items-center">
+                                    <span className="font-mono text-lg font-black tracking-wider truncate mr-2">{people.find(p=>p.id===activeTransfer.toId)?.bankAccount || "Ask Member"}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-4 pt-4 border-t-2 border-dashed border-current border-opacity-20 flex justify-between items-center opacity-50">
+                                <span className="text-[9px] font-bold uppercase tracking-widest">SplitIt. by kmlxly</span>
+                                <span className="text-[9px] font-mono">{new Date().toLocaleDateString()}</span>
+                            </div>
+                         </div>
+                         
+                         {/* Action Buttons */}
+                         <div className="flex flex-col gap-3">
+                             {/* SHARE IMAGE BUTTON */}
+                             <button onClick={handleShareImage} disabled={isSharing} className={`w-full py-3 font-bold uppercase rounded-xl border-2 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-gray-100"}`}>
+                                {isSharing ? <RotateCcw size={16} className="animate-spin"/> : <Share2 size={16}/>} 
+                                {isSharing ? "GENERATING..." : "SHARE GAMBAR RESIT"}
+                             </button>
+
+                             <button 
+                                onClick={() => {
+                                    togglePaymentStatus(activeTransfer.fromId, activeTransfer.toId);
+                                    setShowPayModal(false);
+                                }} 
+                                className={`w-full py-4 font-black uppercase rounded-xl transition-all shadow-lg hover:shadow-none hover:translate-y-[2px] ${
+                                    paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`]
+                                    ? "bg-red-500 text-white" 
+                                    : "bg-green-500 text-black" 
+                                }`}
+                             >
+                                {paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "BATAL / MARK UNPAID" : "✅ DAH TRANSFER SEKARANG"}
+                             </button>
+                         </div>
+                    </div>
                 </div>
             )}
             
