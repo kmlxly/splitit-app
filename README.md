@@ -3,11 +3,12 @@
 **Bahagi bill cara tenang.**
 A modern, mobile-first Split Bill application built with a **Neo-Brutalism** design aesthetic. Designed to solve the headache of splitting complex receipts with friends, complete with tax calculations, discount distribution, and DuitNow QR integration.
 
-🔗 **Live Demo:** [https://splitit-kmlxly.vercel.app](https://splitit-kmlxly.vercel.app) *(Gantikan link sebenar jika ada)*
+🔗 **Live Demo:** [https://splitit-kmlxly.vercel.app](https://splitit-kmlxly.vercel.app)
 
 ## ✨ Features
 
-### v1.8.0 (Latest Build)
+### v1.8.1 (Latest Build)
+- 📱 **Mobile-First Receipt:** Optimized "Pay Terminal" layout for small screens. Vertical alignment prevents text overlap.
 - 🎨 **Neo-Brutalism UI:** High contrast, hard shadows, and bold typography. Supports Dark/Light mode.
 - 🧮 **Hybrid Splitting Logic:**
   - **Kongsi Rata:** Equal split for simple meals.
@@ -34,3 +35,30 @@ First, run the development server:
 npm run dev
 # or
 yarn dev
+
+Open http://localhost:3000 with your browser to see the result.
+
+📝 Changelog
+v1.8.1 - Mobile Layout Fix
+UI Patch: Fixed "Pay Terminal" modal alignment on mobile devices.
+
+Changed receipt layout from horizontal to vertical to prevent text overlap.
+
+Added visual dashed lines for better ticket/receipt feel.
+
+v1.8.0 - Picture Perfect
+Added feature to generate and share receipt as an image.
+
+Fixed UI visibility issues in Dark Mode headers.
+
+v1.7.0 - Status Tracker
+Added "Mark as Paid" toggle in settlement list.
+
+Improved "Copy All" formatted text for WhatsApp.
+
+v1.6.0 - Settlement Pro
+Added Payment Profile (Bank Name, Account No, QR Image).
+
+Added Payment Modal popup with QR display.
+
+Built by kmlxly
