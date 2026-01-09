@@ -5,21 +5,36 @@ A modern, mobile-first Split Bill application built with a **Neo-Brutalism** des
 
 🔗 **Live Demo:** [https://splitit-kmlxly.vercel.app](https://splitit-kmlxly.vercel.app)
 
-## ✨ Features
+## ✨ Features (v2.2.0)
 
-### v1.9.3 (Latest Build)
-- 📱 **Mobile Optimized:** Redesigned "Pay Terminal" modal to be compact with a fixed footer, ensuring buttons are always visible on small screens.
-- 🖼️ **Framed Receipt Sharing:** Generates a beautiful, square-framed receipt image (Insta-story style) for sharing via WhatsApp/Telegram.
-- 🎨 **High Contrast UI:** Fixed visibility issues in Dark Mode, specifically for modal footers and action buttons.
-- 🧮 **Hybrid Splitting Logic:** Supports both "Kongsi Rata" (Equal) and "Split Item" (Itemized) with Smart Tax/Discount distribution.
-- 💾 **Local Persistence:** Auto-saves all data to device storage.
-- 💳 **Payment Profiles:** Store Bank Info & Upload **DuitNow QR** for each user.
-- ✅ **Settlement Tracker:** Mark debts as "PAID" or "UNPAID" visually.
+### 📱 PWA Support (New!)
+- **Installable:** Add to Home Screen on iOS and Android.
+- **Native Feel:** Runs full-screen without browser bars.
+- **Offline Capable:** Loads instantly even on slow connections.
+
+### 📂 Event Manager Pro
+- **Multi-Session:** Create separate folders for different events (e.g., "Trip Hatyai", "Office Lunch").
+- **Manage Folders:** Rename or Delete sessions easily with a dedicated manager UI.
+- **Auto-Save:** All data is persisted locally on your device.
+
+### 📊 Dashboard & Analytics
+- **Quick Summary:** View "Total Hangus" (Total Spent) directly on the dashboard.
+- **Event Switcher:** Fast-switch between active events via the header or dashboard card.
+
+### 💸 Powerful Splitting Logic
+- **Hybrid Splitting:** Supports "Equal Split" & "Itemized Split" in one bill.
+- **Smart Tax/Discount:** Auto-distributes Service Tax and Discounts proportionally or equally.
+- **Final Settlement:** algorithm calculates the minimum number of transfers required to settle debts.
+
+### 🖼️ Share & Pay
+- **Receipt Gen:** Generates high-res, square-framed receipt images for WhatsApp/IG Stories.
+- **Payment Profiles:** Store Bank Info & Upload **DuitNow QR** (with smart crop warnings).
 
 ## 🛠 Tech Stack
 
 - **Framework:** [Next.js 14](https://nextjs.org/) (App Router)
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+- **PWA:** `next-pwa` standards (Manifest & Metadata)
 - **Icons:** [Lucide React](https://lucide.dev/)
 - **Image Gen:** [html2canvas](https://html2canvas.hertzen.com/)
 - **Deployment:** Vercel
@@ -30,12 +45,30 @@ First, run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
 
 Open http://localhost:3000 with your browser to see the result.
 
 📝 Changelog History
+v2.2.0 - Event Manager Update 🛠️
+Feature: Added capability to Rename and Delete specific sessions/events.
+
+UI: Improved Session Manager modal with edit/delete icons.
+
+Safety: Prevented deletion of the last remaining session to ensure app stability.
+
+v2.1.2 - PWA & UI Polish 📱
+Feature: Full PWA Support (Manifest + Viewport settings).
+
+UI: Fixed Logo visibility in Dark Mode (Auto-white background container).
+
+UX: Added "Total Hangus" summary inside the Settlement Card.
+
+v2.0.0 - The Folder Update 📂
+Core: Implemented Multi-Session logic.
+
+Migration: Auto-migrates legacy data into a "Saved Session" folder.
+
+
 v1.9.5 - Stable Release (The "Open Tab" Solution)
 Core Fix: Switched receipt generation method from navigator.share (which fails on non-HTTPS/embedded browsers) to window.open(). This ensures 100% compatibility across iOS and Android.
 
