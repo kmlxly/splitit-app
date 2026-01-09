@@ -40,7 +40,7 @@ type Session = {
     people: Person[];
     bills: Bill[];
     paidStatus: Record<string, boolean>;
-    currency?: string; // NEW: Added currency support
+    currency?: string;
 };
 
 export default function SplitBillBrutalV2() {
@@ -48,34 +48,43 @@ export default function SplitBillBrutalV2() {
   const [darkMode, setDarkMode] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   
+  // Data State
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  
+  // UI Modal States
   const [showSessionModal, setShowSessionModal] = useState(false);
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  
   const [newSessionName, setNewSessionName] = useState("");
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null); 
   const [tempSessionName, setTempSessionName] = useState(""); 
 
+  // Derived State
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const people = activeSession?.people || [];
   const bills = activeSession?.bills || [];
   const paidStatus = activeSession?.paidStatus || {};
-  // NEW: Currency Derived State
   const currency = activeSession?.currency || "RM";
 
+  // UI States
   const [newPersonName, setNewPersonName] = useState("");
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [expandedBillId, setExpandedBillId] = useState<string | null>(null); 
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<"DASHBOARD" | "FORM">("DASHBOARD");
   
+  // Modals
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentProfileId, setPaymentProfileId] = useState<string | null>(null);
   const [showPayModal, setShowPayModal] = useState(false);
   const [activeTransfer, setActiveTransfer] = useState<Transfer | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   
+  // Ref
   const receiptRef = useRef<HTMLDivElement>(null);
 
+  // Form Inputs
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [billType, setBillType] = useState<BillType>("EQUAL");
   const [billTitle, setBillTitle] = useState("");
@@ -86,18 +95,21 @@ export default function SplitBillBrutalV2() {
   const [taxMethod, setTaxMethod] = useState<SplitMethod>("PROPORTIONAL");
   const [discountMethod, setDiscountMethod] = useState<SplitMethod>("PROPORTIONAL");
 
+  // Smart Menu Inputs
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemSharedBy, setNewItemSharedBy] = useState<string[]>([]);
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false); 
 
   // --- STORAGE & MIGRATION ---
   useEffect(() => {
     const savedMode = localStorage.getItem("splitit_darkmode");
     if (savedMode !== null) setDarkMode(savedMode === "true"); else setDarkMode(false);
+
     const savedSessions = localStorage.getItem("splitit_sessions");
     const savedActiveId = localStorage.getItem("splitit_active_session_id");
+
     if (savedSessions) {
         const parsedSessions = JSON.parse(savedSessions);
         setSessions(parsedSessions);
@@ -126,22 +138,21 @@ export default function SplitBillBrutalV2() {
     }
   }, [sessions, darkMode, activeSessionId, isLoaded]);
 
+  // --- LOGIC FUNCTIONS ---
+  
+  const resetData = () => {
+    if (confirm("⚠️ AMARAN KRITIKAL:\n\nAdakah anda pasti nak RESET semua data?\nSemua history bill & nama member akan hilang dari device ini.")) {
+        localStorage.clear();
+        window.location.reload();
+    }
+  };
+
   const updateActiveSession = (updates: Partial<Session>) => {
       setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, ...updates } : s));
   };
 
-  // NEW: Helper to set currency
   const setCurrency = (curr: string) => {
       updateActiveSession({ currency: curr });
-  };
-
-  // NEW: Quick Tax Logic
-  const applyQuickTax = (percentage: number) => {
-      const currentTotal = parseFloat(billTotal);
-      if (!isNaN(currentTotal) && currentTotal > 0) {
-          const newTotal = currentTotal * (1 + percentage / 100);
-          setBillTotal(newTotal.toFixed(2));
-      }
   };
 
   const createNewSession = () => {
@@ -201,12 +212,23 @@ export default function SplitBillBrutalV2() {
       if (!newItemName || !newItemPrice || newItemSharedBy.length === 0) return;
       const price = parseFloat(newItemPrice);
       if (isNaN(price)) return;
-      const newItem: MenuItem = { id: `m${Date.now()}`, name: newItemName, price: price, sharedBy: newItemSharedBy };
+
+      const newItem: MenuItem = {
+          id: `m${Date.now()}`,
+          name: newItemName,
+          price: price,
+          sharedBy: newItemSharedBy
+      };
       setMenuItems([...menuItems, newItem]);
-      setNewItemName(""); setNewItemPrice(""); setNewItemSharedBy([]); setIsMultiSelectMode(false);
+      setNewItemName("");
+      setNewItemPrice("");
+      setNewItemSharedBy([]);
+      setIsMultiSelectMode(false); 
   };
 
-  const removeMenuItem = (mid: string) => { setMenuItems(menuItems.filter(m => m.id !== mid)); };
+  const removeMenuItem = (mid: string) => {
+      setMenuItems(menuItems.filter(m => m.id !== mid));
+  };
 
   const selectPersonForMenu = (pid: string) => {
       if (isMultiSelectMode) {
@@ -223,7 +245,9 @@ export default function SplitBillBrutalV2() {
   const toggleMultiSelect = () => {
       const newMode = !isMultiSelectMode;
       setIsMultiSelectMode(newMode);
-      if (!newMode && newItemSharedBy.length > 1) setNewItemSharedBy([]);
+      if (!newMode) {
+          if (newItemSharedBy.length > 1) setNewItemSharedBy([]);
+      }
   };
 
   const startEditBill = (bill: Bill) => {
@@ -242,6 +266,14 @@ export default function SplitBillBrutalV2() {
     setPayerId(people[0]?.id || ""); 
     setTaxMethod("PROPORTIONAL"); setDiscountMethod("PROPORTIONAL"); setMode("DASHBOARD");
     setNewItemName(""); setNewItemPrice(""); setNewItemSharedBy([]); setIsMultiSelectMode(false);
+  };
+
+  const applyQuickTax = (percentage: number) => {
+      const currentTotal = parseFloat(billTotal);
+      if (!isNaN(currentTotal) && currentTotal > 0) {
+          const newTotal = currentTotal * (1 + percentage / 100);
+          setBillTotal(newTotal.toFixed(2));
+      }
   };
 
   const saveBill = () => {
@@ -306,7 +338,10 @@ export default function SplitBillBrutalV2() {
   
   const calculateSettlement = () => {
     let bal: Record<string, number> = {}; people.forEach(p => bal[p.id] = 0);
-    bills.forEach(b => { bal[b.paidBy] += b.totalAmount; b.details.forEach(d => { bal[d.personId] -= d.total; }); });
+    bills.forEach(b => {
+        bal[b.paidBy] += b.totalAmount;
+        b.details.forEach(d => { bal[d.personId] -= d.total; });
+    });
     const netPeople = people.map(p => ({ ...p, net: bal[p.id] || 0 }));
     let debtors = netPeople.filter(p => p.net < -0.01).map(p => ({...p, net: Math.abs(p.net)})).sort((a,b) => b.net - a.net);
     let creditors = netPeople.filter(p => p.net > 0.01).sort((a,b) => b.net - a.net);
@@ -322,27 +357,23 @@ export default function SplitBillBrutalV2() {
   const { netPeople, txs } = calculateSettlement(); const taxGap = getCalcStatus();
   const totalSpent = bills.reduce((sum, b) => sum + b.totalAmount, 0);
 
-  // NEW: WhatsApp Logic
   const copyWhatsAppSummary = () => {
       let text = `*PROSES SETTLEMENT: ${activeSession?.name?.toUpperCase()}*\n`;
       text += `----------------------------------\n`;
       text += `💰 *Total Hangus:* ${currency}${totalSpent.toFixed(2)}\n\n`;
-      
       if (txs.length > 0) {
           text += `*SENARAI HUTANG:*\n`;
           txs.forEach(t => {
               const status = paidStatus[`${t.fromId}-${t.toId}`] ? "✅ SETTLED" : "❌ UNPAID";
               text += `• *${t.fromName}* ➡️ *${t.toName}*: _${currency}${t.amount.toFixed(2)}_ [${status}]\n`;
           });
-      } else {
-          text += `✅ Semua hutang dah selesai!\n`;
-      }
-      
+      } else { text += `✅ Semua hutang dah selesai!\n`; }
       text += `\n_Generated by SplitIt._`;
       navigator.clipboard.writeText(text);
       setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
 
+  // --- IMAGE & UPLOAD ---
   const handleOpenImage = async () => { 
     if (!receiptRef.current) return;
     setIsSharing(true);
@@ -352,7 +383,7 @@ export default function SplitBillBrutalV2() {
         canvas.toBlob((blob) => { if (blob) { const url = URL.createObjectURL(blob); const newWindow = window.open(url, '_blank'); if (!newWindow) alert("Pop-up diblock!"); } else alert("Gagal."); setIsSharing(false); }, "image/png");
     } catch (err) { alert("Ralat Kritikal."); setIsSharing(false); }
   };
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, pid: string) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, pid: string) => { 
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2000000) { alert("File besar > 2MB."); return; }
@@ -362,6 +393,7 @@ export default function SplitBillBrutalV2() {
     }
   };
 
+  // --- BRUTAL STYLES ---
   const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-200 text-black";
   const cardStyle = `${darkMode ? "bg-[#1E1E1E] border-white" : "bg-white border-black"} border-2 rounded-2xl`;
   const shadowStyle = darkMode ? "" : "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]";
@@ -386,9 +418,8 @@ export default function SplitBillBrutalV2() {
                         <p className="text-[10px] uppercase tracking-widest font-bold mt-1 opacity-70 truncate max-w-[100px]">{activeSession?.name || "Loading..."}</p>
                      </div>
                 </a>
-                <div className="flex gap-2">
-                    {/* NEW: Currency Switcher */}
-                    <button onClick={() => setCurrency(currency === "RM" ? "$" : currency === "$" ? "€" : currency === "€" ? "£" : "RM")} className={`w-10 ${buttonBase} text-xs font-black`}>{currency}</button>
+                <div className="flex gap-2 items-center">
+                    <button onClick={() => setShowCurrencyModal(true)} className={`w-10 h-10 text-xs font-black ${buttonBase}`}>{currency}</button>
                     <button onClick={() => setShowSessionModal(true)} className={`p-2 ${buttonBase}`}><Folder size={20}/></button>
                     <button onClick={() => setDarkMode(!darkMode)} className={`p-2 ${buttonBase}`}>{darkMode ? <Sun size={20}/> : <Moon size={20}/>}</button>
                 </div>
@@ -475,7 +506,6 @@ export default function SplitBillBrutalV2() {
                         <section>
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><CheckCircle size={16}/> Final Settlement</h2>
-                                {/* NEW: WHATSAPP BUTTON */}
                                 <button onClick={copyWhatsAppSummary} className={`px-2 py-1 rounded text-[10px] font-bold border-2 transition-all ${darkMode ? "border-white bg-white text-black" : "border-black bg-black text-white"}`}>
                                     {copied ? "COPIED" : "COPY FOR WHATSAPP"}
                                 </button>
@@ -490,7 +520,18 @@ export default function SplitBillBrutalV2() {
                             </div>
                         </section>
                     )}
-                    <div className="pt-8 pb-4 text-center"><div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v2.5.0 (Global Update)</p></div></div>
+                    <div className="pt-8 pb-10 text-center space-y-4">
+                        {/* REDESIGNED RESET BUTTON (Thin Outline) */}
+                        <button onClick={resetData} className="mx-auto px-5 py-2 rounded-full border border-red-500 text-red-500 text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2">
+                            <RotateCcw size={12}/> Reset Data
+                        </button>
+                        
+                        {/* VERSION */}
+                        <div className="opacity-40">
+                            <p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p>
+                            <p className="text-[9px] font-mono mt-1">v2.5.9 (UI Polish)</p>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -552,16 +593,26 @@ export default function SplitBillBrutalV2() {
                                     <button disabled={!newItemName || !newItemPrice || newItemSharedBy.length === 0} onClick={addMenuItem} className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-wider border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${darkMode ? "bg-white text-black border-white hover:bg-gray-200" : "bg-black text-white border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"}`}>+ Tambah Item</button>
                                 </div>
 
-                                {menuItems.length > 0 && (
-                                    <div className="space-y-2">
-                                        {menuItems.map((item) => (
-                                            <div key={item.id} className={`p-3 border-2 rounded-xl flex justify-between items-center ${darkMode ? "bg-[#222] border-white/20" : "bg-white border-black/10"}`}>
-                                                <div className="flex-1"><div className="flex justify-between items-start"><span className="font-bold text-sm">{item.name}</span><span className="font-mono font-black">{currency}{item.price.toFixed(2)}</span></div><div className="text-[10px] opacity-60 mt-1 flex flex-wrap gap-1">{item.sharedBy.map(pid => (<span key={pid} className="bg-current bg-opacity-10 px-1.5 py-0.5 rounded">{people.find(p=>p.id===pid)?.name}</span>))}</div></div>
-                                                <button onClick={() => removeMenuItem(item.id)} className="ml-3 p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={14}/></button>
+                                {/* FIX V2.5.4: Solid Color Tags */}
+                                {menuItems.map((item) => (
+                                    <div key={item.id} className={`p-3 border-2 rounded-xl flex justify-between items-center animate-in slide-in-from-bottom-2 ${darkMode ? "bg-[#222] border-white/20" : "bg-white border-black/10"}`}>
+                                        <div className="flex-1">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className="font-bold text-sm">{item.name}</span>
+                                                <span className="font-mono font-black text-sm">{currency}{item.price.toFixed(2)}</span>
                                             </div>
-                                        ))}
+                                            {/* Tag Nama Member (Solid Black/White) */}
+                                            <div className="flex flex-wrap gap-1">
+                                                {item.sharedBy.map(pid => (
+                                                    <span key={pid} className={`text-[10px] px-2 py-1 rounded font-black border ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
+                                                        {people.find(p=>p.id===pid)?.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <button onClick={() => removeMenuItem(item.id)} className="ml-2 p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={16}/></button>
                                     </div>
-                                )}
+                                ))}
 
                                 <div className={`${cardStyle} p-5 space-y-6 ${darkMode ? "bg-[#1E1E1E]" : "bg-violet-100"} ${shadowStyle}`}>
                                     <div className="flex gap-4">
@@ -587,7 +638,7 @@ export default function SplitBillBrutalV2() {
             )}
             
             {showPaymentModal && paymentProfileId && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div className={`w-full max-w-[320px] p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative animate-in slide-in-from-bottom-10`}>
                         <button onClick={() => setShowPaymentModal(false)} className="absolute top-3 right-3 opacity-50 hover:opacity-100"><X size={20}/></button>
                         <h3 className="text-lg font-black uppercase mb-4 flex items-center gap-2"><Wallet size={20}/> Payment Profile</h3>
@@ -643,6 +694,23 @@ export default function SplitBillBrutalV2() {
                             ))}
                         </div>
                         <div className="pt-6 border-t border-dashed border-current border-opacity-30"><label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Buka Sesi Baru</label><div className="flex gap-2"><input value={newSessionName} onChange={e => setNewSessionName(e.target.value)} placeholder="Contoh: Trip Hatyai" className={`flex-1 px-3 py-2 rounded-lg bg-transparent border-2 outline-none text-sm font-bold ${darkMode ? "border-white/30 focus:border-white" : "border-black/30 focus:border-black"}`}/><button onClick={createNewSession} disabled={!newSessionName} className={`px-4 py-2 rounded-lg border-2 font-bold text-sm ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} disabled:opacity-50`}>OK</button></div></div>
+                    </div>
+                </div>
+            )}
+            
+            {/* CURRENCY MODAL */}
+            {showCurrencyModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                    <div className={`w-full max-w-[320px] p-6 rounded-[2rem] border-2 ${darkMode ? "bg-zinc-900 border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative`}>
+                        <button onClick={() => setShowCurrencyModal(false)} className="absolute top-5 right-5 opacity-50 hover:opacity-100"><X size={20}/></button>
+                        <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2 tracking-tighter"><Globe size={24}/> Pilih Mata Wang</h2>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[{ s: "RM", n: "Malaysia" }, { s: "S$", n: "Singapore" }, { s: "฿", n: "Thailand" }, { s: "Rp", n: "Indonesia" }, { s: "₱", n: "Philippines" }, { s: "₫", n: "Vietnam" }].map((c) => (
+                                <button key={c.s} onClick={() => { setCurrency(c.s); setShowCurrencyModal(false); }} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-1 transition-all active:scale-95 ${currency === c.s ? (darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black") : "border-current opacity-50 hover:opacity-100"}`}>
+                                    <span className="text-2xl font-black">{c.s}</span><span className="text-[9px] uppercase font-bold tracking-widest opacity-70">{c.n}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
