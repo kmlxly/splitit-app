@@ -520,59 +520,59 @@ export default function SplitBillBrutalV2() {
 
   // --- OCR / SCAN LOGIC ---
   const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    setShowScanMethodModal(false); const file = e.target.files?.[0]; if (!file) return;
-    setIsScanning(true); setScanStatus("Memproses gambar (Compressing)..."); setShowScanModal(true); setScannedItems([]); setScannedExtraInfo({ tax: 0, service: 0, discount: 0, deposit: 0 }); 
-    try {
-        // Guna function helper yang dah didefinisikan di atas
-        const base64Data = await compressImage(file); 
-        setScanStatus("AI sedang menganalisis resit...");
-        
-        const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-        
-        const fetchGemini = async (modelName: string) => {
-           return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`, {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ contents: [{ parts: [{ text: "Extract items, prices, tax, service charge, discount, and deposit amount from this receipt image. Return ONLY a valid raw JSON object. Structure: { \"items\": [{\"name\": \"Nasi Lemak\", \"price\": 5.00}], \"tax\": 0.00, \"serviceCharge\": 0.00, \"discount\": 0.00, \"deposit\": 0.00, \"total\": 0.00 }. 'tax' is SST/GST. 'discount' is total discount deduction. 'deposit' is any pre-payment/deposit. Prices should be numbers. Do not include currency symbols." }, { inline_data: { mime_type: "image/jpeg", data: base64Data } }] }] })
-          });
-        };
+      setShowScanMethodModal(false); const file = e.target.files?.[0]; if (!file) return;
+      setIsScanning(true); setScanStatus("Memproses gambar (Compressing)..."); setShowScanModal(true); setScannedItems([]); setScannedExtraInfo({ tax: 0, service: 0, discount: 0, deposit: 0 }); 
+      try {
+          // Guna function helper yang dah didefinisikan di atas
+          const base64Data = await compressImage(file); 
+          setScanStatus("AI sedang menganalisis resit...");
+          
+          const API_KEY = "AIzaSyAVPSkBGcx5pgqJqwoZIa9grxtKSdZeuVo";
+          
+          const fetchGemini = async (modelName: string) => {
+             return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contents: [{ parts: [{ text: "Extract items, prices, tax, service charge, discount, and deposit amount from this receipt image. Return ONLY a valid raw JSON object. Structure: { \"items\": [{\"name\": \"Nasi Lemak\", \"price\": 5.00}], \"tax\": 0.00, \"serviceCharge\": 0.00, \"discount\": 0.00, \"deposit\": 0.00, \"total\": 0.00 }. 'tax' is SST/GST. 'discount' is total discount deduction. 'deposit' is any pre-payment/deposit. Prices should be numbers. Do not include currency symbols." }, { inline_data: { mime_type: "image/jpeg", data: base64Data } }] }] })
+            });
+          };
 
-        // Logic: Cuba model 2.0 dulu, kalau 404, cuba 1.5-flash-8b (sangat stabil)
-        let response = await fetchGemini("gemini-2.0-flash");
-        if (!response.ok && response.status === 404) { 
-           console.log("Gemini 2.0 404, trying Fallback..."); 
-           setScanStatus("Gemini 2.0 sibuk, mencuba model backup..."); 
-           response = await fetchGemini("gemini-1.5-flash-8b");
-        }
+          // Logic: Cuba model 2.0 dulu, kalau 404, cuba 1.5-flash-8b (sangat stabil)
+          let response = await fetchGemini("gemini-2.0-flash");
+          if (!response.ok && response.status === 404) { 
+             console.log("Gemini 2.0 404, trying Fallback..."); 
+             setScanStatus("Gemini 2.0 sibuk, mencuba model backup..."); 
+             response = await fetchGemini("gemini-1.5-flash-8b");
+          }
 
-        if (!response.ok) { 
-            const errJson = await response.json(); 
-            const errMessage = errJson.error?.message || response.statusText; 
-            alert(`Gemini Error (${response.status}): ${errMessage}`); 
-            throw new Error(`Gemini API Failed: ${errMessage}`); 
-        }
+          if (!response.ok) { 
+              const errJson = await response.json(); 
+              const errMessage = errJson.error?.message || response.statusText; 
+              alert(`Gemini Error (${response.status}): ${errMessage}`); 
+              throw new Error(`Gemini API Failed: ${errMessage}`); 
+          }
 
-        const result = await response.json(); 
-        if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) { throw new Error("AI tak dapat baca data dari resit ni."); }
-        
-        const rawText = result.candidates[0].content.parts[0].text; 
-        const cleanJson = rawText.replace(/```json|```/g, '').trim();
-        let parsedData; 
-        try { parsedData = JSON.parse(cleanJson); } catch (e) { console.error("Failed to parse JSON", rawText); throw new Error("Format data AI tak valid."); }
-        
-        const itemsArray = parsedData.items || (Array.isArray(parsedData) ? parsedData : []);
-        if (Array.isArray(itemsArray)) {
-            const mappedItems: ScannedItem[] = itemsArray.map((item: any, idx: number) => ({ id: `scan-${Date.now()}-${idx}`, name: item.name || "Unknown Item", price: item.price ? String(item.price.toFixed(2)) : "0.00", selected: true }));
-            setScannedItems(mappedItems);
-            const detectedTax = parseFloat(parsedData.tax) || 0; 
-            const detectedService = parseFloat(parsedData.serviceCharge) || 0; 
-            const detectedDiscount = parseFloat(parsedData.discount) || 0; 
-            const detectedDeposit = parseFloat(parsedData.deposit) || 0;
-            setScannedExtraInfo({ tax: detectedTax, service: detectedService, discount: Math.abs(detectedDiscount), deposit: Math.abs(detectedDeposit) });
-        } else { alert("AI tidak menjumpai senarai item."); }
+          const result = await response.json(); 
+          if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) { throw new Error("AI tak dapat baca data dari resit ni."); }
+          
+          const rawText = result.candidates[0].content.parts[0].text; 
+          const cleanJson = rawText.replace(/```json|```/g, '').trim();
+          let parsedData; 
+          try { parsedData = JSON.parse(cleanJson); } catch (e) { console.error("Failed to parse JSON", rawText); throw new Error("Format data AI tak valid."); }
+          
+          const itemsArray = parsedData.items || (Array.isArray(parsedData) ? parsedData : []);
+          if (Array.isArray(itemsArray)) {
+              const mappedItems: ScannedItem[] = itemsArray.map((item: any, idx: number) => ({ id: `scan-${Date.now()}-${idx}`, name: item.name || "Unknown Item", price: item.price ? String(item.price.toFixed(2)) : "0.00", selected: true }));
+              setScannedItems(mappedItems);
+              const detectedTax = parseFloat(parsedData.tax) || 0; 
+              const detectedService = parseFloat(parsedData.serviceCharge) || 0; 
+              const detectedDiscount = parseFloat(parsedData.discount) || 0; 
+              const detectedDeposit = parseFloat(parsedData.deposit) || 0;
+              setScannedExtraInfo({ tax: detectedTax, service: detectedService, discount: Math.abs(detectedDiscount), deposit: Math.abs(detectedDeposit) });
+          } else { alert("AI tidak menjumpai senarai item."); }
 
-    } catch (err: any) { console.error(err); alert(`Gagal scan: ${err.message}`); }
-    setIsScanning(false);
-};
+      } catch (err: any) { console.error(err); alert(`Gagal scan: ${err.message}`); }
+      setIsScanning(false);
+  };
 
   const addSelectedScannedItems = () => {
       const itemsToAdd = scannedItems.filter(i => i.selected); if (itemsToAdd.length === 0) return;
