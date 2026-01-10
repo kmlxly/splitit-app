@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
-import { createWorker } from "tesseract.js"; 
+import { GoogleGenerativeAI } from "@google/generative-ai"; 
 import { 
   Moon, Sun, CheckCircle, Trash2, 
   Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X, 
@@ -389,55 +389,78 @@ export default function SplitBillBrutalV2() {
       setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
 
-  // --- OCR / SCAN LOGIC ---
+  // --- GEMINI AI OCR / SCAN LOGIC ---
   const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
       setShowScanMethodModal(false); // Tutup modal pilihan
       const file = e.target.files?.[0];
       if (!file) return;
 
       setIsScanning(true);
-      setScanStatus("Memulakan AI...");
+      setScanStatus("Menghantar ke AI...");
       setShowScanModal(true);
       setScannedItems([]);
 
       try {
-          const worker = await createWorker('eng'); 
-          setScanStatus("Membaca Resit...");
-          
-          const ret = await worker.recognize(file);
-          setScanStatus("Memproses Data...");
-          
-          const rawText = ret.data.text;
-          const lines = rawText.split('\n');
-          const parsedItems: ScannedItem[] = [];
-
-          lines.forEach((line) => {
-              const priceMatch = line.match(/(\d+[.,]\d{2})\s*$/);
-              if (priceMatch) {
-                  const priceStr = priceMatch[1].replace(',', '.');
-                  const priceVal = parseFloat(priceStr);
-                  let name = line.substring(0, line.lastIndexOf(priceMatch[0])).trim();
-                  name = name.replace(/[^\w\s\-\/\(\).]/g, '');
-
-                  if (name.length > 2 && !isNaN(priceVal)) {
-                       parsedItems.push({
-                           id: `scan-${Date.now()}-${parsedItems.length}`,
-                           name: name,
-                           price: priceStr,
-                           selected: true 
-                       });
-                  }
-              }
+          // 1. Convert Image ke Base64 (Untuk Gemini)
+          const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.readAsDataURL(file);
+              reader.onload = () => {
+                  const result = reader.result as string;
+                  const base64String = result.split(",")[1]; // Buang data:image/ prefix
+                  resolve(base64String);
+              };
+              reader.onerror = error => reject(error);
           });
 
-          setScannedItems(parsedItems);
-          if (parsedItems.length === 0) {
-              alert("AI tak jumpa item dengan harga. Cuba crop gambar atau ambil angle lebih terang.");
-          }
-          await worker.terminate();
+          // 2. Setup Gemini AI
+          const genAI = new GoogleGenerativeAI("AIzaSyC_kxh5AkWCG2XJUp1Z7tXlC-4zXzVmAKk");
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+          setScanStatus("AI sedang membaca resit...");
+
+          // 3. Prompt untuk AI (Strict JSON)
+          const prompt = `
+            Analyze this receipt image. Extract all purchased items and their prices.
+            Ignore tax, subtotal, total, cash, change, date, or store info.
+            Return ONLY a raw JSON array with this format:
+            [{"name": "Item Name", "price": "0.00"}, ...]
+            Do not use markdown formatting like \`\`\`json. Just the raw array.
+          `;
+
+          const imagePart = {
+              inlineData: {
+                  data: base64Data,
+                  mimeType: file.type,
+              },
+          };
+
+          // 4. Hantar ke AI
+          const result = await model.generateContent([prompt, imagePart]);
+          const response = await result.response;
+          let text = response.text();
+
+          // 5. Bersihkan response JSON
+          text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+          
+          setScanStatus("Menyusun data...");
+          
+          const parsedData = JSON.parse(text);
+          
+          // 6. Map ke format aplikasi
+          const formattedItems: ScannedItem[] = parsedData.map((item: any, index: number) => ({
+              id: `scan-${Date.now()}-${index}`,
+              name: item.name,
+              price: item.price.toString(), // Pastikan string untuk input
+              selected: true
+          }));
+
+          setScannedItems(formattedItems);
+
       } catch (err) {
-          console.error(err);
-          alert("Gagal scan resit. Cuba lagi.");
+          console.error("Gemini Error:", err);
+          alert("Gagal scan. Pastikan internet laju atau gambar jelas.");
+          setScanStatus("Error. Cuba lagi.");
       }
       setIsScanning(false);
   };
@@ -626,7 +649,7 @@ export default function SplitBillBrutalV2() {
                     )}
                     <div className="pt-8 pb-10 text-center space-y-4">
                         <button onClick={resetData} className="mx-auto px-5 py-2 rounded-full border border-red-500 text-red-500 text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"><RotateCcw size={12}/> Reset Data</button>
-                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v2.6.1 (Scan Modal)</p></div>
+                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v2.6.2 (Gemini AI Scan)</p></div>
                     </div>
                 </div>
             )}
