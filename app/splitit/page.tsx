@@ -124,6 +124,7 @@ type ScannedItem = {
     name: string;
     price: string;
     selected: boolean;
+    sharedBy: string[];
 };
 
 // --- MAIN COMPONENT ---
@@ -561,7 +562,7 @@ export default function SplitBillBrutalV2() {
         
         const itemsArray = parsedData.items || (Array.isArray(parsedData) ? parsedData : []);
         if (Array.isArray(itemsArray)) {
-            const mappedItems: ScannedItem[] = itemsArray.map((item: any, idx: number) => ({ id: `scan-${Date.now()}-${idx}`, name: item.name || "Unknown Item", price: item.price ? String(item.price.toFixed(2)) : "0.00", selected: true }));
+            const mappedItems: ScannedItem[] = itemsArray.map((item: any, idx: number) => ({ id: `scan-${Date.now()}-${idx}`, name: item.name || "Unknown Item", price: item.price ? String(item.price.toFixed(2)) : "0.00", selected: true, sharedBy: [] }));
             setScannedItems(mappedItems);
             const detectedTax = parseFloat(parsedData.tax) || 0; 
             const detectedService = parseFloat(parsedData.serviceCharge) || 0; 
@@ -576,7 +577,7 @@ export default function SplitBillBrutalV2() {
 
   const addSelectedScannedItems = () => {
       const itemsToAdd = scannedItems.filter(i => i.selected); if (itemsToAdd.length === 0) return;
-      const newMenuItems = itemsToAdd.map(i => ({ id: `m${Date.now()}-${Math.random()}`, name: i.name, price: parseFloat(i.price), sharedBy: [] }));
+      const newMenuItems = itemsToAdd.map(i => ({ id: `m${Date.now()}-${Math.random()}`, name: i.name, price: parseFloat(i.price), sharedBy: i.sharedBy }));
       setMenuItems([...menuItems, ...newMenuItems]);
       const currentTotal = parseFloat(billTotal) || 0; const scannedTotal = itemsToAdd.reduce((sum, i) => sum + parseFloat(i.price), 0);
       if (currentTotal === 0) { setBillTotal(scannedTotal.toFixed(2)); }
@@ -588,6 +589,16 @@ export default function SplitBillBrutalV2() {
   const toggleScanItem = (id: string) => { setScannedItems(items => items.map(i => i.id === id ? { ...i, selected: !i.selected } : i)); };
   const updateScannedItem = (id: string, field: 'name' | 'price', val: string) => { setScannedItems(items => items.map(i => i.id === id ? { ...i, [field]: val } : i)); };
   const deleteScannedItem = (id: string) => { setScannedItems(items => items.filter(i => i.id !== id)); };
+  const togglePersonInScan = (itemId: string, personId: string) => {
+    setScannedItems(items => items.map(item => {
+        if (item.id !== itemId) return item;
+        const isAlreadyAdded = item.sharedBy.includes(personId);
+        const newSharedBy = isAlreadyAdded 
+            ? item.sharedBy.filter(id => id !== personId)
+            : [...item.sharedBy, personId];
+        return { ...item, sharedBy: newSharedBy };
+    }));
+};
 
   // --- IMAGE HELPERS (CROP & SCREENSHOT) ---
   const handleOpenImage = async () => { if (!receiptRef.current) return; setIsSharing(true); await new Promise(r => setTimeout(r, 200)); try { const canvas = await html2canvas(receiptRef.current, { backgroundColor: darkMode ? "#000000" : "#E5E7EB", scale: 2, useCORS: true, allowTaint: true, logging: false }); canvas.toBlob((blob) => { if (blob) { const url = URL.createObjectURL(blob); const newWindow = window.open(url, '_blank'); if (!newWindow) alert("Pop-up diblock!"); } else alert("Gagal."); setIsSharing(false); }, "image/png"); } catch (err) { alert("Ralat Kritikal."); setIsSharing(false); } };
@@ -1076,92 +1087,102 @@ export default function SplitBillBrutalV2() {
                 </div>
             )}
 
-            {/* SCANNING RESULTS MODAL */}
-            {showScanModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                    <div className={`w-full max-w-[360px] max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-                        {isScanning ? (
-                            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-4">
-                                <Loader2 size={48} className="animate-spin text-blue-500"/>
-                                <div>
-                                    <h3 className="text-xl font-black uppercase">Sedang Scan...</h3>
-                                    <p className="text-xs font-bold opacity-60 mt-1">{scanStatus}</p>
-                                </div>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="p-4 border-b border-current border-opacity-10 flex justify-between items-center">
-                                    <h3 className="text-sm font-black uppercase flex items-center gap-2"><Camera size={16}/> Hasil Scan AI</h3>
-                                    <button onClick={() => setShowScanModal(false)}><X size={20}/></button>
-                                </div>
-                                
-                                {/* TAX DETECTION DISPLAY */}
-                                {(scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0) && (
-                                    <div className={`mx-4 mt-4 p-3 rounded-xl border-2 border-dashed flex items-start gap-3 ${darkMode ? "border-yellow-500/50 bg-yellow-500/10" : "border-yellow-600/30 bg-yellow-50"}`}>
-                                        <AlertCircle size={18} className={darkMode ? "text-yellow-500" : "text-yellow-600"}/>
-                                        <div className="flex-1">
-                                            <p className="text-[10px] font-black uppercase opacity-70 mb-1">AI Detect Cukai/Service:</p>
-                                            <div className="flex gap-4 text-xs font-bold mb-2">
-                                                {scannedExtraInfo.tax > 0 && <span>Tax: {currency}{scannedExtraInfo.tax.toFixed(2)}</span>}
-                                                {scannedExtraInfo.service > 0 && <span>Service: {currency}{scannedExtraInfo.service.toFixed(2)}</span>}
-                                            </div>
-                                            <label className="flex items-center gap-2 text-[10px] font-bold cursor-pointer">
-                                                <input type="checkbox" checked={includeScannedTax} onChange={(e) => setIncludeScannedTax(e.target.checked)} className="accent-yellow-500"/>
-                                                Masukkan sekali dalam Caj Tetap?
-                                            </label>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* DISCOUNT/DEPOSIT DETECTION DISPLAY */}
-                                {(scannedExtraInfo.discount > 0 || scannedExtraInfo.deposit > 0) && (
-                                    <div className={`mx-4 mt-2 p-3 rounded-xl border-2 border-dashed flex items-start gap-3 ${darkMode ? "border-green-500/50 bg-green-500/10" : "border-green-600/30 bg-green-50"}`}>
-                                        <Tag size={18} className={darkMode ? "text-green-500" : "text-green-600"}/>
-                                        <div className="flex-1">
-                                            <p className="text-[10px] font-black uppercase opacity-70 mb-1">AI Detect Diskaun/Deposit:</p>
-                                            <div className="flex gap-4 text-xs font-bold mb-2">
-                                                {scannedExtraInfo.discount > 0 && <span>Disc: {currency}{scannedExtraInfo.discount.toFixed(2)}</span>}
-                                                {scannedExtraInfo.deposit > 0 && <span>Depo: {currency}{scannedExtraInfo.deposit.toFixed(2)}</span>}
-                                            </div>
-                                            <label className="flex items-center gap-2 text-[10px] font-bold cursor-pointer">
-                                                <input type="checkbox" checked={includeScannedDiscount} onChange={(e) => setIncludeScannedDiscount(e.target.checked)} className="accent-green-500"/>
-                                                Masukkan dalam kotak Diskaun?
-                                            </label>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                    {scannedItems.length === 0 ? (
-                                        <div className="text-center py-10 opacity-50">
-                                            <p className="text-xs font-bold">Tak jumpa item. Cuba scan lagi.</p>
-                                        </div>
-                                    ) : (
-                                        scannedItems.map(item => (
-                                            <div key={item.id} className={`flex items-start gap-2 p-3 rounded-xl border-2 transition-all ${item.selected ? (darkMode ? "border-green-400 bg-green-400/10" : "border-green-500 bg-green-50") : (darkMode ? "border-white/20 opacity-50" : "border-black/20 opacity-50")}`}>
-                                                <input type="checkbox" checked={item.selected} onChange={() => toggleScanItem(item.id)} className="mt-1 accent-green-500 w-4 h-4"/>
-                                                <div className="flex-1 space-y-1">
-                                                    <input value={item.name} onChange={e => updateScannedItem(item.id, 'name', e.target.value)} className="w-full bg-transparent font-bold text-xs outline-none border-b border-transparent focus:border-current"/>
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-[10px] opacity-50">{currency}</span>
-                                                        <input type="number" value={item.price} onChange={e => updateScannedItem(item.id, 'price', e.target.value)} className="w-20 bg-transparent font-mono font-black text-sm outline-none border-b border-transparent focus:border-current"/>
-                                                    </div>
-                                                </div>
-                                                <button onClick={() => deleteScannedItem(item.id)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={14}/></button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                                <div className="p-4 border-t border-current border-opacity-10">
-                                    <button onClick={addSelectedScannedItems} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all`}>
-                                        Masukkan {scannedItems.filter(i => i.selected).length} Item Ke Bill
-                                    </button>
-                                </div>
-                            </>
-                        )}
+            {/* SCANNING RESULTS MODAL V3.2 */}
+{showScanModal && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+        <div className={`w-full max-w-[360px] max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+            {isScanning ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-4">
+                    <Loader2 size={48} className="animate-spin text-blue-500"/>
+                    <div>
+                        <h3 className="text-xl font-black uppercase">Sedang Scan...</h3>
+                        <p className="text-xs font-bold opacity-60 mt-1">{scanStatus}</p>
                     </div>
                 </div>
+            ) : (
+                <>
+                    <div className="p-4 border-b border-current border-opacity-10 flex justify-between items-center">
+                        <h3 className="text-sm font-black uppercase flex items-center gap-2"><Camera size={16}/> Hasil Scan AI</h3>
+                        <button onClick={() => setShowScanModal(false)}><X size={20}/></button>
+                    </div>
+                    
+                    {/* INFO DETECTION (Tax/Discount) */}
+                    <div className="px-4 pt-4 space-y-2">
+                        {(scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0) && (
+                            <div className={`p-2 rounded-xl border-2 border-dashed flex items-start gap-2 ${darkMode ? "border-yellow-500/50 bg-yellow-500/10" : "border-yellow-600/30 bg-yellow-50"}`}>
+                                <AlertCircle size={14} className="mt-0.5 text-yellow-500"/>
+                                <div className="flex-1">
+                                    <p className="text-[9px] font-black uppercase opacity-70">Tax/SC: {currency}{(scannedExtraInfo.tax + scannedExtraInfo.service).toFixed(2)}</p>
+                                    <label className="flex items-center gap-1.5 text-[9px] font-bold cursor-pointer">
+                                        <input type="checkbox" checked={includeScannedTax} onChange={(e) => setIncludeScannedTax(e.target.checked)} className="accent-yellow-500 w-3 h-3"/>
+                                        Masuk Caj Tetap?
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+                        {(scannedExtraInfo.discount > 0 || scannedExtraInfo.deposit > 0) && (
+                            <div className={`p-2 rounded-xl border-2 border-dashed flex items-start gap-2 ${darkMode ? "border-green-500/50 bg-green-500/10" : "border-green-600/30 bg-green-50"}`}>
+                                <Tag size={14} className="mt-0.5 text-green-500"/>
+                                <div className="flex-1">
+                                    <p className="text-[9px] font-black uppercase opacity-70">Disc/Depo: {currency}{(scannedExtraInfo.discount + scannedExtraInfo.deposit).toFixed(2)}</p>
+                                    <label className="flex items-center gap-1.5 text-[9px] font-bold cursor-pointer">
+                                        <input type="checkbox" checked={includeScannedDiscount} onChange={(e) => setIncludeScannedDiscount(e.target.checked)} className="accent-green-500 w-3 h-3"/>
+                                        Masuk Kotak Diskaun?
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        {scannedItems.length === 0 ? (
+                            <div className="text-center py-10 opacity-50"><p className="text-xs font-bold">Tak jumpa item. Cuba scan lagi.</p></div>
+                        ) : (
+                            scannedItems.map(item => (
+                                <div key={item.id} className={`p-3 rounded-xl border-2 transition-all ${item.selected ? (darkMode ? "border-green-400 bg-green-400/5" : "border-green-500 bg-green-50/30") : "opacity-40 grayscale"}`}>
+                                    <div className="flex items-start gap-2 mb-3">
+                                        <input type="checkbox" checked={item.selected} onChange={() => toggleScanItem(item.id)} className="mt-1 accent-green-500 w-4 h-4"/>
+                                        <div className="flex-1">
+                                            <input value={item.name} onChange={e => updateScannedItem(item.id, 'name', e.target.value)} className="w-full bg-transparent font-bold text-xs outline-none border-b border-dashed border-current/20 focus:border-green-500 mb-1"/>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[10px] opacity-50">{currency}</span>
+                                                <input type="number" value={item.price} onChange={e => updateScannedItem(item.id, 'price', e.target.value)} className="w-20 bg-transparent font-mono font-black text-sm outline-none"/>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => deleteScannedItem(item.id)} className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={14}/></button>
+                                    </div>
+
+                                    {/* PILIHAN ORANG UNTUK SETIAP ITEM */}
+                                    <div className="flex flex-wrap gap-1 pt-2 border-t border-dashed border-current/10">
+                                        {people.map(p => {
+                                            const isAssigned = item.sharedBy.includes(p.id);
+                                            return (
+                                                <button 
+                                                    key={p.id} 
+                                                    onClick={() => togglePersonInScan(item.id, p.id)}
+                                                    className={`px-2 py-1 rounded-md text-[9px] font-black uppercase border transition-all ${isAssigned 
+                                                        ? (darkMode ? "bg-blue-500 border-blue-400 text-white" : "bg-blue-600 border-black text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]") 
+                                                        : (darkMode ? "border-white/20 text-white/40" : "border-black/20 text-black/40")}`}
+                                                >
+                                                    {p.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    <div className="p-4 border-t border-current border-opacity-10 bg-current/5">
+                        <button onClick={addSelectedScannedItems} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all`}>
+                            Masukkan {scannedItems.filter(i => i.selected).length} Item Ke Bill
+                        </button>
+                    </div>
+                </>
             )}
+        </div>
+    </div>
+)}
         {/* CURRENCY MODAL (ASEAN STYLE) */}
         {showCurrencyModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
