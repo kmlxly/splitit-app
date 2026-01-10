@@ -1162,6 +1162,83 @@ export default function SplitBillBrutalV2() {
                     </div>
                 </div>
             )}
+        {/* CURRENCY MODAL (ASEAN STYLE) */}
+        {showCurrencyModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                    <div className={`w-full max-w-[320px] p-6 rounded-[2rem] border-2 ${darkMode ? "bg-zinc-900 border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative`}>
+                        <button onClick={() => setShowCurrencyModal(false)} className="absolute top-5 right-5 opacity-50 hover:opacity-100"><X size={20}/></button>
+                        <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2 tracking-tighter"><Globe size={24}/> Pilih Mata Wang</h2>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { s: "RM", n: "Malaysia" }, 
+                                { s: "S$", n: "Singapore" },
+                                { s: "฿", n: "Thailand" }, 
+                                { s: "Rp", n: "Indonesia" },
+                                { s: "₱", n: "Philippines" }, 
+                                { s: "₫", n: "Vietnam" }
+                            ].map((c) => (
+                                <button key={c.s} onClick={() => { setCurrency(c.s); setShowCurrencyModal(false); }} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-1 transition-all active:scale-95 ${currency === c.s ? (darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black") : "border-current opacity-50 hover:opacity-100"}`}>
+                                    <span className="text-2xl font-black">{c.s}</span>
+                                    <span className="text-[9px] uppercase font-bold tracking-widest opacity-70">{c.n}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* MODAL: SESSION MANAGER (UPDATED V2.2.0) */}
+            {showSessionModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                    <div className={`w-full max-w-[340px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative`}>
+                        <button onClick={() => setShowSessionModal(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20}/></button>
+                        <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2"><Folder size={24}/> Pilih Sesi</h2>
+                        
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto mb-6 pr-1">
+                            {sessions.map(s => (
+                                <div key={s.id} className={`p-4 rounded-xl border-2 flex items-center justify-between transition-all ${activeSessionId === s.id ? (darkMode ? "border-green-400 bg-green-900/20" : "border-black bg-green-100") : "border-transparent bg-current bg-opacity-5"}`}>
+                                    {/* Content Kiri */}
+                                    {editingSessionId === s.id ? (
+                                        // Mode EDIT
+                                        <div className="flex-1 flex gap-2">
+                                            <input autoFocus value={tempSessionName} onChange={e => setTempSessionName(e.target.value)} onKeyDown={e => e.key === "Enter" && saveRenameSession()} className={`flex-1 bg-transparent border-b-2 outline-none font-bold text-sm ${darkMode ? "border-white" : "border-black"}`}/>
+                                            <button onClick={saveRenameSession} className="p-1 text-green-500 hover:scale-110 transition"><Save size={16}/></button>
+                                        </div>
+                                    ) : (
+                                        // Mode NORMAL
+                                        <div onClick={() => {setActiveSessionId(s.id); setShowSessionModal(false);}} className="flex-1 cursor-pointer">
+                                            <h3 className="font-bold text-sm">{s.name}</h3>
+                                            <p className="text-[10px] opacity-50">{new Date(s.createdAt).toLocaleDateString()}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons Kanan */}
+                                    <div className="flex items-center gap-1 pl-2">
+                                        {activeSessionId === s.id && !editingSessionId && <CheckCircle size={16} className="text-green-500 mr-1"/>}
+                                        
+                                        {!editingSessionId && (
+                                            <>
+                                                <button onClick={() => startRenameSession(s)} className="p-2 opacity-50 hover:opacity-100 hover:text-blue-500 transition"><Edit3 size={14}/></button>
+                                                {sessions.length > 1 && (
+                                                    <button onClick={() => deleteSession(s.id)} className="p-2 opacity-50 hover:opacity-100 hover:text-red-500 transition"><Trash2 size={14}/></button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="pt-6 border-t border-dashed border-current border-opacity-30">
+                            <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Buka Sesi Baru</label>
+                            <div className="flex gap-2">
+                                <input value={newSessionName} onChange={e => setNewSessionName(e.target.value)} placeholder="Contoh: Trip Hatyai" className={`flex-1 px-3 py-2 rounded-lg bg-transparent border-2 outline-none text-sm font-bold ${darkMode ? "border-white/30 focus:border-white" : "border-black/30 focus:border-black"}`}/>
+                                <button onClick={createNewSession} disabled={!newSessionName} className={`px-4 py-2 rounded-lg border-2 font-bold text-sm ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} disabled:opacity-50`}>OK</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
       </div>
     </div>
