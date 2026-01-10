@@ -517,6 +517,53 @@ export default function SplitBillBrutalV2() {
             }
         });
         return details;
+        const handleOpenImage = async () => { 
+            if (!receiptRef.current) return; 
+            setIsSharing(true); 
+            
+            // Memberi sedikit masa untuk UI 'Generating' muncul
+            await new Promise(r => setTimeout(r, 600)); 
+        
+            try { 
+              const canvas = await html2canvas(receiptRef.current, { 
+                backgroundColor: darkMode ? "#1E1E1E" : "#FFFFFF", 
+                scale: 3, 
+                useCORS: true, 
+                allowTaint: true, 
+                logging: false 
+              }); 
+        
+              const imageUrl = canvas.toDataURL("image/png");
+              
+              if (navigator.share) {
+                const blob = await (await fetch(imageUrl)).blob();
+                const file = new File([blob], `Settlement-${activeTransfer?.toName}.png`, { type: "image/png" });
+                
+                // Arahan sebelum Share Sheet muncul
+                await navigator.share({
+                  files: [file],
+                  title: 'Settlement Bill',
+                  text: 'Pilih "Save Image" atau hantar terus ke WhatsApp/Telegram.',
+                });
+              } else {
+                const newWindow = window.open();
+                if (newWindow) {
+                  newWindow.document.write(`
+                    <div style="text-align:center; font-family:sans-serif; padding:20px; background:#f0f0f0;">
+                      <p style="font-weight:bold; color:#333;">💡 TEKAN LAMA PADA GAMBAR UNTUK SIMPAN (SAVE IMAGE)</p>
+                      <img src="${imageUrl}" style="width:100%; max-width:400px; border:2px solid black; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.2);" />
+                    </div>
+                  `);
+                }
+              }
+        
+              setIsSharing(false); 
+            } catch (err) { 
+              console.error("Ralat:", err);
+              alert("Gagal menjana gambar. Sila ambil screenshot manual."); 
+              setIsSharing(false); 
+            } 
+          };
   };
 
   // --- OCR / SCAN LOGIC ---
@@ -601,8 +648,53 @@ export default function SplitBillBrutalV2() {
 };
 
   // --- IMAGE HELPERS (CROP & SCREENSHOT) ---
-  const handleOpenImage = async () => { if (!receiptRef.current) return; setIsSharing(true); await new Promise(r => setTimeout(r, 200)); try { const canvas = await html2canvas(receiptRef.current, { backgroundColor: darkMode ? "#000000" : "#E5E7EB", scale: 2, useCORS: true, allowTaint: true, logging: false }); canvas.toBlob((blob) => { if (blob) { const url = URL.createObjectURL(blob); const newWindow = window.open(url, '_blank'); if (!newWindow) alert("Pop-up diblock!"); } else alert("Gagal."); setIsSharing(false); }, "image/png"); } catch (err) { alert("Ralat Kritikal."); setIsSharing(false); } };
-  
+  const handleOpenImage = async () => { 
+    if (!receiptRef.current) return; 
+    setIsSharing(true); 
+    
+    // Memberi sedikit masa untuk UI 'Generating' muncul
+    await new Promise(r => setTimeout(r, 600)); 
+
+    try { 
+      const canvas = await html2canvas(receiptRef.current, { 
+        backgroundColor: darkMode ? "#1E1E1E" : "#FFFFFF", 
+        scale: 3, 
+        useCORS: true, 
+        allowTaint: true, 
+        logging: false 
+      }); 
+
+      const imageUrl = canvas.toDataURL("image/png");
+      
+      if (navigator.share) {
+        const blob = await (await fetch(imageUrl)).blob();
+        const file = new File([blob], `Settlement-${activeTransfer?.toName}.png`, { type: "image/png" });
+        
+        // Arahan sebelum Share Sheet muncul
+        await navigator.share({
+          files: [file],
+          title: 'Settlement Bill',
+          text: 'Pilih "Save Image" atau hantar terus ke WhatsApp/Telegram.',
+        });
+      } else {
+        const newWindow = window.open();
+        if (newWindow) {
+          newWindow.document.write(`
+            <div style="text-align:center; font-family:sans-serif; padding:20px; background:#f0f0f0;">
+              <p style="font-weight:bold; color:#333;">💡 TEKAN LAMA PADA GAMBAR UNTUK SIMPAN (SAVE IMAGE)</p>
+              <img src="${imageUrl}" style="width:100%; max-width:400px; border:2px solid black; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.2);" />
+            </div>
+          `);
+        }
+      }
+
+      setIsSharing(false); 
+    } catch (err) { 
+      console.error("Ralat:", err);
+      alert("Gagal menjana gambar. Sila ambil screenshot manual."); 
+      setIsSharing(false); 
+    } 
+  };
   // Logic untuk pilih gambar QR
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, pid: string) => { 
     const file = e.target.files?.[0];
@@ -770,7 +862,7 @@ export default function SplitBillBrutalV2() {
                     )}
                     <div className="pt-8 pb-10 text-center space-y-4">
                         <button onClick={resetData} className="mx-auto px-5 py-2 rounded-full border border-red-500 text-red-500 text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"><RotateCcw size={12}/> Reset Data</button>
-                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v3.1.0 (Fixed: Helper Function Location)</p></div>
+                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v3.2.2 (Fixed: Image Sharing)</p></div>
                     </div>
                 </div>
             )}
@@ -1047,6 +1139,11 @@ export default function SplitBillBrutalV2() {
                                         <span className="text-[8px] font-bold tracking-widest">SPLITIT.</span>
                                         <span className="text-[8px] font-mono">{new Date().toLocaleDateString()}</span>
                                     </div>
+                                    <div className="mt-2 text-center">
+    <p className={`text-[7px] font-black uppercase tracking-tighter opacity-30 ${darkMode ? "text-white" : "text-black"}`}>
+        * Jana Gambar Resit Untuk Download dah Kongsi
+    </p>
+</div>
                                 </div>
                             </div>
                             {/* END CARD */}
