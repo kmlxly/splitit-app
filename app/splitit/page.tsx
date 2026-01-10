@@ -142,6 +142,8 @@ export default function SplitBillBrutalV2() {
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false); 
   const [showScanMethodModal, setShowScanMethodModal] = useState(false); 
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   
   // NEW: Crop Modal State
   const [tempQrImage, setTempQrImage] = useState<string | null>(null);
@@ -605,8 +607,8 @@ export default function SplitBillBrutalV2() {
     if (!receiptRef.current) return; 
     setIsSharing(true); 
     
-    // Beri masa 600ms untuk spinner muncul
-    await new Promise(r => setTimeout(r, 600)); 
+    // Delay sekejap untuk pastikan UI render
+    await new Promise(r => setTimeout(r, 200)); 
   
     try { 
       const canvas = await html2canvas(receiptRef.current, { 
@@ -619,31 +621,16 @@ export default function SplitBillBrutalV2() {
   
       const imageUrl = canvas.toDataURL("image/png");
       
-      // Web Share API: Untuk iPhone/Android share terus ke WhatsApp/Save Gallery
-      if (navigator.share) {
-        const blob = await (await fetch(imageUrl)).blob();
-        const file = new File([blob], `Settlement.png`, { type: "image/png" });
-        await navigator.share({
-          files: [file],
-          title: 'Resit SplitIt',
-          text: 'Hold gambar untuk simpan atau terus share ke WhatsApp.',
-        });
-      } else {
-        // Fallback untuk Browser Desktop
-        const newWindow = window.open();
-        newWindow?.document.write(`
-          <div style="text-align:center;font-family:sans-serif;padding:20px;">
-            <p><b>💡 TEKAN LAMA UNTUK SIMPAN GAMBAR</b></p>
-            <img src="${imageUrl}" style="width:100%;max-width:400px;border:2px solid black;border-radius:15px;" />
-          </div>
-        `);
-      }
-      setIsSharing(false); 
+      // Set gambar ke state untuk dipaparkan dalam Modal
+      setPreviewImage(imageUrl);
+      setShowPreviewModal(true);
+      
     } catch (err) { 
       console.error("Ralat:", err);
-      alert("Gagal menjana. Sila screenshot skrin sahaja."); 
+      alert("Gagal menjana gambar. Sila screenshot manual."); 
+    } finally {
       setIsSharing(false); 
-    } 
+    }
   };
   // Logic untuk pilih gambar QR
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, pid: string) => { 
@@ -1081,7 +1068,7 @@ export default function SplitBillBrutalV2() {
                                     {/* QR CONTAINER - UPDATED SIZE */}
                                     {people.find(p=>p.id===activeTransfer.toId)?.qrImage && (
                                         <div className="w-28 h-28 mx-auto border-2 border-current rounded-xl overflow-hidden mb-1">
-                                            <img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} className="w-full h-full object-cover bg-white" alt="QR"/>
+                                            <img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} className="w-full h-full object-cover bg-white" alt="QR" crossOrigin="anonymous"/>
                                         </div>
                                     )}
 
@@ -1303,6 +1290,60 @@ export default function SplitBillBrutalV2() {
                                 <input value={newSessionName} onChange={e => setNewSessionName(e.target.value)} placeholder="Contoh: Trip Hatyai" className={`flex-1 px-3 py-2 rounded-lg bg-transparent border-2 outline-none text-sm font-bold ${darkMode ? "border-white/30 focus:border-white" : "border-black/30 focus:border-black"}`}/>
                                 <button onClick={createNewSession} disabled={!newSessionName} className={`px-4 py-2 rounded-lg border-2 font-bold text-sm ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} disabled:opacity-50`}>OK</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+                
+            )}
+            {/* IMAGE PREVIEW MODAL (LONG PRESS TO SAVE) */}
+            {showPreviewModal && previewImage && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md animate-in fade-in">
+                    <div className="relative w-full max-w-sm flex flex-col items-center gap-4 animate-in zoom-in-95 duration-300">
+                        {/* Tombol Tutup */}
+                        <button 
+                            onClick={() => setShowPreviewModal(false)} 
+                            className="absolute -top-12 right-0 p-2 text-white/50 hover:text-white bg-white/10 rounded-full transition-colors"
+                        >
+                            <X size={24}/>
+                        </button>
+                        
+                        <h3 className="text-white text-xs font-bold uppercase tracking-[0.2em] text-center opacity-80">
+                            Preview Resit
+                        </h3>
+                        
+                        {/* Gambar Hasil Generate */}
+                        <img 
+                            src={previewImage} 
+                            alt="Receipt Preview" 
+                            className="w-full rounded-2xl border-2 border-white/20 shadow-2xl" 
+                        />
+                        
+                        {/* Arahan User */}
+                        <div className="text-center space-y-3 mt-2">
+                            <div className="bg-white/10 px-4 py-2 rounded-lg backdrop-blur">
+                                <p className="text-white text-[10px] font-bold uppercase tracking-wide animate-pulse">
+                                    📲 iPhone: Tekan Lama (Long Press) Gambar
+                                </p>
+                                <p className="text-white/50 text-[9px]">
+                                    Pilih "Save to Photos" atau "Share"
+                                </p>
+                            </div>
+
+                            {/* Butang Share Manual (Jika Support) */}
+                            {typeof navigator !== "undefined" && navigator.share && (
+                                <button 
+                                    onClick={async () => {
+                                        try {
+                                            const blob = await (await fetch(previewImage)).blob();
+                                            const file = new File([blob], "Settlement.png", { type: "image/png" });
+                                            await navigator.share({ files: [file], title: 'Resit SplitIt' });
+                                        } catch(e) {}
+                                    }} 
+                                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-bold rounded-full text-[10px] uppercase tracking-widest hover:bg-blue-500 transition-colors mx-auto"
+                                >
+                                    <ExternalLink size={12}/> Share Sekarang
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
