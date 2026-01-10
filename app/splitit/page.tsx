@@ -517,53 +517,6 @@ export default function SplitBillBrutalV2() {
             }
         });
         return details;
-        const handleOpenImage = async () => { 
-            if (!receiptRef.current) return; 
-            setIsSharing(true); 
-            
-            // Memberi sedikit masa untuk UI 'Generating' muncul
-            await new Promise(r => setTimeout(r, 600)); 
-        
-            try { 
-              const canvas = await html2canvas(receiptRef.current, { 
-                backgroundColor: darkMode ? "#1E1E1E" : "#FFFFFF", 
-                scale: 3, 
-                useCORS: true, 
-                allowTaint: true, 
-                logging: false 
-              }); 
-        
-              const imageUrl = canvas.toDataURL("image/png");
-              
-              if (navigator.share) {
-                const blob = await (await fetch(imageUrl)).blob();
-                const file = new File([blob], `Settlement-${activeTransfer?.toName}.png`, { type: "image/png" });
-                
-                // Arahan sebelum Share Sheet muncul
-                await navigator.share({
-                  files: [file],
-                  title: 'Settlement Bill',
-                  text: 'Pilih "Save Image" atau hantar terus ke WhatsApp/Telegram.',
-                });
-              } else {
-                const newWindow = window.open();
-                if (newWindow) {
-                  newWindow.document.write(`
-                    <div style="text-align:center; font-family:sans-serif; padding:20px; background:#f0f0f0;">
-                      <p style="font-weight:bold; color:#333;">💡 TEKAN LAMA PADA GAMBAR UNTUK SIMPAN (SAVE IMAGE)</p>
-                      <img src="${imageUrl}" style="width:100%; max-width:400px; border:2px solid black; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.2);" />
-                    </div>
-                  `);
-                }
-              }
-        
-              setIsSharing(false); 
-            } catch (err) { 
-              console.error("Ralat:", err);
-              alert("Gagal menjana gambar. Sila ambil screenshot manual."); 
-              setIsSharing(false); 
-            } 
-          };
   };
 
   // --- OCR / SCAN LOGIC ---
@@ -652,13 +605,13 @@ export default function SplitBillBrutalV2() {
     if (!receiptRef.current) return; 
     setIsSharing(true); 
     
-    // Memberi sedikit masa untuk UI 'Generating' muncul
+    // Beri masa untuk spinner muncul
     await new Promise(r => setTimeout(r, 600)); 
 
     try { 
       const canvas = await html2canvas(receiptRef.current, { 
         backgroundColor: darkMode ? "#1E1E1E" : "#FFFFFF", 
-        scale: 3, 
+        scale: 3, // Kualiti tajam
         useCORS: true, 
         allowTaint: true, 
         logging: false 
@@ -666,32 +619,29 @@ export default function SplitBillBrutalV2() {
 
       const imageUrl = canvas.toDataURL("image/png");
       
+      // Menggunakan Web Share API (Sangat stabil untuk iPhone & Android)
       if (navigator.share) {
         const blob = await (await fetch(imageUrl)).blob();
-        const file = new File([blob], `Settlement-${activeTransfer?.toName}.png`, { type: "image/png" });
-        
-        // Arahan sebelum Share Sheet muncul
+        const file = new File([blob], `Settlement.png`, { type: "image/png" });
         await navigator.share({
           files: [file],
-          title: 'Settlement Bill',
-          text: 'Pilih "Save Image" atau hantar terus ke WhatsApp/Telegram.',
+          title: 'Resit Settlement',
+          text: 'Simpan gambar ini atau hantar ke WhatsApp.',
         });
       } else {
+        // Fallback untuk desktop: Buka di window baru
         const newWindow = window.open();
-        if (newWindow) {
-          newWindow.document.write(`
-            <div style="text-align:center; font-family:sans-serif; padding:20px; background:#f0f0f0;">
-              <p style="font-weight:bold; color:#333;">💡 TEKAN LAMA PADA GAMBAR UNTUK SIMPAN (SAVE IMAGE)</p>
-              <img src="${imageUrl}" style="width:100%; max-width:400px; border:2px solid black; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.2);" />
-            </div>
-          `);
-        }
+        newWindow?.document.write(`
+          <div style="text-align:center; padding:20px;">
+            <p>Tekan lama pada gambar untuk simpan</p>
+            <img src="${imageUrl}" style="max-width:100%; border:2px solid black; border-radius:10px;" />
+          </div>
+        `);
       }
-
       setIsSharing(false); 
     } catch (err) { 
-      console.error("Ralat:", err);
-      alert("Gagal menjana gambar. Sila ambil screenshot manual."); 
+      console.error("Ralat penjanaan:", err);
+      alert("Gagal menjana gambar. Sila cuba lagi atau ambil screenshot manual."); 
       setIsSharing(false); 
     } 
   };
