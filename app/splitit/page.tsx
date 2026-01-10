@@ -2,13 +2,88 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
-import { GoogleGenerativeAI } from "@google/generative-ai"; 
+// Pastikan dah install: npm install react-easy-crop
+import Cropper from "react-easy-crop"; 
 import { 
   Moon, Sun, CheckCircle, Trash2, 
   Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X, 
   ChevronDown, ChevronUp, Receipt, Users, AlertCircle, 
-  CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight, Info, Folder, Calculator, Save, ShoppingBag, User, Globe, Camera, Loader2, Image as ImageIcon
+  CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight, Info, Folder, Calculator, Save, ShoppingBag, User, Globe, Camera, Loader2, Image as ImageIcon, XCircle, List, Crop
 } from "lucide-react";
+
+// --- 1. HELPER FUNCTIONS (DILETAKKAN DI ATAS UNTUK ELAK ERROR) ---
+
+// Helper: Create Image element
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", (error) => reject(error));
+    image.setAttribute("crossOrigin", "anonymous"); 
+    image.src = url;
+  });
+
+// Helper: Crop Image Logic
+async function getCroppedImg(imageSrc: string, pixelCrop: any): Promise<string> {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) return "";
+
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
+  );
+
+  return canvas.toDataURL("image/jpeg", 0.9);
+}
+
+// Helper: Compress Image (Untuk AI Scan)
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 1024; 
+          const MAX_HEIGHT = 1024; 
+          let width = img.width; 
+          let height = img.height;
+
+          if (width > height) { 
+            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } 
+          } else { 
+            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } 
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.7); // Quality 70%
+          const base64 = dataUrl.split(",")[1]; // Buang prefix data:image...
+          resolve(base64);
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+};
 
 // --- TYPES ---
 type Person = { 
@@ -44,7 +119,6 @@ type Session = {
     currency?: string;
 };
 
-// Type untuk item hasil scan
 type ScannedItem = {
     id: string;
     name: string;
@@ -52,6 +126,7 @@ type ScannedItem = {
     selected: boolean;
 };
 
+// --- MAIN COMPONENT ---
 export default function SplitBillBrutalV2() {
   // --- STATE ---
   const [darkMode, setDarkMode] = useState(false);
@@ -65,7 +140,13 @@ export default function SplitBillBrutalV2() {
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false); 
-  const [showScanMethodModal, setShowScanMethodModal] = useState(false); // NEW: Modal Pilihan Scan
+  const [showScanMethodModal, setShowScanMethodModal] = useState(false); 
+  
+  // NEW: Crop Modal State
+  const [tempQrImage, setTempQrImage] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
   
   const [newSessionName, setNewSessionName] = useState("");
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null); 
@@ -96,8 +177,11 @@ export default function SplitBillBrutalV2() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState("Ready");
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
+  const [scannedExtraInfo, setScannedExtraInfo] = useState({ tax: 0, service: 0, discount: 0, deposit: 0 });
+  const [includeScannedTax, setIncludeScannedTax] = useState(true);
+  const [includeScannedDiscount, setIncludeScannedDiscount] = useState(true);
 
-  // Ref
+  // Refs
   const receiptRef = useRef<HTMLDivElement>(null);
 
   // Form Inputs
@@ -117,6 +201,7 @@ export default function SplitBillBrutalV2() {
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemSharedBy, setNewItemSharedBy] = useState<string[]>([]);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false); 
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   // --- STORAGE & MIGRATION ---
   useEffect(() => {
@@ -155,7 +240,6 @@ export default function SplitBillBrutalV2() {
   }, [sessions, darkMode, activeSessionId, isLoaded]);
 
   // --- LOGIC FUNCTIONS ---
-  
   const resetData = () => {
     if (confirm("⚠️ AMARAN KRITIKAL:\n\nAdakah anda pasti nak RESET semua data?\nSemua history bill & nama member akan hilang dari device ini.")) {
         localStorage.clear();
@@ -224,46 +308,48 @@ export default function SplitBillBrutalV2() {
     updateActiveSession({ paidStatus: { ...paidStatus, [key]: !paidStatus[key] } });
   };
 
+  // --- MENU ITEM LOGIC ---
   const addMenuItem = () => {
       if (!newItemName || !newItemPrice || newItemSharedBy.length === 0) return;
       const price = parseFloat(newItemPrice);
       if (isNaN(price)) return;
 
-      const newItem: MenuItem = {
-          id: `m${Date.now()}`,
-          name: newItemName,
-          price: price,
-          sharedBy: newItemSharedBy
-      };
-      setMenuItems([...menuItems, newItem]);
-      setNewItemName("");
-      setNewItemPrice("");
-      setNewItemSharedBy([]);
-      setIsMultiSelectMode(false); 
+      if (editingItemId) {
+          setMenuItems(prev => prev.map(item => 
+              item.id === editingItemId 
+              ? { ...item, name: newItemName, price: price, sharedBy: newItemSharedBy }
+              : item
+          ));
+          setEditingItemId(null); 
+      } else {
+          const newItem: MenuItem = {
+              id: `m${Date.now()}`,
+              name: newItemName,
+              price: price,
+              sharedBy: newItemSharedBy
+          };
+          setMenuItems([...menuItems, newItem]);
+      }
+      setNewItemName(""); setNewItemPrice(""); setNewItemSharedBy([]); setIsMultiSelectMode(false); 
   };
 
+  const startEditItem = (item: MenuItem) => {
+      setEditingItemId(item.id); setNewItemName(item.name); setNewItemPrice(String(item.price)); setNewItemSharedBy(item.sharedBy); setIsMultiSelectMode(item.sharedBy.length > 1);
+  };
+  const cancelEditItem = () => {
+      setEditingItemId(null); setNewItemName(""); setNewItemPrice(""); setNewItemSharedBy([]); setIsMultiSelectMode(false);
+  };
   const removeMenuItem = (mid: string) => {
+      if (editingItemId === mid) cancelEditItem();
       setMenuItems(menuItems.filter(m => m.id !== mid));
   };
-
   const selectPersonForMenu = (pid: string) => {
       if (isMultiSelectMode) {
-          if (newItemSharedBy.includes(pid)) {
-              setNewItemSharedBy(newItemSharedBy.filter(id => id !== pid));
-          } else {
-              setNewItemSharedBy([...newItemSharedBy, pid]);
-          }
-      } else {
-          setNewItemSharedBy([pid]);
-      }
+          if (newItemSharedBy.includes(pid)) { setNewItemSharedBy(newItemSharedBy.filter(id => id !== pid)); } else { setNewItemSharedBy([...newItemSharedBy, pid]); }
+      } else { setNewItemSharedBy([pid]); }
   };
-
   const toggleMultiSelect = () => {
-      const newMode = !isMultiSelectMode;
-      setIsMultiSelectMode(newMode);
-      if (!newMode) {
-          if (newItemSharedBy.length > 1) setNewItemSharedBy([]);
-      }
+      const newMode = !isMultiSelectMode; setIsMultiSelectMode(newMode); if (!newMode) { if (newItemSharedBy.length > 1) setNewItemSharedBy([]); }
   };
 
   const startEditBill = (bill: Bill) => {
@@ -282,6 +368,7 @@ export default function SplitBillBrutalV2() {
     setPayerId(people[0]?.id || ""); 
     setTaxMethod("PROPORTIONAL"); setDiscountMethod("PROPORTIONAL"); setMode("DASHBOARD");
     setNewItemName(""); setNewItemPrice(""); setNewItemSharedBy([]); setIsMultiSelectMode(false);
+    setEditingItemId(null); 
   };
 
   const applyQuickTax = (percentage: number) => {
@@ -374,153 +461,176 @@ export default function SplitBillBrutalV2() {
   const totalSpent = bills.reduce((sum, b) => sum + b.totalAmount, 0);
 
   const copyWhatsAppSummary = () => {
-      let text = `*PROSES SETTLEMENT: ${activeSession?.name?.toUpperCase()}*\n`;
-      text += `----------------------------------\n`;
-      text += `💰 *Total Hangus:* ${currency}${totalSpent.toFixed(2)}\n\n`;
-      if (txs.length > 0) {
-          text += `*SENARAI HUTANG:*\n`;
-          txs.forEach(t => {
-              const status = paidStatus[`${t.fromId}-${t.toId}`] ? "✅ SETTLED" : "❌ UNPAID";
-              text += `• *${t.fromName}* ➡️ *${t.toName}*: _${currency}${t.amount.toFixed(2)}_ [${status}]\n`;
-          });
-      } else { text += `✅ Semua hutang dah selesai!\n`; }
-      text += `\n_Generated by SplitIt._`;
-      navigator.clipboard.writeText(text);
-      setCopied(true); setTimeout(() => setCopied(false), 2000);
+    let text = `*PROSES SETTLEMENT: ${activeSession?.name?.toUpperCase()}*\n`;
+    text += `----------------------------------\n`;
+    text += `💰 *Total Hangus:* ${currency}${totalSpent.toFixed(2)}\n\n`;
+    if (txs.length > 0) {
+        text += `*SENARAI HUTANG:*\n`;
+        txs.forEach(t => {
+            const status = paidStatus[`${t.fromId}-${t.toId}`] ? "✅ SETTLED" : "❌ UNPAID";
+            text += `• *${t.fromName}* ➡️ *${t.toName}*: _${currency}${t.amount.toFixed(2)}_ [${status}]\n`;
+        });
+    } else { text += `✅ Semua hutang dah selesai!\n`; }
+    text += `\n_Generated by SplitIt._`;
+
+    // --- FIX: Fallback Copy Logic ---
+    if (navigator.clipboard && window.isSecureContext) {
+        // Cara Moden (HTTPS/Localhost)
+        navigator.clipboard.writeText(text).then(() => {
+            setCopied(true); setTimeout(() => setCopied(false), 2000);
+        }).catch(err => {
+            alert("Gagal copy: " + err);
+        });
+    } else {
+        // Cara Lama (Backup untuk HTTP/IP Address)
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed"; // Elak scroll lari
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            setCopied(true); setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+            alert("Browser tak bagi copy. Sila screenshot manual.");
+        }
+        document.body.removeChild(textArea);
+    }
+};
+
+  // --- HELPER: CONTEXT FOR SETTLEMENT ---
+  const getTransferDetails = (fromId: string, toId: string) => {
+        let details: string[] = [];
+        bills.forEach(b => {
+            if (b.paidBy === toId) {
+                if (b.type === "EQUAL") {
+                    const detail = b.details.find(d => d.personId === fromId);
+                    if (detail && detail.total > 0) details.push(`Kongsi: ${b.title}`);
+                } else if (b.type === "ITEMIZED" && b.menuItems) {
+                    const userItems = b.menuItems.filter(item => item.sharedBy.includes(fromId));
+                    userItems.forEach(item => details.push(item.name));
+                }
+            }
+        });
+        return details;
   };
 
-  // --- GEMINI AI OCR / SCAN LOGIC ---
+  // --- OCR / SCAN LOGIC ---
   const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      setShowScanMethodModal(false); // Tutup modal pilihan
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      setIsScanning(true);
-      setScanStatus("Menghantar ke AI...");
-      setShowScanModal(true);
-      setScannedItems([]);
-
+      setShowScanMethodModal(false); const file = e.target.files?.[0]; if (!file) return;
+      setIsScanning(true); setScanStatus("Memproses gambar (Compressing)..."); setShowScanModal(true); setScannedItems([]); setScannedExtraInfo({ tax: 0, service: 0, discount: 0, deposit: 0 }); 
       try {
-          // 1. Convert Image ke Base64 (Untuk Gemini)
-          const base64Data = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.readAsDataURL(file);
-              reader.onload = () => {
-                  const result = reader.result as string;
-                  const base64String = result.split(",")[1]; // Buang data:image/ prefix
-                  resolve(base64String);
-              };
-              reader.onerror = error => reject(error);
-          });
-
-          // 2. Setup Gemini AI
-          const genAI = new GoogleGenerativeAI("AIzaSyC_kxh5AkWCG2XJUp1Z7tXlC-4zXzVmAKk");
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-          setScanStatus("AI sedang membaca resit...");
-
-          // 3. Prompt untuk AI (Strict JSON)
-          const prompt = `
-            Analyze this receipt image. Extract all purchased items and their prices.
-            Ignore tax, subtotal, total, cash, change, date, or store info.
-            Return ONLY a raw JSON array with this format:
-            [{"name": "Item Name", "price": "0.00"}, ...]
-            Do not use markdown formatting like \`\`\`json. Just the raw array.
-          `;
-
-          const imagePart = {
-              inlineData: {
-                  data: base64Data,
-                  mimeType: file.type,
-              },
+          // Guna function helper yang dah didefinisikan di atas
+          const base64Data = await compressImage(file); 
+          setScanStatus("AI sedang menganalisis resit...");
+          
+          const API_KEY = "AIzaSyAVPSkBGcx5pgqJqwoZIa9grxtKSdZeuVo";
+          
+          const fetchGemini = async (modelName: string) => {
+             return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contents: [{ parts: [{ text: "Extract items, prices, tax, service charge, discount, and deposit amount from this receipt image. Return ONLY a valid raw JSON object. Structure: { \"items\": [{\"name\": \"Nasi Lemak\", \"price\": 5.00}], \"tax\": 0.00, \"serviceCharge\": 0.00, \"discount\": 0.00, \"deposit\": 0.00, \"total\": 0.00 }. 'tax' is SST/GST. 'discount' is total discount deduction. 'deposit' is any pre-payment/deposit. Prices should be numbers. Do not include currency symbols." }, { inline_data: { mime_type: "image/jpeg", data: base64Data } }] }] })
+            });
           };
 
-          // 4. Hantar ke AI
-          const result = await model.generateContent([prompt, imagePart]);
-          const response = await result.response;
-          let text = response.text();
+          // Logic: Cuba model 2.0 dulu, kalau 404, cuba 1.5-flash-8b (sangat stabil)
+          let response = await fetchGemini("gemini-2.0-flash");
+          if (!response.ok && response.status === 404) { 
+             console.log("Gemini 2.0 404, trying Fallback..."); 
+             setScanStatus("Gemini 2.0 sibuk, mencuba model backup..."); 
+             response = await fetchGemini("gemini-1.5-flash-8b");
+          }
 
-          // 5. Bersihkan response JSON
-          text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-          
-          setScanStatus("Menyusun data...");
-          
-          const parsedData = JSON.parse(text);
-          
-          // 6. Map ke format aplikasi
-          const formattedItems: ScannedItem[] = parsedData.map((item: any, index: number) => ({
-              id: `scan-${Date.now()}-${index}`,
-              name: item.name,
-              price: item.price.toString(), // Pastikan string untuk input
-              selected: true
-          }));
+          if (!response.ok) { 
+              const errJson = await response.json(); 
+              const errMessage = errJson.error?.message || response.statusText; 
+              alert(`Gemini Error (${response.status}): ${errMessage}`); 
+              throw new Error(`Gemini API Failed: ${errMessage}`); 
+          }
 
-          setScannedItems(formattedItems);
+          const result = await response.json(); 
+          if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) { throw new Error("AI tak dapat baca data dari resit ni."); }
+          
+          const rawText = result.candidates[0].content.parts[0].text; 
+          const cleanJson = rawText.replace(/```json|```/g, '').trim();
+          let parsedData; 
+          try { parsedData = JSON.parse(cleanJson); } catch (e) { console.error("Failed to parse JSON", rawText); throw new Error("Format data AI tak valid."); }
+          
+          const itemsArray = parsedData.items || (Array.isArray(parsedData) ? parsedData : []);
+          if (Array.isArray(itemsArray)) {
+              const mappedItems: ScannedItem[] = itemsArray.map((item: any, idx: number) => ({ id: `scan-${Date.now()}-${idx}`, name: item.name || "Unknown Item", price: item.price ? String(item.price.toFixed(2)) : "0.00", selected: true }));
+              setScannedItems(mappedItems);
+              const detectedTax = parseFloat(parsedData.tax) || 0; 
+              const detectedService = parseFloat(parsedData.serviceCharge) || 0; 
+              const detectedDiscount = parseFloat(parsedData.discount) || 0; 
+              const detectedDeposit = parseFloat(parsedData.deposit) || 0;
+              setScannedExtraInfo({ tax: detectedTax, service: detectedService, discount: Math.abs(detectedDiscount), deposit: Math.abs(detectedDeposit) });
+          } else { alert("AI tidak menjumpai senarai item."); }
 
-      } catch (err) {
-          console.error("Gemini Error:", err);
-          alert("Gagal scan. Pastikan internet laju atau gambar jelas.");
-          setScanStatus("Error. Cuba lagi.");
-      }
+      } catch (err: any) { console.error(err); alert(`Gagal scan: ${err.message}`); }
       setIsScanning(false);
   };
 
   const addSelectedScannedItems = () => {
-      const itemsToAdd = scannedItems.filter(i => i.selected);
-      if (itemsToAdd.length === 0) return;
-
-      const newMenuItems = itemsToAdd.map(i => ({
-          id: `m${Date.now()}-${Math.random()}`,
-          name: i.name,
-          price: parseFloat(i.price),
-          sharedBy: [] 
-      }));
-
+      const itemsToAdd = scannedItems.filter(i => i.selected); if (itemsToAdd.length === 0) return;
+      const newMenuItems = itemsToAdd.map(i => ({ id: `m${Date.now()}-${Math.random()}`, name: i.name, price: parseFloat(i.price), sharedBy: [] }));
       setMenuItems([...menuItems, ...newMenuItems]);
-      
-      const currentTotal = parseFloat(billTotal) || 0;
-      const scannedTotal = itemsToAdd.reduce((sum, i) => sum + parseFloat(i.price), 0);
-      
-      if (currentTotal === 0) {
-          setBillTotal(scannedTotal.toFixed(2));
-      }
-
+      const currentTotal = parseFloat(billTotal) || 0; const scannedTotal = itemsToAdd.reduce((sum, i) => sum + parseFloat(i.price), 0);
+      if (currentTotal === 0) { setBillTotal(scannedTotal.toFixed(2)); }
+      if (includeScannedTax && (scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0)) { const totalTaxService = scannedExtraInfo.tax + scannedExtraInfo.service; const currentMisc = parseFloat(miscFee) || 0; setMiscFee((currentMisc + totalTaxService).toFixed(2)); }
+      if (includeScannedDiscount && (scannedExtraInfo.discount > 0 || scannedExtraInfo.deposit > 0)) { const totalDeductions = scannedExtraInfo.discount + scannedExtraInfo.deposit; const currentDisc = parseFloat(discountFee) || 0; setDiscountFee((currentDisc + totalDeductions).toFixed(2)); }
       setShowScanModal(false);
   };
 
-  const toggleScanItem = (id: string) => {
-      setScannedItems(items => items.map(i => i.id === id ? { ...i, selected: !i.selected } : i));
-  };
+  const toggleScanItem = (id: string) => { setScannedItems(items => items.map(i => i.id === id ? { ...i, selected: !i.selected } : i)); };
+  const updateScannedItem = (id: string, field: 'name' | 'price', val: string) => { setScannedItems(items => items.map(i => i.id === id ? { ...i, [field]: val } : i)); };
+  const deleteScannedItem = (id: string) => { setScannedItems(items => items.filter(i => i.id !== id)); };
+
+  // --- IMAGE HELPERS (CROP & SCREENSHOT) ---
+  const handleOpenImage = async () => { if (!receiptRef.current) return; setIsSharing(true); await new Promise(r => setTimeout(r, 200)); try { const canvas = await html2canvas(receiptRef.current, { backgroundColor: darkMode ? "#000000" : "#E5E7EB", scale: 2, useCORS: true, allowTaint: true, logging: false }); canvas.toBlob((blob) => { if (blob) { const url = URL.createObjectURL(blob); const newWindow = window.open(url, '_blank'); if (!newWindow) alert("Pop-up diblock!"); } else alert("Gagal."); setIsSharing(false); }, "image/png"); } catch (err) { alert("Ralat Kritikal."); setIsSharing(false); } };
   
-  const updateScannedItem = (id: string, field: 'name' | 'price', val: string) => {
-       setScannedItems(items => items.map(i => i.id === id ? { ...i, [field]: val } : i));
-  };
-
-  const deleteScannedItem = (id: string) => {
-      setScannedItems(items => items.filter(i => i.id !== id));
-  };
-
-  // --- IMAGE & UPLOAD ---
-  const handleOpenImage = async () => { 
-    if (!receiptRef.current) return;
-    setIsSharing(true);
-    await new Promise(r => setTimeout(r, 200));
-    try {
-        const canvas = await html2canvas(receiptRef.current, { backgroundColor: darkMode ? "#000000" : "#E5E7EB", scale: 2, useCORS: true, allowTaint: true, logging: false });
-        canvas.toBlob((blob) => { if (blob) { const url = URL.createObjectURL(blob); const newWindow = window.open(url, '_blank'); if (!newWindow) alert("Pop-up diblock!"); } else alert("Gagal."); setIsSharing(false); }, "image/png");
-    } catch (err) { alert("Ralat Kritikal."); setIsSharing(false); }
-  };
+  // Logic untuk pilih gambar QR
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, pid: string) => { 
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2000000) { alert("File besar > 2MB."); return; }
+      if (file.size > 5000000) { alert("File besar > 5MB."); return; }
       const reader = new FileReader();
-      reader.onloadend = async () => { const rawBase64 = reader.result as string; const p = people.find(per => per.id === pid); if(p) updatePaymentProfile(pid, p.bankName || "", p.bankAccount || "", rawBase64); };
+      reader.onloadend = () => { 
+          setTempQrImage(reader.result as string);
+          setPaymentProfileId(pid); // Simpan ID orang yang kita tengah edit
+          setZoom(1);
+          setCrop({ x: 0, y: 0 });
+      };
       reader.readAsDataURL(file);
     }
   };
 
-  // --- BRUTAL STYLES ---
+  const onCropComplete = (croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  };
+
+  const saveCroppedQr = async () => {
+      if (!tempQrImage || !croppedAreaPixels || !paymentProfileId) return;
+      try {
+          const croppedImageBase64 = await getCroppedImg(tempQrImage, croppedAreaPixels);
+          const p = people.find(per => per.id === paymentProfileId);
+          if(p) {
+              updatePaymentProfile(paymentProfileId, p.bankName || "", p.bankAccount || "", croppedImageBase64);
+          }
+          setTempQrImage(null); // Tutup crop modal
+      } catch (e) {
+          console.error(e);
+          alert("Gagal crop gambar.");
+      }
+  };
+
+  const cancelCrop = () => {
+      setTempQrImage(null);
+  };
+
   const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-200 text-black";
   const cardStyle = `${darkMode ? "bg-[#1E1E1E] border-white" : "bg-white border-black"} border-2 rounded-2xl`;
   const shadowStyle = darkMode ? "" : "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]";
@@ -649,7 +759,7 @@ export default function SplitBillBrutalV2() {
                     )}
                     <div className="pt-8 pb-10 text-center space-y-4">
                         <button onClick={resetData} className="mx-auto px-5 py-2 rounded-full border border-red-500 text-red-500 text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"><RotateCcw size={12}/> Reset Data</button>
-                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v2.6.2 (Gemini AI Scan)</p></div>
+                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v3.1.0 (Fixed: Helper Function Location)</p></div>
                     </div>
                 </div>
             )}
@@ -685,7 +795,7 @@ export default function SplitBillBrutalV2() {
                         {billType === "ITEMIZED" && (
                             <div className="space-y-6 animate-in fade-in">
                                 
-                                {/* 1. SCAN BUTTON (DUDUK LUAR & JELAS) */}
+                                {/* 1. SCAN BUTTON */}
                                 <div className="flex flex-col gap-2">
                                     <button onClick={() => setShowScanMethodModal(true)} className={`w-full py-3 rounded-xl border-2 flex items-center justify-center gap-2 font-black uppercase text-xs transition-all active:scale-95 ${darkMode ? "bg-indigo-500 text-white border-indigo-400" : "bg-indigo-100 text-indigo-700 border-indigo-300 hover:bg-indigo-200"}`}>
                                         <Camera size={16}/> Scan Resit (Auto-Fill)
@@ -697,9 +807,16 @@ export default function SplitBillBrutalV2() {
                                     </div>
                                 </div>
 
-                                {/* 2. INPUT CARD (LEBIH KEMAS) */}
-                                <div className={`${cardStyle} p-4 space-y-4 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle} overflow-hidden transition-all duration-300`}>
+                                {/* 2. INPUT CARD */}
+                                <div className={`${cardStyle} p-4 space-y-4 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle} overflow-hidden transition-all duration-300 relative`}>
                                     
+                                    {/* Indicator Edit Mode */}
+                                    {editingItemId && (
+                                        <div className="absolute top-0 right-0 p-2">
+                                            <span className="text-[9px] font-black uppercase bg-yellow-400 text-black px-2 py-1 rounded-bl-xl rounded-tr-xl animate-pulse">EDITING MODE</span>
+                                        </div>
+                                    )}
+
                                     {/* Input Baris 1: Nama & Harga */}
                                     <div className="flex gap-3">
                                         <div className="flex-[2] space-y-1">
@@ -738,12 +855,21 @@ export default function SplitBillBrutalV2() {
                                         </div>
                                     </div>
 
-                                    <button disabled={!newItemName || !newItemPrice || newItemSharedBy.length === 0} onClick={addMenuItem} className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-wider border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${darkMode ? "bg-white text-black border-white hover:bg-gray-200" : "bg-black text-white border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"}`}>+ Tambah Item</button>
+                                    <div className="flex gap-2">
+                                        {editingItemId && (
+                                            <button onClick={cancelEditItem} className={`px-4 py-3 rounded-xl border-2 font-black uppercase text-xs transition-all ${darkMode ? "border-red-400 text-red-400 hover:bg-red-400/20" : "border-red-600 text-red-600 hover:bg-red-50"}`}>
+                                                <X size={16}/>
+                                            </button>
+                                        )}
+                                        <button disabled={!newItemName || !newItemPrice || newItemSharedBy.length === 0} onClick={addMenuItem} className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-wider border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${editingItemId ? (darkMode ? "bg-yellow-400 text-black border-yellow-400 hover:bg-yellow-300" : "bg-yellow-400 text-black border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]") : (darkMode ? "bg-white text-black border-white hover:bg-gray-200" : "bg-black text-white border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]")}`}>
+                                            {editingItemId ? "Update Item" : "+ Tambah Item"}
+                                        </button>
+                                    </div>
                                 </div>
 
-                                {/* LIST ITEM (KOD ASAL, Cuma Refined Sikit Jarak) */}
+                                {/* LIST ITEM */}
                                 {menuItems.map((item) => (
-                                    <div key={item.id} className={`p-3 border-2 rounded-xl flex justify-between items-center animate-in slide-in-from-bottom-2 ${darkMode ? "bg-[#222] border-white/20" : "bg-white border-black/10"}`}>
+                                    <div key={item.id} className={`p-3 border-2 rounded-xl flex justify-between items-center animate-in slide-in-from-bottom-2 ${editingItemId === item.id ? (darkMode ? "border-yellow-400 bg-yellow-400/10" : "border-black bg-yellow-50") : (darkMode ? "bg-[#222] border-white/20" : "bg-white border-black/10")}`}>
                                         <div className="flex-1">
                                             <div className="flex justify-between items-start mb-2">
                                                 <span className="font-bold text-sm">{item.name}</span>
@@ -757,7 +883,10 @@ export default function SplitBillBrutalV2() {
                                                 ))}
                                             </div>
                                         </div>
-                                        <button onClick={() => removeMenuItem(item.id)} className="ml-2 p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                                        <div className="flex items-center gap-1 ml-2">
+                                            <button onClick={() => startEditItem(item)} className={`p-2 rounded-lg transition-colors ${editingItemId === item.id ? "text-yellow-500 bg-yellow-100" : "text-blue-500 hover:bg-blue-500/10"}`}><Edit3 size={16}/></button>
+                                            <button onClick={() => removeMenuItem(item.id)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                                        </div>
                                     </div>
                                 ))}
 
@@ -786,21 +915,65 @@ export default function SplitBillBrutalV2() {
             
             {showPaymentModal && paymentProfileId && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                    <div className={`w-full max-w-[320px] p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative animate-in slide-in-from-bottom-10`}>
-                        <button onClick={() => setShowPaymentModal(false)} className="absolute top-3 right-3 opacity-50 hover:opacity-100"><X size={20}/></button>
+                    <div className={`w-full max-w-[320px] p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative animate-in slide-in-from-bottom-10 max-h-[90vh] overflow-y-auto`}>
+                        
+                        {!tempQrImage && (
+                            <button onClick={() => setShowPaymentModal(false)} className="absolute top-3 right-3 opacity-50 hover:opacity-100"><X size={20}/></button>
+                        )}
+
                         <h3 className="text-lg font-black uppercase mb-4 flex items-center gap-2"><Wallet size={20}/> Payment Profile</h3>
-                        <div className="space-y-4">
-                            <div className="space-y-2"><label className="text-[10px] font-bold uppercase opacity-70">Nama Bank / E-Wallet</label><input placeholder="Maybank / TNG" value={people.find(p=>p.id===paymentProfileId)?.bankName || ""} onChange={e => updatePaymentProfile(paymentProfileId, e.target.value, people.find(p=>p.id===paymentProfileId)?.bankAccount || "", people.find(p=>p.id===paymentProfileId)?.qrImage || "")} className={inputStyle}/></div>
-                            <div className="space-y-2"><label className="text-[10px] font-bold uppercase opacity-70">No. Akaun</label><input placeholder="1234567890" value={people.find(p=>p.id===paymentProfileId)?.bankAccount || ""} onChange={e => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", e.target.value, people.find(p=>p.id===paymentProfileId)?.qrImage || "")} className={`${inputStyle} font-mono`}/></div>
-                            <div className="space-y-2 pt-2 border-t border-dashed border-current border-opacity-30">
-                                <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">DuitNow QR (Optional)</label>
-                                <div className={`flex items-start gap-2 p-3 rounded-lg text-[10px] font-bold mb-3 ${darkMode ? "bg-yellow-900/30 text-yellow-200" : "bg-yellow-100 text-yellow-800"}`}><Info size={14} className="flex-shrink-0 mt-[1px]"/><p>Tips: Crop gambar QR code jadi petak (Square) sebelum upload supaya QR dapat dibaca tanpa masalah.</p></div>
-                                <div className="flex items-center gap-3">
-                                    {people.find(p=>p.id===paymentProfileId)?.qrImage ? (<div className="relative w-16 h-16 border-2 border-current rounded-lg overflow-hidden group"><img src={people.find(p=>p.id===paymentProfileId)?.qrImage!} className="w-full h-full object-cover" alt="QR"/><button onClick={() => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", people.find(p=>p.id===paymentProfileId)?.bankAccount || "", "")} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={16} className="text-white"/></button></div>) : (<div className="w-16 h-16 border-2 border-dashed border-current rounded-lg flex items-center justify-center opacity-30"><QrCode size={20}/></div>)}<label className={`flex-1 py-3 px-4 border-2 rounded-xl flex items-center justify-center gap-2 cursor-pointer font-bold uppercase text-[10px] hover:opacity-80 ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}><Upload size={14}/> Upload Image<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, paymentProfileId)}/></label>
+                        
+                        {/* JIKA SEDANG CROP GAMBAR */}
+                        {tempQrImage ? (
+                            <div className="space-y-4">
+                                <div className="relative w-full h-64 bg-black rounded-xl border-2 border-dashed border-gray-500 overflow-hidden">
+                                    <Cropper
+                                        image={tempQrImage}
+                                        crop={crop}
+                                        zoom={zoom}
+                                        aspect={1} // Square Crop
+                                        onCropChange={setCrop}
+                                        onCropComplete={onCropComplete}
+                                        onZoomChange={setZoom}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold uppercase opacity-70">Zoom: {zoom.toFixed(1)}x</label>
+                                    <input 
+                                        type="range" 
+                                        value={zoom} 
+                                        min={1} 
+                                        max={3} 
+                                        step={0.1} 
+                                        aria-labelledby="Zoom"
+                                        onChange={(e) => setZoom(Number(e.target.value))}
+                                        className="w-full accent-blue-500 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={cancelCrop} className={`flex-1 py-2 rounded-lg font-bold border-2 ${darkMode ? "border-white text-white" : "border-black text-black"}`}>BATAL</button>
+                                    <button onClick={saveCroppedQr} className={`flex-[2] py-2 rounded-lg font-bold border-2 ${darkMode ? "bg-green-500 text-black border-green-500" : "bg-green-500 text-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}>CONFIRM CROP</button>
                                 </div>
                             </div>
-                        </div>
-                        <button onClick={() => setShowPaymentModal(false)} className={`w-full py-3 mt-5 text-sm font-black uppercase rounded-xl border-2 ${darkMode ? "bg-green-400 text-black border-green-400" : "bg-green-400 text-black border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px]"}`}>SIMPAN PROFILE</button>
+                        ) : (
+                            /* UI ASAL (FORM INPUT) */
+                            <div className="space-y-4">
+                                <div className="space-y-2"><label className="text-[10px] font-bold uppercase opacity-70">Nama Bank / E-Wallet</label><input placeholder="Maybank / TNG" value={people.find(p=>p.id===paymentProfileId)?.bankName || ""} onChange={e => updatePaymentProfile(paymentProfileId, e.target.value, people.find(p=>p.id===paymentProfileId)?.bankAccount || "", people.find(p=>p.id===paymentProfileId)?.qrImage || "")} className={inputStyle}/></div>
+                                <div className="space-y-2"><label className="text-[10px] font-bold uppercase opacity-70">No. Akaun</label><input placeholder="1234567890" value={people.find(p=>p.id===paymentProfileId)?.bankAccount || ""} onChange={e => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", e.target.value, people.find(p=>p.id===paymentProfileId)?.qrImage || "")} className={`${inputStyle} font-mono`}/></div>
+                                <div className="space-y-2 pt-2 border-t border-dashed border-current border-opacity-30">
+                                    <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">DuitNow QR (Optional)</label>
+                                    
+                                    <div className="flex items-center gap-3">
+                                        {people.find(p=>p.id===paymentProfileId)?.qrImage ? (<div className="relative w-24 h-24 border-2 border-current rounded-lg overflow-hidden group flex-shrink-0"><img src={people.find(p=>p.id===paymentProfileId)?.qrImage!} className="w-full h-full object-cover" alt="QR"/><button onClick={() => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", people.find(p=>p.id===paymentProfileId)?.bankAccount || "", "")} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={16} className="text-white"/></button></div>) : (<div className="w-24 h-24 border-2 border-dashed border-current rounded-lg flex items-center justify-center opacity-30 flex-shrink-0"><QrCode size={24}/></div>)}
+                                        <div className="flex-1 space-y-2">
+                                            <div className={`p-2 rounded text-[9px] leading-tight font-bold ${darkMode ? "bg-yellow-900/30 text-yellow-200" : "bg-yellow-100 text-yellow-800"}`}><p>Sila upload gambar QR. Anda boleh crop & zoom selepas pilih gambar.</p></div>
+                                            <label className={`w-full py-2 px-3 border-2 rounded-xl flex items-center justify-center gap-2 cursor-pointer font-bold uppercase text-[10px] hover:opacity-80 ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}><Upload size={14}/> Pilih Gambar<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, paymentProfileId)}/></label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowPaymentModal(false)} className={`w-full py-3 mt-5 text-sm font-black uppercase rounded-xl border-2 ${darkMode ? "bg-green-400 text-black border-green-400" : "bg-green-400 text-black border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px]"}`}>SIMPAN PROFILE</button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -809,25 +982,74 @@ export default function SplitBillBrutalV2() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                     <div className={`w-full max-w-[340px] max-h-[85vh] flex flex-col rounded-2xl overflow-hidden ${darkMode ? "bg-[#1E1E1E] text-white" : "bg-white text-black"} shadow-2xl relative animate-in zoom-in-95`}>
                          <div className="p-4 flex-shrink-0 flex justify-between items-center border-b border-current border-opacity-10"><span className="text-[10px] font-black uppercase tracking-widest opacity-50">SIAP UNTUK SHARE</span><button onClick={() => setShowPayModal(false)}><X size={20} className="opacity-50 hover:opacity-100"/></button></div>
-                         <div className={`flex-1 overflow-y-auto p-6 flex flex-col items-center ${darkMode ? "bg-[#111]" : "bg-gray-200"}`}>
-                            <div ref={receiptRef} className={`w-full bg-white text-black p-5 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden`}>
-                                <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 w-4 h-4 bg-black rounded-full"></div>
-                                <div className="text-center border-b-2 border-dashed border-black/20 pb-4 mb-4"><p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">TOTAL BAYARAN</p><h2 className="text-3xl font-black font-mono">{currency}{activeTransfer.amount.toFixed(2)}</h2></div>
-                                <div className="text-center mb-4"><p className="text-[9px] font-bold opacity-40 uppercase mb-1">KEPADA</p><h3 className="text-xl font-black uppercase leading-none mb-2">{activeTransfer.toName}</h3><p className="text-[9px] font-bold opacity-40 uppercase">{people.find(p=>p.id===activeTransfer.toId)?.bankName || "Unknown Bank"}</p></div>
-                                {people.find(p=>p.id===activeTransfer.toId)?.qrImage ? (<div className="w-32 h-32 mx-auto border-2 border-black rounded-lg overflow-hidden mb-4"><img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} className="w-full h-full object-cover bg-white" alt="QR"/></div>) : (<div className="w-full py-4 border-2 border-dashed border-black/20 rounded-lg flex flex-col items-center justify-center opacity-30 mb-4"><QrCode size={24}/><span className="text-[8px] font-bold mt-1">NO QR</span></div>)}
-                                <div className="bg-gray-100 p-2 rounded border border-black/10 text-center"><p className="text-[8px] font-bold uppercase opacity-40 mb-1">NO AKAUN</p><p className="font-mono font-black text-sm tracking-wider">{people.find(p=>p.id===activeTransfer.toId)?.bankAccount || "Ask Member"}</p></div>
-                                <div className="mt-4 pt-2 border-t-2 border-black/10 flex justify-between items-center opacity-40"><span className="text-[8px] font-bold tracking-widest">SPLITIT.</span><span className="text-[8px] font-mono">{new Date().toLocaleDateString()}</span></div>
+                         <div className={`flex-1 overflow-y-auto p-4 flex flex-col items-center ${darkMode ? "bg-[#111]" : "bg-gray-200"}`}>
+                            
+                            {/* COMPACT REDESIGNED CARD */}
+                            <div ref={receiptRef} className={`w-full ${darkMode ? "bg-[#222]" : "bg-white"} p-3 rounded-2xl ${darkMode ? "border-white" : "border-black"} border-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden`}>
+                                {/* Inner Frame */}
+                                <div className={`rounded-xl border-2 border-dashed ${darkMode ? "border-white/30 bg-white/5" : "border-black/20 bg-gray-50"} p-4 relative`}>
+                                    <div className="absolute top-[-8px] left-1/2 -translate-x-1/2 w-4 h-1.5 bg-current rounded-full opacity-20"></div>
+                                    
+                                    <div className="text-center border-b-2 border-dashed border-current/20 pb-3 mb-3">
+                                        <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">TOTAL BAYARAN</p>
+                                        <h2 className="text-3xl font-black font-mono tracking-tight">{currency}{activeTransfer.amount.toFixed(2)}</h2>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-end mb-4">
+                                        <div className="text-left">
+                                            <p className="text-[8px] font-bold opacity-40 uppercase mb-0.5">KEPADA</p>
+                                            <h3 className="text-base font-black uppercase leading-none">{activeTransfer.toName}</h3>
+                                            <p className="text-[8px] font-bold opacity-60 uppercase">{people.find(p=>p.id===activeTransfer.toId)?.bankName || "Unknown Bank"}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[8px] font-bold opacity-40 uppercase mb-0.5">DARI</p>
+                                            <h3 className="text-sm font-black uppercase leading-none">{activeTransfer.fromName}</h3>
+                                        </div>
+                                    </div>
+
+                                    <div className={`p-2 rounded border ${darkMode ? "border-white/20 bg-black/30" : "border-black/10 bg-white"} flex justify-between items-center mb-4`}>
+                                        <span className="text-[8px] font-bold uppercase opacity-50">NO AKAUN</span>
+                                        <span className="font-mono font-black text-sm tracking-wider">{people.find(p=>p.id===activeTransfer.toId)?.bankAccount || "MINTA MEMBER"}</span>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <p className="text-[8px] font-bold uppercase opacity-40 mb-1 flex items-center gap-1"><List size={10}/> UNTUK:</p>
+                                        <div className="flex flex-wrap gap-1">
+                                            {getTransferDetails(activeTransfer.fromId, activeTransfer.toId).slice(0, 3).map((item, idx) => (
+                                                <span key={idx} className={`text-[9px] font-bold px-1.5 py-0.5 border rounded ${darkMode ? "border-white/20 bg-white/10" : "border-black/20 bg-white"}`}>{item}</span>
+                                            ))}
+                                            {getTransferDetails(activeTransfer.fromId, activeTransfer.toId).length > 3 && (
+                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 border rounded opacity-60 ${darkMode ? "border-white/20 bg-white/5" : "border-black/20 bg-gray-100"}`}>+{getTransferDetails(activeTransfer.fromId, activeTransfer.toId).length - 3} lagi...</span>
+                                            )}
+                                            {getTransferDetails(activeTransfer.fromId, activeTransfer.toId).length === 0 && <span className="text-[9px] italic opacity-50">Settlement baki akaun...</span>}
+                                        </div>
+                                    </div>
+
+                                    {/* QR CONTAINER - UPDATED SIZE */}
+                                    {people.find(p=>p.id===activeTransfer.toId)?.qrImage && (
+                                        <div className="w-28 h-28 mx-auto border-2 border-current rounded-xl overflow-hidden mb-1">
+                                            <img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} className="w-full h-full object-cover bg-white" alt="QR"/>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-between items-center opacity-40 pt-2 border-t-2 border-dashed border-current/20 mt-2">
+                                        <span className="text-[8px] font-bold tracking-widest">SPLITIT.</span>
+                                        <span className="text-[8px] font-mono">{new Date().toLocaleDateString()}</span>
+                                    </div>
+                                </div>
                             </div>
+                            {/* END CARD */}
+
                          </div>
-                         <div className={`p-4 flex-shrink-0 space-y-3 border-t-2 ${darkMode ? "bg-black border-white/20" : "bg-white border-black/10"}`}>
-                             <button onClick={handleOpenImage} disabled={isSharing} className={`w-full py-3 text-xs font-bold uppercase rounded-xl border-2 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-gray-100"}`}>{isSharing ? <RotateCcw size={14} className="animate-spin"/> : <ExternalLink size={14}/>} {isSharing ? "GENERATING..." : "BUKA GAMBAR RESIT"}</button>
-                             <button onClick={() => {togglePaymentStatus(activeTransfer.fromId, activeTransfer.toId); setShowPayModal(false);}} className={`w-full py-3 text-xs font-black uppercase rounded-xl transition-all shadow-lg hover:shadow-none hover:translate-y-[2px] ${paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "bg-red-500 text-white" : "bg-green-500 text-black"}`}>{paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "BATAL / MARK UNPAID" : "✅ DAH TRANSFER"}</button>
+                         <div className={`p-4 flex-shrink-0 space-y-2 border-t-2 ${darkMode ? "bg-black border-white/20" : "bg-white border-black/10"}`}>
+                             <button onClick={handleOpenImage} disabled={isSharing} className={`w-full py-2.5 text-xs font-bold uppercase rounded-xl border-2 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-gray-100"}`}>{isSharing ? <RotateCcw size={14} className="animate-spin"/> : <ExternalLink size={14}/>} {isSharing ? "GENERATING..." : "BUKA GAMBAR RESIT"}</button>
+                             <button onClick={() => {togglePaymentStatus(activeTransfer.fromId, activeTransfer.toId); setShowPayModal(false);}} className={`w-full py-2.5 text-xs font-black uppercase rounded-xl transition-all shadow-lg hover:shadow-none hover:translate-y-[2px] ${paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "bg-red-500 text-white" : "bg-green-500 text-black"}`}>{paidStatus[`${activeTransfer.fromId}-${activeTransfer.toId}`] ? "BATAL / MARK UNPAID" : "✅ DAH TRANSFER"}</button>
                          </div>
                     </div>
                 </div>
             )}
 
-            {/* SCANNING METHOD MODAL (NEW) */}
+            {/* SCANNING METHOD MODAL */}
             {showScanMethodModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                     <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
@@ -872,6 +1094,43 @@ export default function SplitBillBrutalV2() {
                                     <h3 className="text-sm font-black uppercase flex items-center gap-2"><Camera size={16}/> Hasil Scan AI</h3>
                                     <button onClick={() => setShowScanModal(false)}><X size={20}/></button>
                                 </div>
+                                
+                                {/* TAX DETECTION DISPLAY */}
+                                {(scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0) && (
+                                    <div className={`mx-4 mt-4 p-3 rounded-xl border-2 border-dashed flex items-start gap-3 ${darkMode ? "border-yellow-500/50 bg-yellow-500/10" : "border-yellow-600/30 bg-yellow-50"}`}>
+                                        <AlertCircle size={18} className={darkMode ? "text-yellow-500" : "text-yellow-600"}/>
+                                        <div className="flex-1">
+                                            <p className="text-[10px] font-black uppercase opacity-70 mb-1">AI Detect Cukai/Service:</p>
+                                            <div className="flex gap-4 text-xs font-bold mb-2">
+                                                {scannedExtraInfo.tax > 0 && <span>Tax: {currency}{scannedExtraInfo.tax.toFixed(2)}</span>}
+                                                {scannedExtraInfo.service > 0 && <span>Service: {currency}{scannedExtraInfo.service.toFixed(2)}</span>}
+                                            </div>
+                                            <label className="flex items-center gap-2 text-[10px] font-bold cursor-pointer">
+                                                <input type="checkbox" checked={includeScannedTax} onChange={(e) => setIncludeScannedTax(e.target.checked)} className="accent-yellow-500"/>
+                                                Masukkan sekali dalam Caj Tetap?
+                                            </label>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* DISCOUNT/DEPOSIT DETECTION DISPLAY */}
+                                {(scannedExtraInfo.discount > 0 || scannedExtraInfo.deposit > 0) && (
+                                    <div className={`mx-4 mt-2 p-3 rounded-xl border-2 border-dashed flex items-start gap-3 ${darkMode ? "border-green-500/50 bg-green-500/10" : "border-green-600/30 bg-green-50"}`}>
+                                        <Tag size={18} className={darkMode ? "text-green-500" : "text-green-600"}/>
+                                        <div className="flex-1">
+                                            <p className="text-[10px] font-black uppercase opacity-70 mb-1">AI Detect Diskaun/Deposit:</p>
+                                            <div className="flex gap-4 text-xs font-bold mb-2">
+                                                {scannedExtraInfo.discount > 0 && <span>Disc: {currency}{scannedExtraInfo.discount.toFixed(2)}</span>}
+                                                {scannedExtraInfo.deposit > 0 && <span>Depo: {currency}{scannedExtraInfo.deposit.toFixed(2)}</span>}
+                                            </div>
+                                            <label className="flex items-center gap-2 text-[10px] font-bold cursor-pointer">
+                                                <input type="checkbox" checked={includeScannedDiscount} onChange={(e) => setIncludeScannedDiscount(e.target.checked)} className="accent-green-500"/>
+                                                Masukkan dalam kotak Diskaun?
+                                            </label>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                                     {scannedItems.length === 0 ? (
                                         <div className="text-center py-10 opacity-50">
@@ -900,41 +1159,6 @@ export default function SplitBillBrutalV2() {
                                 </div>
                             </>
                         )}
-                    </div>
-                </div>
-            )}
-
-            {showSessionModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                    <div className={`w-full max-w-[340px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative`}>
-                        <button onClick={() => setShowSessionModal(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20}/></button>
-                        <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2"><Folder size={24}/> Pilih Sesi</h2>
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto mb-6 pr-1">
-                            {sessions.map(s => (
-                                <div key={s.id} className={`p-4 rounded-xl border-2 flex items-center justify-between transition-all ${activeSessionId === s.id ? (darkMode ? "border-green-400 bg-green-900/20" : "border-black bg-green-100") : "border-transparent bg-current bg-opacity-5 hover:border-current"}`}>
-                                    {editingSessionId === s.id ? (<div className="flex-1 flex gap-2"><input autoFocus value={tempSessionName} onChange={e => setTempSessionName(e.target.value)} onKeyDown={e => e.key === "Enter" && saveRenameSession()} className={`flex-1 bg-transparent border-b-2 outline-none font-bold text-sm ${darkMode ? "border-white" : "border-black"}`}/><button onClick={saveRenameSession} className="p-1 text-green-500 hover:scale-110 transition"><Save size={16}/></button></div>) : (<div onClick={() => {setActiveSessionId(s.id); setShowSessionModal(false);}} className="flex-1 cursor-pointer"><h3 className="font-bold text-sm">{s.name}</h3><p className="text-[10px] opacity-50">{new Date(s.createdAt).toLocaleDateString()}</p></div>)}
-                                    <div className="flex items-center gap-1 pl-2">{activeSessionId === s.id && !editingSessionId && <CheckCircle size={16} className="text-green-500 mr-1"/>}{!editingSessionId && (<><button onClick={() => startRenameSession(s)} className="p-2 opacity-50 hover:opacity-100 hover:text-blue-500 transition"><Edit3 size={14}/></button>{sessions.length > 1 && (<button onClick={() => deleteSession(s.id)} className="p-2 opacity-50 hover:opacity-100 hover:text-red-500 transition"><Trash2 size={14}/></button>)}</>)}</div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="pt-6 border-t border-dashed border-current border-opacity-30"><label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Buka Sesi Baru</label><div className="flex gap-2"><input value={newSessionName} onChange={e => setNewSessionName(e.target.value)} placeholder="Contoh: Trip Hatyai" className={`flex-1 px-3 py-2 rounded-lg bg-transparent border-2 outline-none text-sm font-bold ${darkMode ? "border-white/30 focus:border-white" : "border-black/30 focus:border-black"}`}/><button onClick={createNewSession} disabled={!newSessionName} className={`px-4 py-2 rounded-lg border-2 font-bold text-sm ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} disabled:opacity-50`}>OK</button></div></div>
-                    </div>
-                </div>
-            )}
-            
-            {/* CURRENCY MODAL */}
-            {showCurrencyModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                    <div className={`w-full max-w-[320px] p-6 rounded-[2rem] border-2 ${darkMode ? "bg-zinc-900 border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative`}>
-                        <button onClick={() => setShowCurrencyModal(false)} className="absolute top-5 right-5 opacity-50 hover:opacity-100"><X size={20}/></button>
-                        <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2 tracking-tighter"><Globe size={24}/> Pilih Mata Wang</h2>
-                        <div className="grid grid-cols-2 gap-3">
-                            {[{ s: "RM", n: "Malaysia" }, { s: "S$", n: "Singapore" }, { s: "฿", n: "Thailand" }, { s: "Rp", n: "Indonesia" }, { s: "₱", n: "Philippines" }, { s: "₫", n: "Vietnam" }].map((c) => (
-                                <button key={c.s} onClick={() => { setCurrency(c.s); setShowCurrencyModal(false); }} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-1 transition-all active:scale-95 ${currency === c.s ? (darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black") : "border-current opacity-50 hover:opacity-100"}`}>
-                                    <span className="text-2xl font-black">{c.s}</span><span className="text-[9px] uppercase font-bold tracking-widest opacity-70">{c.n}</span>
-                                </button>
-                            ))}
-                        </div>
                     </div>
                 </div>
             )}
