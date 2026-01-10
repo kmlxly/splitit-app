@@ -605,43 +605,43 @@ export default function SplitBillBrutalV2() {
     if (!receiptRef.current) return; 
     setIsSharing(true); 
     
-    // Beri masa untuk spinner muncul
+    // Beri masa 600ms untuk spinner muncul
     await new Promise(r => setTimeout(r, 600)); 
-
+  
     try { 
       const canvas = await html2canvas(receiptRef.current, { 
         backgroundColor: darkMode ? "#1E1E1E" : "#FFFFFF", 
-        scale: 3, // Kualiti tajam
+        scale: 3, 
         useCORS: true, 
         allowTaint: true, 
         logging: false 
       }); 
-
+  
       const imageUrl = canvas.toDataURL("image/png");
       
-      // Menggunakan Web Share API (Sangat stabil untuk iPhone & Android)
+      // Web Share API: Untuk iPhone/Android share terus ke WhatsApp/Save Gallery
       if (navigator.share) {
         const blob = await (await fetch(imageUrl)).blob();
         const file = new File([blob], `Settlement.png`, { type: "image/png" });
         await navigator.share({
           files: [file],
-          title: 'Resit Settlement',
-          text: 'Simpan gambar ini atau hantar ke WhatsApp.',
+          title: 'Resit SplitIt',
+          text: 'Hold gambar untuk simpan atau terus share ke WhatsApp.',
         });
       } else {
-        // Fallback untuk desktop: Buka di window baru
+        // Fallback untuk Browser Desktop
         const newWindow = window.open();
         newWindow?.document.write(`
-          <div style="text-align:center; padding:20px;">
-            <p>Tekan lama pada gambar untuk simpan</p>
-            <img src="${imageUrl}" style="max-width:100%; border:2px solid black; border-radius:10px;" />
+          <div style="text-align:center;font-family:sans-serif;padding:20px;">
+            <p><b>💡 TEKAN LAMA UNTUK SIMPAN GAMBAR</b></p>
+            <img src="${imageUrl}" style="width:100%;max-width:400px;border:2px solid black;border-radius:15px;" />
           </div>
         `);
       }
       setIsSharing(false); 
     } catch (err) { 
-      console.error("Ralat penjanaan:", err);
-      alert("Gagal menjana gambar. Sila cuba lagi atau ambil screenshot manual."); 
+      console.error("Ralat:", err);
+      alert("Gagal menjana. Sila screenshot skrin sahaja."); 
       setIsSharing(false); 
     } 
   };
