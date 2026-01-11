@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.90.1",
     "framer-motion": "^12.25.0",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.562.0",

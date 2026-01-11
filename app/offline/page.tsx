@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
+// Pastikan dah install: npm install react-easy-crop
 import Cropper from "react-easy-crop"; 
-import { supabase } from "../../lib/supabaseClient"; // Path updated
 import { 
   Moon, Sun, CheckCircle, Trash2, 
   Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X, 
@@ -11,9 +11,8 @@ import {
   CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight, Info, Folder, Calculator, Save, ShoppingBag, User, Globe, Camera, Loader2, Image as ImageIcon, XCircle, List, Crop
 } from "lucide-react";
 
-// --- 1. HELPER FUNCTIONS ---
-const APP_VERSION = "v3.3.0-cloud"; 
-
+// --- 1. HELPER FUNCTIONS (DILETAKKAN DI ATAS UNTUK ELAK ERROR) ---
+const APP_VERSION = "v3.2.4"; // <--- Tukar ni bila push update baru!
 // Helper: Create Image element
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -50,7 +49,7 @@ async function getCroppedImg(imageSrc: string, pixelCrop: any): Promise<string> 
   return canvas.toDataURL("image/jpeg", 0.9);
 }
 
-// Helper: Compress Image
+// Helper: Compress Image (Untuk AI Scan)
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -76,8 +75,8 @@ const compressImage = (file: File): Promise<string> => {
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, width, height);
           
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.7); 
-          const base64 = dataUrl.split(",")[1]; 
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.7); // Quality 70%
+          const base64 = dataUrl.split(",")[1]; // Buang prefix data:image...
           resolve(base64);
         };
         img.onerror = (err) => reject(err);
@@ -85,38 +84,6 @@ const compressImage = (file: File): Promise<string> => {
       reader.onerror = (err) => reject(err);
     });
 };
-
-// --- DATABASE CONVERTERS (SQL <-> APP) ---
-const mapSqlBillToLocal = (sqlBill: any): Bill => ({
-  id: sqlBill.id,
-  title: sqlBill.title,
-  type: sqlBill.type as BillType,
-  totalAmount: Number(sqlBill.total_amount),
-  paidBy: sqlBill.paid_by,
-  details: sqlBill.details || [],
-  menuItems: sqlBill.menu_items || [],
-  itemsSubtotal: 0, 
-  miscAmount: Number(sqlBill.misc_amount || 0),
-  discountAmount: Number(sqlBill.discount_amount || 0),
-  taxMethod: sqlBill.tax_method || "PROPORTIONAL",
-  discountMethod: sqlBill.discount_method || "PROPORTIONAL"
-});
-
-const mapLocalBillToSql = (bill: Bill, sessionId: string) => ({
-  id: bill.id,
-  session_id: sessionId,
-  title: bill.title,
-  type: bill.type,
-  total_amount: bill.totalAmount,
-  paid_by: bill.paidBy,
-  details: bill.details, 
-  menu_items: bill.menuItems, 
-  misc_amount: bill.miscAmount,
-  discount_amount: bill.discountAmount,
-  tax_method: bill.taxMethod,
-  discount_method: bill.discountMethod,
-  created_at: new Date().toISOString()
-});
 
 // --- TYPES ---
 type Person = { 
@@ -161,16 +128,11 @@ type ScannedItem = {
 };
 
 // --- MAIN COMPONENT ---
-export default function SplitItCloud() {
+export default function OfflineBackup() {
   // --- STATE ---
   const [darkMode, setDarkMode] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  // Auth & Sync State
-  const [user, setUser] = useState<any>(null);
-  const [syncStatus, setSyncStatus] = useState<"SAVED" | "SAVING" | "ERROR" | "OFFLINE">("OFFLINE");
-  const [pendingChanges, setPendingChanges] = useState(false);
-
   // Data State
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -183,7 +145,7 @@ export default function SplitItCloud() {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   
-  // Crop Modal State
+  // NEW: Crop Modal State
   const [tempQrImage, setTempQrImage] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -244,157 +206,66 @@ export default function SplitItCloud() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false); 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
-  // --- HYBRID SYNC ENGINE ---
-
-  // 1. Load Data (Cloud First -> Local Fallback)
+  // --- STORAGE & MIGRATION ---
   useEffect(() => {
-    const initApp = async () => {
-        // Check Auth
-        const { data: { session } } = await supabase.auth.getSession();
-        const currentUser = session?.user;
-        setUser(currentUser);
+    const savedVersion = localStorage.getItem("splitit_version");
 
-        // Load Preferences
-        const savedMode = localStorage.getItem("splitit_darkmode");
-        setDarkMode(savedMode === "true");
-
-        if (currentUser) {
-            // ---> LOGIC ONLINE (Load dari Supabase)
-            setSyncStatus("SAVING"); // Loading UI
-            try {
-                // A. Fetch Sessions
-                const { data: sessData, error: sessError } = await supabase
-                    .from('sessions')
-                    .select('*')
-                    .eq('owner_id', currentUser.id)
-                    .order('created_at', { ascending: true });
-
-                if (sessError) throw sessError;
-
-                if (sessData && sessData.length > 0) {
-                    // B. Fetch Bills (Bulk fetch)
-                    const sessionIds = sessData.map(s => s.id);
-                    const { data: billData } = await supabase
-                        .from('bills')
-                        .select('*')
-                        .in('session_id', sessionIds);
-
-                    // C. Construct State
-                    const cloudSessions: Session[] = sessData.map(s => ({
-                        id: s.id,
-                        name: s.name,
-                        createdAt: new Date(s.created_at).getTime(),
-                        currency: s.currency || "RM",
-                        people: s.people || [],
-                        paidStatus: s.paid_status || {},
-                        bills: billData ? billData.filter(b => b.session_id === s.id).map(mapSqlBillToLocal) : []
-                    }));
-                    
-                    setSessions(cloudSessions);
-                    if (cloudSessions.length > 0) setActiveSessionId(cloudSessions[cloudSessions.length - 1].id);
-                } else {
-                    // User baru (First time login)
-                    const newSession: Session = {
-                        id: crypto.randomUUID(), 
-                        name: "Sesi Pertama", createdAt: Date.now(),
-                        people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
-                        bills: [], paidStatus: {}, currency: "RM"
-                    };
-                    setSessions([newSession]);
-                    setActiveSessionId(newSession.id);
+    if (savedVersion !== APP_VERSION) {
+        console.log(`New version detected: ${APP_VERSION}. Updating...`);
+        
+        // Update version dalam storage
+        localStorage.setItem("splitit_version", APP_VERSION);
+        
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    registration.unregister();
                 }
-                setSyncStatus("SAVED");
-
-            } catch (err) {
-                console.error("Cloud Load Error:", err);
-                setSyncStatus("ERROR");
-                alert("Gagal load data cloud. Check internet.");
-            }
-
-        } else {
-            // ---> LOGIC OFFLINE (Load dari LocalStorage)
-            setSyncStatus("OFFLINE");
-            const savedSessions = localStorage.getItem("splitit_sessions");
-            const savedActiveId = localStorage.getItem("splitit_active_session_id");
-
-            if (savedSessions) {
-                const parsedSessions = JSON.parse(savedSessions);
-                setSessions(parsedSessions);
-                if (savedActiveId && parsedSessions.some((s:Session) => s.id === savedActiveId)) {
-                    setActiveSessionId(savedActiveId);
-                } else if (parsedSessions.length > 0) {
-                    setActiveSessionId(parsedSessions[0].id);
-                }
-            } else {
-                const newSession: Session = {
-                    id: `s${Date.now()}`, name: "Sesi Lepak 1", createdAt: Date.now(),
-                    people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
-                    bills: [], paidStatus: {}, currency: "RM"
-                };
-                setSessions([newSession]);
-                setActiveSessionId(newSession.id);
-            }
+            });
         }
-        setIsLoaded(true);
-    };
+        
+        // Force Reload page untuk dapatkan kod HTML/JS baru dari Vercel
+        window.location.reload();
+        return; // Stop execution supaya tak load state lama
+    }
 
-    initApp();
+    const savedMode = localStorage.getItem("splitit_darkmode");
+    if (savedMode !== null) setDarkMode(savedMode === "true"); else setDarkMode(false);
+
+    const savedSessions = localStorage.getItem("splitit_sessions");
+    const savedActiveId = localStorage.getItem("splitit_active_session_id");
+
+    if (savedSessions) {
+        const parsedSessions = JSON.parse(savedSessions);
+        setSessions(parsedSessions);
+        if (savedActiveId && parsedSessions.some((s:Session) => s.id === savedActiveId)) {
+            setActiveSessionId(savedActiveId);
+        } else if (parsedSessions.length > 0) {
+            setActiveSessionId(parsedSessions[0].id);
+        }
+    } else {
+        const newSession: Session = {
+            id: `s${Date.now()}`, name: "Sesi Lepak 1", createdAt: Date.now(),
+            people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
+            bills: [], paidStatus: {}, currency: "RM"
+        };
+        setSessions([newSession]);
+        setActiveSessionId(newSession.id);
+    }
+    setIsLoaded(true);
   }, []);
 
-  // 2. Save Logic (Auto Sync with Debounce)
   useEffect(() => {
-    if (!isLoaded) return;
-
-    // A. Backup Local
-    localStorage.setItem("splitit_sessions", JSON.stringify(sessions));
-    localStorage.setItem("splitit_darkmode", String(darkMode));
-    if (activeSessionId) localStorage.setItem("splitit_active_session_id", activeSessionId);
-
-    // B. Cloud Sync
-    if (user) {
-        setSyncStatus("SAVING");
-        setPendingChanges(true);
-
-        const timer = setTimeout(async () => {
-            try {
-                const currentSession = sessions.find(s => s.id === activeSessionId);
-                if (currentSession) {
-                    // 1. Upsert Session
-                    const { error: sessError } = await supabase.from('sessions').upsert({
-                        id: currentSession.id,
-                        owner_id: user.id,
-                        name: currentSession.name,
-                        currency: currentSession.currency,
-                        people: currentSession.people,
-                        paid_status: currentSession.paidStatus,
-                        updated_at: new Date().toISOString()
-                    });
-                    if (sessError) throw sessError;
-
-                    // 2. Upsert Bills
-                    if (currentSession.bills.length > 0) {
-                        const billsPayload = currentSession.bills.map(b => mapLocalBillToSql(b, currentSession.id));
-                        const { error: billError } = await supabase.from('bills').upsert(billsPayload);
-                        if (billError) throw billError;
-                    }
-                }
-                setSyncStatus("SAVED");
-            } catch (err) {
-                console.error("Auto-Save Error:", err);
-                setSyncStatus("ERROR");
-            } finally {
-                setPendingChanges(false);
-            }
-        }, 2000); 
-
-        return () => clearTimeout(timer);
+    if (isLoaded) {
+        localStorage.setItem("splitit_sessions", JSON.stringify(sessions));
+        localStorage.setItem("splitit_darkmode", String(darkMode));
+        if (activeSessionId) localStorage.setItem("splitit_active_session_id", activeSessionId);
     }
-  }, [sessions, darkMode, activeSessionId, isLoaded, user]);
+  }, [sessions, darkMode, activeSessionId, isLoaded]);
 
-
-  // --- LOGIC FUNCTIONS (ORIGINAL APP LOGIC) ---
+  // --- LOGIC FUNCTIONS ---
   const resetData = () => {
-    if (confirm("⚠️ AMARAN KRITIKAL:\n\nAdakah anda pasti nak RESET semua data?")) {
+    if (confirm("⚠️ AMARAN KRITIKAL:\n\nAdakah anda pasti nak RESET semua data?\nSemua history bill & nama member akan hilang dari device ini.")) {
         localStorage.clear();
         window.location.reload();
     }
@@ -411,8 +282,7 @@ export default function SplitItCloud() {
   const createNewSession = () => {
       if (!newSessionName.trim()) return;
       const newSession: Session = {
-          id: user ? crypto.randomUUID() : `s${Date.now()}`, 
-          name: newSessionName, createdAt: Date.now(),
+          id: `s${Date.now()}`, name: newSessionName, createdAt: Date.now(),
           people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
           bills: [], paidStatus: {}, currency: "RM"
       };
@@ -423,17 +293,12 @@ export default function SplitItCloud() {
       setMode("DASHBOARD");
   };
 
-  const deleteSession = async (sid: string) => {
+  const deleteSession = (sid: string) => {
       if (sessions.length <= 1) { alert("Tinggal satu je sesi, tak boleh delete bos."); return; }
       if (confirm("Padam sesi ni?")) {
           const newSessions = sessions.filter(s => s.id !== sid);
           setSessions(newSessions);
           if (activeSessionId === sid) setActiveSessionId(newSessions[0].id);
-
-          // Delete from Cloud if logged in
-          if (user) {
-              await supabase.from('sessions').delete().eq('id', sid);
-          }
       }
   };
 
@@ -538,7 +403,7 @@ export default function SplitItCloud() {
       }
   };
 
-  const saveBill = async () => {
+  const saveBill = () => {
     if (!billTitle || !billTotal || !payerId) return;
     const grandTotal = parseFloat(billTotal);
     const miscTotal = parseFloat(miscFee) || 0;
@@ -576,8 +441,7 @@ export default function SplitItCloud() {
     }
 
     const newBill: Bill = {
-        id: editingBillId || (user ? crypto.randomUUID() : `b${Date.now()}`), 
-        title: billTitle, type: billType, totalAmount: grandTotal, paidBy: payerId, 
+        id: editingBillId || `b${Date.now()}`, title: billTitle, type: billType, totalAmount: grandTotal, paidBy: payerId, 
         details: calculatedDetails, itemsSubtotal, miscAmount: miscTotal, discountAmount: discountTotal, taxMethod, discountMethod,
         menuItems: billType === "ITEMIZED" ? menuItems : []
     };
@@ -589,12 +453,8 @@ export default function SplitItCloud() {
     resetForm();
   };
 
-  const deleteBill = async (id: string) => { 
-      if(confirm("Padam resit ni?")) {
-        updateActiveSession({ bills: bills.filter(b => b.id !== id) });
-        // Kalau cloud, delete dari DB
-        if (user) await supabase.from('bills').delete().eq('id', id);
-      }
+  const deleteBill = (id: string) => { 
+      if(confirm("Padam resit ni?")) updateActiveSession({ bills: bills.filter(b => b.id !== id) });
   };
 
   const getCalcStatus = () => {
@@ -637,16 +497,19 @@ export default function SplitItCloud() {
     } else { text += `✅ Semua hutang dah selesai!\n`; }
     text += `\n_Generated by SplitIt._`;
 
+    // --- FIX: Fallback Copy Logic ---
     if (navigator.clipboard && window.isSecureContext) {
+        // Cara Moden (HTTPS/Localhost)
         navigator.clipboard.writeText(text).then(() => {
             setCopied(true); setTimeout(() => setCopied(false), 2000);
         }).catch(err => {
             alert("Gagal copy: " + err);
         });
     } else {
+        // Cara Lama (Backup untuk HTTP/IP Address)
         const textArea = document.createElement("textarea");
         textArea.value = text;
-        textArea.style.position = "fixed"; 
+        textArea.style.position = "fixed"; // Elak scroll lari
         textArea.style.left = "-9999px";
         document.body.appendChild(textArea);
         textArea.focus();
@@ -655,12 +518,14 @@ export default function SplitItCloud() {
             document.execCommand('copy');
             setCopied(true); setTimeout(() => setCopied(false), 2000);
         } catch (err) {
+            console.error('Fallback copy failed', err);
             alert("Browser tak bagi copy. Sila screenshot manual.");
         }
         document.body.removeChild(textArea);
     }
 };
 
+  // --- HELPER: CONTEXT FOR SETTLEMENT ---
   const getTransferDetails = (fromId: string, toId: string) => {
         let details: string[] = [];
         bills.forEach(b => {
@@ -682,6 +547,7 @@ export default function SplitItCloud() {
     setShowScanMethodModal(false); const file = e.target.files?.[0]; if (!file) return;
     setIsScanning(true); setScanStatus("Memproses gambar (Compressing)..."); setShowScanModal(true); setScannedItems([]); setScannedExtraInfo({ tax: 0, service: 0, discount: 0, deposit: 0 }); 
     try {
+        // Guna function helper yang dah didefinisikan di atas
         const base64Data = await compressImage(file); 
         setScanStatus("AI sedang menganalisis resit...");
         
@@ -694,6 +560,7 @@ export default function SplitItCloud() {
           });
         };
 
+        // Logic: Cuba model 2.0 dulu, kalau 404, cuba 1.5-flash-8b (sangat stabil)
         let response = await fetchGemini("gemini-2.0-flash");
         if (!response.ok && response.status === 404) { 
            console.log("Gemini 2.0 404, trying Fallback..."); 
@@ -756,10 +623,12 @@ export default function SplitItCloud() {
     }));
 };
 
-  // --- IMAGE HELPERS ---
+  // --- IMAGE HELPERS (CROP & SCREENSHOT) ---
   const handleOpenImage = async () => { 
     if (!receiptRef.current) return; 
     setIsSharing(true); 
+    
+    // Delay sekejap untuk pastikan UI render
     await new Promise(r => setTimeout(r, 200)); 
   
     try { 
@@ -770,17 +639,21 @@ export default function SplitItCloud() {
         allowTaint: true, 
         logging: false 
       }); 
+  
       const imageUrl = canvas.toDataURL("image/png");
+      
+      // Set gambar ke state untuk dipaparkan dalam Modal
       setPreviewImage(imageUrl);
       setShowPreviewModal(true);
+      
     } catch (err) { 
       console.error("Ralat:", err);
-      alert("Gagal menjana gambar."); 
+      alert("Gagal menjana gambar. Sila screenshot manual."); 
     } finally {
       setIsSharing(false); 
     }
   };
-
+  // Logic untuk pilih gambar QR
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, pid: string) => { 
     const file = e.target.files?.[0];
     if (file) {
@@ -788,7 +661,7 @@ export default function SplitItCloud() {
       const reader = new FileReader();
       reader.onloadend = () => { 
           setTempQrImage(reader.result as string);
-          setPaymentProfileId(pid);
+          setPaymentProfileId(pid); // Simpan ID orang yang kita tengah edit
           setZoom(1);
           setCrop({ x: 0, y: 0 });
       };
@@ -808,7 +681,7 @@ export default function SplitItCloud() {
           if(p) {
               updatePaymentProfile(paymentProfileId, p.bankName || "", p.bankAccount || "", croppedImageBase64);
           }
-          setTempQrImage(null);
+          setTempQrImage(null); // Tutup crop modal
       } catch (e) {
           console.error(e);
           alert("Gagal crop gambar.");
@@ -819,20 +692,19 @@ export default function SplitItCloud() {
       setTempQrImage(null);
   };
 
-  // --- STYLES ---
   const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-200 text-black";
   const cardStyle = `${darkMode ? "bg-[#1E1E1E] border-white" : "bg-white border-black"} border-2 rounded-2xl`;
   const shadowStyle = darkMode ? "" : "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]";
   const buttonBase = `border-2 font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"} ${shadowStyle} hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]`;
   const inputStyle = `w-full p-3 rounded-xl bg-transparent border-2 outline-none font-bold transition-all focus:ring-0 ${darkMode ? "border-white focus:border-lime-300 placeholder:text-white/50" : "border-black focus:border-blue-500 placeholder:text-black/50"}`;
 
-  if (!isLoaded) return <div className="min-h-screen bg-gray-200 flex items-center justify-center"><Loader2 className="animate-spin text-black"/></div>;
+  if (!isLoaded) return <div className="min-h-screen bg-gray-200"/>;
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
       <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
         
-        {/* HEADER - UPDATED V3.3.1 */}
+        {/* HEADER */}
         <header className={`p-6 border-b-2 relative z-10 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
             <div className="flex justify-between items-center">
                 <a href="/" className="flex items-center gap-3 cursor-pointer group">
@@ -841,19 +713,7 @@ export default function SplitItCloud() {
                      </div>
                      <div>
                         <h1 className="text-2xl font-black tracking-tight leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
-                        
-                        {/* 1. Nama Event / Folder (Dah Timbul Balik!) */}
-                        <p className="text-[10px] uppercase tracking-widest font-bold mt-1 opacity-70 truncate max-w-[120px]">
-                            {activeSession?.name || "Loading..."}
-                        </p>
-                        
-                        {/* 2. Status Sync (Kecil di bawah nama event) */}
-                        <div className="text-[8px] font-bold mt-0.5">
-                           {syncStatus === "SAVING" && <span className="text-yellow-500 animate-pulse">☁️ SAVING...</span>}
-                           {syncStatus === "SAVED" && <span className="text-green-500">☁️ ALL SAVED</span>}
-                           {syncStatus === "ERROR" && <span className="text-red-500">❌ SYNC ERROR</span>}
-                           {syncStatus === "OFFLINE" && <span className="opacity-30">🔌 OFFLINE MODE</span>}
-                        </div>
+                        <p className="text-[10px] uppercase tracking-widest font-bold mt-1 opacity-70 truncate max-w-[100px]">{activeSession?.name || "Loading..."}</p>
                      </div>
                 </a>
                 <div className="flex gap-2 items-center">
@@ -960,7 +820,7 @@ export default function SplitItCloud() {
                     )}
                     <div className="pt-8 pb-10 text-center space-y-4">
                         <button onClick={resetData} className="mx-auto px-5 py-2 rounded-full border border-red-500 text-red-500 text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"><RotateCcw size={12}/> Reset Data</button>
-                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">{APP_VERSION}</p></div>
+                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v3.2.4 (PWA Manifest, App icon & Auto-refresh Cache Buster)</p></div>
                     </div>
                 </div>
             )}
@@ -1185,13 +1045,17 @@ export default function SplitItCloud() {
                          <div className="p-4 flex-shrink-0 flex justify-between items-center border-b border-current border-opacity-10"><span className="text-[10px] font-black uppercase tracking-widest opacity-50">SIAP UNTUK SHARE</span><button onClick={() => setShowPayModal(false)}><X size={20} className="opacity-50 hover:opacity-100"/></button></div>
                          <div className={`flex-1 overflow-y-auto p-4 flex flex-col items-center ${darkMode ? "bg-[#111]" : "bg-gray-200"}`}>
                             
+                            {/* COMPACT REDESIGNED CARD */}
                             <div ref={receiptRef} className={`w-full ${darkMode ? "bg-[#222]" : "bg-white"} p-3 rounded-2xl ${darkMode ? "border-white" : "border-black"} border-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden`}>
+                                {/* Inner Frame */}
                                 <div className={`rounded-xl border-2 border-dashed ${darkMode ? "border-white/30 bg-white/5" : "border-black/20 bg-gray-50"} p-4 relative`}>
                                     <div className="absolute top-[-8px] left-1/2 -translate-x-1/2 w-4 h-1.5 bg-current rounded-full opacity-20"></div>
+                                    
                                     <div className="text-center border-b-2 border-dashed border-current/20 pb-3 mb-3">
                                         <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">TOTAL BAYARAN</p>
                                         <h2 className="text-3xl font-black font-mono tracking-tight">{currency}{activeTransfer.amount.toFixed(2)}</h2>
                                     </div>
+                                    
                                     <div className="flex justify-between items-end mb-4">
                                         <div className="text-left">
                                             <p className="text-[8px] font-bold opacity-40 uppercase mb-0.5">KEPADA</p>
@@ -1203,10 +1067,12 @@ export default function SplitItCloud() {
                                             <h3 className="text-sm font-black uppercase leading-none">{activeTransfer.fromName}</h3>
                                         </div>
                                     </div>
+
                                     <div className={`p-2 rounded border ${darkMode ? "border-white/20 bg-black/30" : "border-black/10 bg-white"} flex justify-between items-center mb-4`}>
                                         <span className="text-[8px] font-bold uppercase opacity-50">NO AKAUN</span>
                                         <span className="font-mono font-black text-sm tracking-wider">{people.find(p=>p.id===activeTransfer.toId)?.bankAccount || "MINTA MEMBER"}</span>
                                     </div>
+
                                     <div className="mb-4">
                                         <p className="text-[8px] font-bold uppercase opacity-40 mb-1 flex items-center gap-1"><List size={10}/> UNTUK:</p>
                                         <div className="flex flex-wrap gap-1">
@@ -1219,17 +1085,26 @@ export default function SplitItCloud() {
                                             {getTransferDetails(activeTransfer.fromId, activeTransfer.toId).length === 0 && <span className="text-[9px] italic opacity-50">Settlement baki akaun...</span>}
                                         </div>
                                     </div>
+
+                                    {/* QR CONTAINER - UPDATED SIZE */}
                                     {people.find(p=>p.id===activeTransfer.toId)?.qrImage && (
                                         <div className="w-28 h-28 mx-auto border-2 border-current rounded-xl overflow-hidden mb-1">
                                             <img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} className="w-full h-full object-cover bg-white" alt="QR" crossOrigin="anonymous"/>
                                         </div>
                                     )}
+
                                     <div className="flex justify-between items-center opacity-40 pt-2 border-t-2 border-dashed border-current/20 mt-2">
                                         <span className="text-[8px] font-bold tracking-widest">SPLITIT.</span>
                                         <span className="text-[8px] font-mono">{new Date().toLocaleDateString()}</span>
                                     </div>
+                                    <div className="mt-2 text-center">
+    <p className={`text-[7px] font-black uppercase tracking-tighter opacity-30 ${darkMode ? "text-white" : "text-black"}`}>
+        * Jana Gambar Resit Untuk Download dah Kongsi
+    </p>
+</div>
                                 </div>
                             </div>
+                            {/* END CARD */}
 
                          </div>
                          <div className={`p-4 flex-shrink-0 space-y-2 border-t-2 ${darkMode ? "bg-black border-white/20" : "bg-white border-black/10"}`}>
@@ -1240,6 +1115,7 @@ export default function SplitItCloud() {
                 </div>
             )}
 
+            {/* SCANNING METHOD MODAL */}
             {showScanMethodModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                     <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
@@ -1248,11 +1124,14 @@ export default function SplitItCloud() {
                              <button onClick={() => setShowScanMethodModal(false)}><X size={20}/></button>
                         </div>
                         <div className="space-y-4">
+                            {/* CAMERA OPTION */}
                             <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" : "border-indigo-600 bg-indigo-50 hover:bg-indigo-100"}`}>
                                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanReceipt}/>
                                 <Camera size={32} className={`mx-auto mb-2 ${darkMode ? "text-indigo-400" : "text-indigo-600"}`}/>
                                 <span className="block font-black uppercase text-sm">Ambil Gambar (Camera)</span>
                             </label>
+                            
+                            {/* GALLERY OPTION */}
                             <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-white/30 bg-white/5 hover:bg-white/10" : "border-black/20 bg-gray-50 hover:bg-gray-100"}`}>
                                 <input type="file" accept="image/*" className="hidden" onChange={handleScanReceipt}/>
                                 <ImageIcon size={32} className="mx-auto mb-2 opacity-50"/>
@@ -1263,59 +1142,118 @@ export default function SplitItCloud() {
                 </div>
             )}
 
-            {showScanModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                    <div className={`w-full max-w-[360px] max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-                        {isScanning ? (
-                            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-4">
-                                <Loader2 size={48} className="animate-spin text-blue-500"/>
-                                <div><h3 className="text-xl font-black uppercase">Sedang Scan...</h3><p className="text-xs font-bold opacity-60 mt-1">{scanStatus}</p></div>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="p-4 border-b border-current border-opacity-10 flex justify-between items-center">
-                                    <h3 className="text-sm font-black uppercase flex items-center gap-2"><Camera size={16}/> Hasil Scan AI</h3>
-                                    <button onClick={() => setShowScanModal(false)}><X size={20}/></button>
-                                </div>
-                                <div className="px-4 pt-4 space-y-2">
-                                    {(scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0) && (
-                                        <div className={`p-2 rounded-xl border-2 border-dashed flex items-start gap-2 ${darkMode ? "border-yellow-500/50 bg-yellow-500/10" : "border-yellow-600/30 bg-yellow-50"}`}>
-                                            <AlertCircle size={14} className="mt-0.5 text-yellow-500"/>
-                                            <div className="flex-1">
-                                                <p className="text-[9px] font-black uppercase opacity-70">Tax/SC: {currency}{(scannedExtraInfo.tax + scannedExtraInfo.service).toFixed(2)}</p>
-                                                <label className="flex items-center gap-1.5 text-[9px] font-bold cursor-pointer"><input type="checkbox" checked={includeScannedTax} onChange={(e) => setIncludeScannedTax(e.target.checked)} className="accent-yellow-500 w-3 h-3"/>Masuk Caj Tetap?</label>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {(scannedExtraInfo.discount > 0 || scannedExtraInfo.deposit > 0) && (
-                                        <div className={`p-2 rounded-xl border-2 border-dashed flex items-start gap-2 ${darkMode ? "border-green-500/50 bg-green-500/10" : "border-green-600/30 bg-green-50"}`}>
-                                            <Tag size={14} className="mt-0.5 text-green-500"/>
-                                            <div className="flex-1">
-                                                <p className="text-[9px] font-black uppercase opacity-70">Disc/Depo: {currency}{(scannedExtraInfo.discount + scannedExtraInfo.deposit).toFixed(2)}</p>
-                                                <label className="flex items-center gap-1.5 text-[9px] font-bold cursor-pointer"><input type="checkbox" checked={includeScannedDiscount} onChange={(e) => setIncludeScannedDiscount(e.target.checked)} className="accent-green-500 w-3 h-3"/>Masuk Kotak Diskaun?</label>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                                    {scannedItems.length === 0 ? (<div className="text-center py-10 opacity-50"><p className="text-xs font-bold">Tak jumpa item. Cuba scan lagi.</p></div>) : (scannedItems.map(item => (<div key={item.id} className={`p-3 rounded-xl border-2 transition-all ${item.selected ? (darkMode ? "border-green-400 bg-green-400/5" : "border-green-500 bg-green-50/30") : "opacity-40 grayscale"}`}><div className="flex items-start gap-2 mb-3"><input type="checkbox" checked={item.selected} onChange={() => toggleScanItem(item.id)} className="mt-1 accent-green-500 w-4 h-4"/><div className="flex-1"><input value={item.name} onChange={e => updateScannedItem(item.id, 'name', e.target.value)} className="w-full bg-transparent font-bold text-xs outline-none border-b border-dashed border-current/20 focus:border-green-500 mb-1"/><div className="flex items-center gap-1"><span className="text-[10px] opacity-50">{currency}</span><input type="number" value={item.price} onChange={e => updateScannedItem(item.id, 'price', e.target.value)} className="w-20 bg-transparent font-mono font-black text-sm outline-none"/></div></div><button onClick={() => deleteScannedItem(item.id)} className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={14}/></button></div><div className="flex flex-wrap gap-1 pt-2 border-t border-dashed border-current/10">{people.map(p => {const isAssigned = item.sharedBy.includes(p.id);return (<button key={p.id} onClick={() => togglePersonInScan(item.id, p.id)} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase border transition-all ${isAssigned ? (darkMode ? "bg-blue-500 border-blue-400 text-white" : "bg-blue-600 border-black text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]") : (darkMode ? "border-white/20 text-white/40" : "border-black/20 text-black/40")}`}>{p.name}</button>);})}</div></div>)))}
-                                </div>
-                                <div className="p-4 border-t border-current border-opacity-10 bg-current/5">
-                                    <button onClick={addSelectedScannedItems} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all`}>Masukkan {scannedItems.filter(i => i.selected).length} Item Ke Bill</button>
-                                </div>
-                            </>
-                        )}
+            {/* SCANNING RESULTS MODAL V3.2 */}
+{showScanModal && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+        <div className={`w-full max-w-[360px] max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+            {isScanning ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-4">
+                    <Loader2 size={48} className="animate-spin text-blue-500"/>
+                    <div>
+                        <h3 className="text-xl font-black uppercase">Sedang Scan...</h3>
+                        <p className="text-xs font-bold opacity-60 mt-1">{scanStatus}</p>
                     </div>
                 </div>
-            )}
+            ) : (
+                <>
+                    <div className="p-4 border-b border-current border-opacity-10 flex justify-between items-center">
+                        <h3 className="text-sm font-black uppercase flex items-center gap-2"><Camera size={16}/> Hasil Scan AI</h3>
+                        <button onClick={() => setShowScanModal(false)}><X size={20}/></button>
+                    </div>
+                    
+                    {/* INFO DETECTION (Tax/Discount) */}
+                    <div className="px-4 pt-4 space-y-2">
+                        {(scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0) && (
+                            <div className={`p-2 rounded-xl border-2 border-dashed flex items-start gap-2 ${darkMode ? "border-yellow-500/50 bg-yellow-500/10" : "border-yellow-600/30 bg-yellow-50"}`}>
+                                <AlertCircle size={14} className="mt-0.5 text-yellow-500"/>
+                                <div className="flex-1">
+                                    <p className="text-[9px] font-black uppercase opacity-70">Tax/SC: {currency}{(scannedExtraInfo.tax + scannedExtraInfo.service).toFixed(2)}</p>
+                                    <label className="flex items-center gap-1.5 text-[9px] font-bold cursor-pointer">
+                                        <input type="checkbox" checked={includeScannedTax} onChange={(e) => setIncludeScannedTax(e.target.checked)} className="accent-yellow-500 w-3 h-3"/>
+                                        Masuk Caj Tetap?
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+                        {(scannedExtraInfo.discount > 0 || scannedExtraInfo.deposit > 0) && (
+                            <div className={`p-2 rounded-xl border-2 border-dashed flex items-start gap-2 ${darkMode ? "border-green-500/50 bg-green-500/10" : "border-green-600/30 bg-green-50"}`}>
+                                <Tag size={14} className="mt-0.5 text-green-500"/>
+                                <div className="flex-1">
+                                    <p className="text-[9px] font-black uppercase opacity-70">Disc/Depo: {currency}{(scannedExtraInfo.discount + scannedExtraInfo.deposit).toFixed(2)}</p>
+                                    <label className="flex items-center gap-1.5 text-[9px] font-bold cursor-pointer">
+                                        <input type="checkbox" checked={includeScannedDiscount} onChange={(e) => setIncludeScannedDiscount(e.target.checked)} className="accent-green-500 w-3 h-3"/>
+                                        Masuk Kotak Diskaun?
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
-            {showCurrencyModal && (
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        {scannedItems.length === 0 ? (
+                            <div className="text-center py-10 opacity-50"><p className="text-xs font-bold">Tak jumpa item. Cuba scan lagi.</p></div>
+                        ) : (
+                            scannedItems.map(item => (
+                                <div key={item.id} className={`p-3 rounded-xl border-2 transition-all ${item.selected ? (darkMode ? "border-green-400 bg-green-400/5" : "border-green-500 bg-green-50/30") : "opacity-40 grayscale"}`}>
+                                    <div className="flex items-start gap-2 mb-3">
+                                        <input type="checkbox" checked={item.selected} onChange={() => toggleScanItem(item.id)} className="mt-1 accent-green-500 w-4 h-4"/>
+                                        <div className="flex-1">
+                                            <input value={item.name} onChange={e => updateScannedItem(item.id, 'name', e.target.value)} className="w-full bg-transparent font-bold text-xs outline-none border-b border-dashed border-current/20 focus:border-green-500 mb-1"/>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[10px] opacity-50">{currency}</span>
+                                                <input type="number" value={item.price} onChange={e => updateScannedItem(item.id, 'price', e.target.value)} className="w-20 bg-transparent font-mono font-black text-sm outline-none"/>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => deleteScannedItem(item.id)} className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={14}/></button>
+                                    </div>
+
+                                    {/* PILIHAN ORANG UNTUK SETIAP ITEM */}
+                                    <div className="flex flex-wrap gap-1 pt-2 border-t border-dashed border-current/10">
+                                        {people.map(p => {
+                                            const isAssigned = item.sharedBy.includes(p.id);
+                                            return (
+                                                <button 
+                                                    key={p.id} 
+                                                    onClick={() => togglePersonInScan(item.id, p.id)}
+                                                    className={`px-2 py-1 rounded-md text-[9px] font-black uppercase border transition-all ${isAssigned 
+                                                        ? (darkMode ? "bg-blue-500 border-blue-400 text-white" : "bg-blue-600 border-black text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]") 
+                                                        : (darkMode ? "border-white/20 text-white/40" : "border-black/20 text-black/40")}`}
+                                                >
+                                                    {p.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    <div className="p-4 border-t border-current border-opacity-10 bg-current/5">
+                        <button onClick={addSelectedScannedItems} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all`}>
+                            Masukkan {scannedItems.filter(i => i.selected).length} Item Ke Bill
+                        </button>
+                    </div>
+                </>
+            )}
+        </div>
+    </div>
+)}
+        {/* CURRENCY MODAL (ASEAN STYLE) */}
+        {showCurrencyModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                     <div className={`w-full max-w-[320px] p-6 rounded-[2rem] border-2 ${darkMode ? "bg-zinc-900 border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative`}>
                         <button onClick={() => setShowCurrencyModal(false)} className="absolute top-5 right-5 opacity-50 hover:opacity-100"><X size={20}/></button>
                         <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2 tracking-tighter"><Globe size={24}/> Pilih Mata Wang</h2>
+                        
                         <div className="grid grid-cols-2 gap-3">
-                            {[{ s: "RM", n: "Malaysia" }, { s: "S$", n: "Singapore" }, { s: "฿", n: "Thailand" }, { s: "Rp", n: "Indonesia" }, { s: "₱", n: "Philippines" }, { s: "₫", n: "Vietnam" }].map((c) => (
+                            {[
+                                { s: "RM", n: "Malaysia" }, 
+                                { s: "S$", n: "Singapore" },
+                                { s: "฿", n: "Thailand" }, 
+                                { s: "Rp", n: "Indonesia" },
+                                { s: "₱", n: "Philippines" }, 
+                                { s: "₫", n: "Vietnam" }
+                            ].map((c) => (
                                 <button key={c.s} onClick={() => { setCurrency(c.s); setShowCurrencyModal(false); }} className={`p-4 rounded-xl border-2 flex flex-col items-center gap-1 transition-all active:scale-95 ${currency === c.s ? (darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black") : "border-current opacity-50 hover:opacity-100"}`}>
                                     <span className="text-2xl font-black">{c.s}</span>
                                     <span className="text-[9px] uppercase font-bold tracking-widest opacity-70">{c.n}</span>
@@ -1325,44 +1263,108 @@ export default function SplitItCloud() {
                     </div>
                 </div>
             )}
-
+            {/* MODAL: SESSION MANAGER (UPDATED V2.2.0) */}
             {showSessionModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                     <div className={`w-full max-w-[340px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative`}>
                         <button onClick={() => setShowSessionModal(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20}/></button>
                         <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2"><Folder size={24}/> Pilih Sesi</h2>
+                        
                         <div className="space-y-3 max-h-[300px] overflow-y-auto mb-6 pr-1">
                             {sessions.map(s => (
                                 <div key={s.id} className={`p-4 rounded-xl border-2 flex items-center justify-between transition-all ${activeSessionId === s.id ? (darkMode ? "border-green-400 bg-green-900/20" : "border-black bg-green-100") : "border-transparent bg-current bg-opacity-5"}`}>
+                                    {/* Content Kiri */}
                                     {editingSessionId === s.id ? (
-                                        <div className="flex-1 flex gap-2"><input autoFocus value={tempSessionName} onChange={e => setTempSessionName(e.target.value)} onKeyDown={e => e.key === "Enter" && saveRenameSession()} className={`flex-1 bg-transparent border-b-2 outline-none font-bold text-sm ${darkMode ? "border-white" : "border-black"}`}/><button onClick={saveRenameSession} className="p-1 text-green-500 hover:scale-110 transition"><Save size={16}/></button></div>
+                                        // Mode EDIT
+                                        <div className="flex-1 flex gap-2">
+                                            <input autoFocus value={tempSessionName} onChange={e => setTempSessionName(e.target.value)} onKeyDown={e => e.key === "Enter" && saveRenameSession()} className={`flex-1 bg-transparent border-b-2 outline-none font-bold text-sm ${darkMode ? "border-white" : "border-black"}`}/>
+                                            <button onClick={saveRenameSession} className="p-1 text-green-500 hover:scale-110 transition"><Save size={16}/></button>
+                                        </div>
                                     ) : (
-                                        <div onClick={() => {setActiveSessionId(s.id); setShowSessionModal(false);}} className="flex-1 cursor-pointer"><h3 className="font-bold text-sm">{s.name}</h3><p className="text-[10px] opacity-50">{new Date(s.createdAt).toLocaleDateString()}</p></div>
+                                        // Mode NORMAL
+                                        <div onClick={() => {setActiveSessionId(s.id); setShowSessionModal(false);}} className="flex-1 cursor-pointer">
+                                            <h3 className="font-bold text-sm">{s.name}</h3>
+                                            <p className="text-[10px] opacity-50">{new Date(s.createdAt).toLocaleDateString()}</p>
+                                        </div>
                                     )}
+
+                                    {/* Action Buttons Kanan */}
                                     <div className="flex items-center gap-1 pl-2">
                                         {activeSessionId === s.id && !editingSessionId && <CheckCircle size={16} className="text-green-500 mr-1"/>}
-                                        {!editingSessionId && (<><button onClick={() => startRenameSession(s)} className="p-2 opacity-50 hover:opacity-100 hover:text-blue-500 transition"><Edit3 size={14}/></button>{sessions.length > 1 && (<button onClick={() => deleteSession(s.id)} className="p-2 opacity-50 hover:opacity-100 hover:text-red-500 transition"><Trash2 size={14}/></button>)}</>)}
+                                        
+                                        {!editingSessionId && (
+                                            <>
+                                                <button onClick={() => startRenameSession(s)} className="p-2 opacity-50 hover:opacity-100 hover:text-blue-500 transition"><Edit3 size={14}/></button>
+                                                {sessions.length > 1 && (
+                                                    <button onClick={() => deleteSession(s.id)} className="p-2 opacity-50 hover:opacity-100 hover:text-red-500 transition"><Trash2 size={14}/></button>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             ))}
                         </div>
+
                         <div className="pt-6 border-t border-dashed border-current border-opacity-30">
                             <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Buka Sesi Baru</label>
-                            <div className="flex gap-2"><input value={newSessionName} onChange={e => setNewSessionName(e.target.value)} placeholder="Contoh: Trip Hatyai" className={`flex-1 px-3 py-2 rounded-lg bg-transparent border-2 outline-none text-sm font-bold ${darkMode ? "border-white/30 focus:border-white" : "border-black/30 focus:border-black"}`}/><button onClick={createNewSession} disabled={!newSessionName} className={`px-4 py-2 rounded-lg border-2 font-bold text-sm ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} disabled:opacity-50`}>OK</button></div>
+                            <div className="flex gap-2">
+                                <input value={newSessionName} onChange={e => setNewSessionName(e.target.value)} placeholder="Contoh: Trip Hatyai" className={`flex-1 px-3 py-2 rounded-lg bg-transparent border-2 outline-none text-sm font-bold ${darkMode ? "border-white/30 focus:border-white" : "border-black/30 focus:border-black"}`}/>
+                                <button onClick={createNewSession} disabled={!newSessionName} className={`px-4 py-2 rounded-lg border-2 font-bold text-sm ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} disabled:opacity-50`}>OK</button>
+                            </div>
                         </div>
                     </div>
                 </div>
+                
             )}
-
+            {/* IMAGE PREVIEW MODAL (LONG PRESS TO SAVE) */}
             {showPreviewModal && previewImage && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md animate-in fade-in">
                     <div className="relative w-full max-w-sm flex flex-col items-center gap-4 animate-in zoom-in-95 duration-300">
-                        <button onClick={() => setShowPreviewModal(false)} className="absolute -top-12 right-0 p-2 text-white/50 hover:text-white bg-white/10 rounded-full transition-colors"><X size={24}/></button>
-                        <h3 className="text-white text-xs font-bold uppercase tracking-[0.2em] text-center opacity-80">Preview Resit</h3>
-                        <img src={previewImage} alt="Receipt Preview" className="w-full rounded-2xl border-2 border-white/20 shadow-2xl" />
+                        {/* Tombol Tutup */}
+                        <button 
+                            onClick={() => setShowPreviewModal(false)} 
+                            className="absolute -top-12 right-0 p-2 text-white/50 hover:text-white bg-white/10 rounded-full transition-colors"
+                        >
+                            <X size={24}/>
+                        </button>
+                        
+                        <h3 className="text-white text-xs font-bold uppercase tracking-[0.2em] text-center opacity-80">
+                            Preview Resit
+                        </h3>
+                        
+                        {/* Gambar Hasil Generate */}
+                        <img 
+                            src={previewImage} 
+                            alt="Receipt Preview" 
+                            className="w-full rounded-2xl border-2 border-white/20 shadow-2xl" 
+                        />
+                        
+                        {/* Arahan User */}
                         <div className="text-center space-y-3 mt-2">
-                            <div className="bg-white/10 px-4 py-2 rounded-lg backdrop-blur"><p className="text-white text-[10px] font-bold uppercase tracking-wide animate-pulse">📲 iPhone: Tekan Lama (Long Press) Gambar</p><p className="text-white/50 text-[9px]">Pilih "Save to Photos" atau "Share"</p></div>
-                            {typeof navigator !== "undefined" && navigator.share && (<button onClick={async () => {try {const blob = await (await fetch(previewImage)).blob();const file = new File([blob], "Settlement.png", { type: "image/png" });await navigator.share({ files: [file], title: 'Resit SplitIt' });} catch(e) {}}} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-bold rounded-full text-[10px] uppercase tracking-widest hover:bg-blue-500 transition-colors mx-auto"><ExternalLink size={12}/> Share Sekarang</button>)}
+                            <div className="bg-white/10 px-4 py-2 rounded-lg backdrop-blur">
+                                <p className="text-white text-[10px] font-bold uppercase tracking-wide animate-pulse">
+                                    📲 iPhone: Tekan Lama (Long Press) Gambar
+                                </p>
+                                <p className="text-white/50 text-[9px]">
+                                    Pilih "Save to Photos" atau "Share"
+                                </p>
+                            </div>
+
+                            {/* Butang Share Manual (Jika Support) */}
+                            {typeof navigator !== "undefined" && navigator.share && (
+                                <button 
+                                    onClick={async () => {
+                                        try {
+                                            const blob = await (await fetch(previewImage)).blob();
+                                            const file = new File([blob], "Settlement.png", { type: "image/png" });
+                                            await navigator.share({ files: [file], title: 'Resit SplitIt' });
+                                        } catch(e) {}
+                                    }} 
+                                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-bold rounded-full text-[10px] uppercase tracking-widest hover:bg-blue-500 transition-colors mx-auto"
+                                >
+                                    <ExternalLink size={12}/> Share Sekarang
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
