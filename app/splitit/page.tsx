@@ -1434,15 +1434,15 @@ function SplitItContent() {
                         <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2"><Folder size={24}/> Pilih Sesi</h2>
                         <div className="space-y-3 max-h-[300px] overflow-y-auto mb-6 pr-1">
                             {sessions.map(s => (
-                                <div key={s.id} className={`p-4 rounded-xl border-2 flex items-center justify-between transition-all ${activeSessionId === s.id ? (darkMode ? "border-green-400 bg-green-900/20" : "border-black bg-green-100") : "border-transparent bg-current bg-opacity-5"}`}>
+                                <div key={s.id} className={`p-4 rounded-xl border-2 flex items-center justify-between transition-all ${activeSessionId === s.id ? (darkMode ? "border-green-400 bg-green-900/20" : "border-black bg-green-100") : (darkMode ? "border-white/10 bg-white/5" : "border-black/5 bg-gray-50")}`}>
                                     {editingSessionId === s.id ? (
                                         <div className="flex-1 flex gap-2"><input autoFocus value={tempSessionName} onChange={e => setTempSessionName(e.target.value)} onKeyDown={e => e.key === "Enter" && saveRenameSession()} className={`flex-1 bg-transparent border-b-2 outline-none font-bold text-sm ${darkMode ? "border-white" : "border-black"}`}/><button onClick={saveRenameSession} className="p-1 text-green-500 hover:scale-110 transition"><Save size={16}/></button></div>
                                     ) : (
-                                        <div onClick={() => {setActiveSessionId(s.id); setShowSessionModal(false);}} className="flex-1 cursor-pointer"><h3 className="font-bold text-sm">{s.name}</h3><p className="text-[10px] opacity-50">{new Date(s.createdAt).toLocaleDateString()}</p></div>
+                                        <div onClick={() => {setActiveSessionId(s.id); setShowSessionModal(false);}} className="flex-1 cursor-pointer"><h3 className={`font-bold text-sm ${darkMode ? "text-white" : "text-black"}`}>{s.name}</h3><p className="text-[10px] opacity-50">{new Date(s.createdAt).toLocaleDateString()}</p></div>
                                     )}
                                     <div className="flex items-center gap-1 pl-2">
                                         {activeSessionId === s.id && !editingSessionId && <CheckCircle size={16} className="text-green-500 mr-1"/>}
-                                        {!editingSessionId && (<><button onClick={() => startRenameSession(s)} className="p-2 opacity-50 hover:opacity-100 hover:text-blue-500 transition"><Edit3 size={14}/></button>{sessions.length > 1 && (<button onClick={() => deleteSession(s.id)} className="p-2 opacity-50 hover:opacity-100 hover:text-red-500 transition"><Trash2 size={14}/></button>)}</>)}
+                                        {!editingSessionId && (<><button onClick={() => startRenameSession(s)} className={`p-2 transition-all ${darkMode ? "text-white/50 hover:text-blue-400" : "text-black/50 hover:text-blue-600"}`}><Edit3 size={14}/></button>{sessions.length > 1 && (<button onClick={() => deleteSession(s.id)} className="p-2 opacity-50 hover:opacity-100 hover:text-red-500 transition"><Trash2 size={14}/></button>)}</>)}
                                     </div>
                                 </div>
                             ))}
