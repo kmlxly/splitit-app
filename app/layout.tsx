@@ -17,8 +17,8 @@ export const metadata: Metadata = {
   description: "Split bill dengan member cara brutal.",
   manifest: "/manifest.json", // Link ke fail manifest tadi
   icons: {
-    icon: "/icon.png",
-    apple: "/icon.png", // Untuk iPhone home screen
+    icon: "/icon.png",       // Ini untuk tab browser
+    apple: "/apple-icon.png", // Ini KHAS untuk iPhone 
   },
   appleWebApp: {
     capable: true,
