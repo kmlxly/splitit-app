@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import html2canvas from "html2canvas";
+import AuthModal from "@/components/Auth";
 import Cropper from "react-easy-crop"; 
 import { supabase } from "../../lib/supabaseClient"; // Path updated
 import { 
@@ -183,6 +184,8 @@ function SplitItContent() {
   // UI Modal States
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [showLoginGuide, setShowLoginGuide] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false); 
   const [showScanMethodModal, setShowScanMethodModal] = useState(false); 
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -250,13 +253,15 @@ function SplitItContent() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false); 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
-  // Function Login Google
-  const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: window.location.href } // Balik ke page ni lepas login
-    });
-    if (error) alert("Error login: " + error.message);
+  // 1. Trigger bila tekan butang LOGIN (Buka Warning dulu)
+  const handleLoginClick = () => {
+    setShowLoginGuide(true);
+};
+
+// 2. Lepas faham warning, buka Menu Pilihan (Google/Email)
+const openAuthOptions = () => {
+    setShowLoginGuide(false); // Tutup warning
+    setShowAuthModal(true);   // Buka AuthModal
 };
 
   // --- HYBRID SYNC ENGINE ---
@@ -945,7 +950,7 @@ function SplitItContent() {
                             <UserPlus size={16}/>
                         </button>
                     ) : (
-                        <button onClick={handleLogin} className={`w-auto px-3 h-9 rounded-lg border-2 flex items-center justify-center gap-1 transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white"}`}>
+                        <button onClick={handleLoginClick} className={`w-auto px-3 h-9 rounded-lg border-2 flex items-center justify-center gap-1 transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white"}`}>
                             <span className="text-[10px] font-black uppercase">LOGIN</span>
                         </button>
                     )}
@@ -1506,6 +1511,85 @@ function SplitItContent() {
                         }} className={`w-full py-4 rounded-xl font-black uppercase text-sm border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-indigo-500 text-white border-black"}`}>
                             <Copy size={16}/> COPY / SHARE LINK
                         </button>
+                    </div>
+                </div>
+            )}
+            {/* LOGIN GUIDE MODAL (Google Unverified Warning) */}
+            {showLoginGuide && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
+                    <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                        <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20}/></button>
+                        
+                        <div className="text-center mb-4">
+                            <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-3 border-2 border-black">
+                                <AlertCircle size={32} className="text-yellow-600"/>
+                            </div>
+                            <h2 className="text-lg font-black uppercase leading-tight text-red-500">Google Warning!</h2>
+                            <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed">
+                                App ni masih status "Beta" di Google. Anda mungkin nampak amaran keselamatan. Jangan risau, ini normal.
+                            </p>
+                        </div>
+
+                        {/* Visual Guide (Kotak Arahan) */}
+                        <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-gray-50 border-black/10"}`}>
+                            <p className="text-[9px] font-black uppercase opacity-50 mb-1">LANGKAH UNTUK LEPAS:</p>
+                            <div className="flex items-start gap-3">
+                                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
+                                <p className="text-xs font-bold">Tekan link <span className="underline decoration-red-500 decoration-2">Advanced</span> di bawah kiri.</p>
+                            </div>
+                            <div className="flex items-start gap-3">
+                                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
+                                <p className="text-xs font-bold">Tekan <span className="underline decoration-red-500 decoration-2">Go to SplitIt (unsafe)</span>.</p>
+                            </div>
+                        </div>
+
+                        <button onClick={openAuthOptions} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-blue-600 text-white border-black"}`}>
+                            FAHAM, TERUSKAN LOGIN <ArrowRight size={14}/>
+                        </button>
+                        
+                        <p className="text-[9px] text-center mt-3 opacity-40 font-bold">Kami tak simpan password anda.</p>
+                    </div>
+                </div>
+            )}
+            {/* 1. AUTH MODAL (Pilihan Google/Email) */}
+            <AuthModal 
+                isOpen={showAuthModal} 
+                onClose={() => setShowAuthModal(false)}
+                isDarkMode={darkMode}
+            />
+
+            {/* 2. LOGIN GUIDE MODAL (Warning Google) */}
+            {showLoginGuide && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
+                    <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                        <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20}/></button>
+                        
+                        <div className="text-center mb-4">
+                            <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-3 border-2 border-black">
+                                <AlertCircle size={32} className="text-yellow-600"/>
+                            </div>
+                            <h2 className="text-lg font-black uppercase leading-tight text-red-500">Google Warning!</h2>
+                            <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed">
+                                App status "Beta". Kalau nampak warning merah, jangan panik. Ikut langkah di bawah.
+                            </p>
+                        </div>
+
+                        <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-gray-50 border-black/10"}`}>
+                            <p className="text-[9px] font-black uppercase opacity-50 mb-1">CARA LEPAS WARNING:</p>
+                            <div className="flex items-start gap-3">
+                                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
+                                <p className="text-xs font-bold">Tekan link <span className="underline decoration-red-500 decoration-2">Advanced</span> (Kiri Bawah).</p>
+                            </div>
+                            <div className="flex items-start gap-3">
+                                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
+                                <p className="text-xs font-bold">Tekan <span className="underline decoration-red-500 decoration-2">Go to SplitIt (unsafe)</span>.</p>
+                            </div>
+                        </div>
+
+                        <button onClick={openAuthOptions} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-blue-600 text-white border-black"}`}>
+                            FAHAM, PILIH CARA LOGIN <ArrowRight size={14}/>
+                        </button>
+                        <p className="text-[9px] text-center mt-3 opacity-40 font-bold">Safe & Secure. No password stored.</p>
                     </div>
                 </div>
             )}
