@@ -1,24 +1,27 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "SplitIt. by kmlxly",
-  description: "Bahagi bill cara tenang dan moden.",
-  icons: {
-    icon: "/icon.png",
-  },
-};
-
+// Tambah export Viewport berasingan (Wajib untuk Next.js 14+)
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false,
-  // TUKAR SINI: Warna hitam 'Brutalism' (#191919) supaya bar phone nampak seamless
-  themeColor: "#191919", 
+  userScalable: false, // Rasa macam native app, tak boleh pinch zoom
+  themeColor: "#000000",
+};
+
+export const metadata: Metadata = {
+  title: "SplitIt - Bill Splitter",
+  description: "Split bill dengan member cara brutal.",
+  manifest: "/manifest.json", // Link ke fail manifest tadi
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png", // Untuk iPhone home screen
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "SplitIt",
+  },
 };
 
 export default function RootLayout({
@@ -27,8 +30,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>{children}</body>
+    <html lang="en">
+      <body>{children}</body>
     </html>
   );
 }

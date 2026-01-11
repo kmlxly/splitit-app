@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 // --- 1. HELPER FUNCTIONS (DILETAKKAN DI ATAS UNTUK ELAK ERROR) ---
-
+const APP_VERSION = "v3.2.4"; // <--- Tukar ni bila push update baru!
 // Helper: Create Image element
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -208,6 +208,27 @@ export default function SplitBillBrutalV2() {
 
   // --- STORAGE & MIGRATION ---
   useEffect(() => {
+    const savedVersion = localStorage.getItem("splitit_version");
+
+    if (savedVersion !== APP_VERSION) {
+        console.log(`New version detected: ${APP_VERSION}. Updating...`);
+        
+        // Update version dalam storage
+        localStorage.setItem("splitit_version", APP_VERSION);
+        
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    registration.unregister();
+                }
+            });
+        }
+        
+        // Force Reload page untuk dapatkan kod HTML/JS baru dari Vercel
+        window.location.reload();
+        return; // Stop execution supaya tak load state lama
+    }
+
     const savedMode = localStorage.getItem("splitit_darkmode");
     if (savedMode !== null) setDarkMode(savedMode === "true"); else setDarkMode(false);
 
@@ -799,7 +820,7 @@ export default function SplitBillBrutalV2() {
                     )}
                     <div className="pt-8 pb-10 text-center space-y-4">
                         <button onClick={resetData} className="mx-auto px-5 py-2 rounded-full border border-red-500 text-red-500 text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"><RotateCcw size={12}/> Reset Data</button>
-                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v3.2.2 (Fixed: Image Sharing)</p></div>
+                        <div className="opacity-40"><p className="text-[10px] font-black uppercase tracking-widest">SplitIt. by kmlxly</p><p className="text-[9px] font-mono mt-1">v3.2.4 (PWA Manifest, App icon & Auto-refresh Cache Buster)</p></div>
                     </div>
                 </div>
             )}
