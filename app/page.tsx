@@ -152,10 +152,27 @@ export default function Home() {
 
       </main>
 
-      {/* FOOTER */}
-      <footer className="p-8 text-center opacity-40">
-          <p className="text-[10px] font-black uppercase tracking-widest">Built by kmlxly</p>
+            {/* FOOTER */}
+            <footer className="p-10 flex flex-col items-center gap-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Built by kmlxly</p>
+          
+          {/* 2 PAGE BARU: PRIVACY & TERMS */}
+          <div className="flex gap-4 items-center">
+              <Link 
+                href="/privacy-policy" 
+                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 border-2 rounded-lg transition-all hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:scale-95 ${darkMode ? "border-white/20 text-white/40 hover:border-white hover:text-white hover:shadow-white" : "border-black/20 text-black/40 hover:border-black hover:text-black"}`}
+              >
+                Privacy Policy
+              </Link>
+              <Link 
+                href="/terms-of-service" 
+                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 border-2 rounded-lg transition-all hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:scale-95 ${darkMode ? "border-white/20 text-white/40 hover:border-white hover:text-white hover:shadow-white" : "border-black/20 text-black/40 hover:border-black hover:text-black"}`}
+              >
+                Terms of Service
+              </Link>
+          </div>
       </footer>
+
 
       {/* MODAL LOGIN */}
       <AuthModal 
