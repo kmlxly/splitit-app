@@ -146,13 +146,13 @@ export default function Home() {
                     </div>
                     <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1"/>
                 </div>
-                <h3 className="text-xl font-black uppercase mb-1">SplitIt v4.3</h3>
+                <h3 className="text-xl font-black uppercase mb-1">SplitIt v5.1</h3>
                 <p className="text-xs font-bold opacity-60 leading-relaxed">
-                    Kira bil makan member. Support Multiplayer, Offline Mode & AI Scan.
+                    Kira bil. Support Multiplayer, Direct Tukar Currency, Offline Mode & AI Scan.
                 </p>
                 <div className="mt-4 pt-4 border-t border-dashed border-current border-opacity-20 flex gap-2">
                     <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Finance</span>
-                    <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Stable</span>
+                    <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Utility</span>
                 </div>
             </Link>
 
@@ -160,7 +160,7 @@ export default function Home() {
             <div className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-50 ${darkMode ? "border-white" : "border-black"}`}>
                 <Layout size={32} className="mb-3"/>
                 <h3 className="text-lg font-black uppercase">Next Project?</h3>
-                <p className="text-xs font-bold mt-1">Multi-Currency Coming Soon.</p>
+                <p className="text-xs font-bold mt-1">Ada Idea App Apa Next?</p>
             </div>
 
         </div>

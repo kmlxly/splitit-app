@@ -14,7 +14,28 @@ import {
 } from "lucide-react";
 
 // --- 1. HELPER FUNCTIONS ---
-const APP_VERSION = "v4.3.0 - Fix: Restore Offline Mode & Add Login Button";
+const APP_VERSION = "v5.0.0-beta (Multi-Currency)";
+
+// --- 2. CURRENCY API HELPER (FREE) ---
+const fetchExchangeRate = async (fromCurr: string, toCurr: string) => {
+    try {
+        // FIX: API global kenal "MYR", tapi app kita guna "RM".
+        // Kita tukar kod ni senyap-senyap sebelum tanya API.
+        const apiFrom = fromCurr === "RM" ? "MYR" : fromCurr;
+        const apiTo = toCurr === "RM" ? "MYR" : toCurr;
+
+        const res = await fetch(`https://api.exchangerate-api.com/v4/latest/${apiFrom}`);
+        const data = await res.json();
+        
+        // Ambil rate guna kod yang betul (MYR)
+        const rate = data.rates[apiTo];
+        
+        return rate || null; // Kalau null, biar user isi manual
+    } catch (e) {
+        console.error("Gagal tarik rate:", e);
+        return null; 
+    }
+};
 
 // Helper: Create Image element
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -101,7 +122,10 @@ const mapSqlBillToLocal = (sqlBill: any): Bill => ({
   miscAmount: Number(sqlBill.misc_amount || 0),
   discountAmount: Number(sqlBill.discount_amount || 0),
   taxMethod: sqlBill.tax_method || "PROPORTIONAL",
-  discountMethod: sqlBill.discount_method || "PROPORTIONAL"
+  discountMethod: sqlBill.discount_method || "PROPORTIONAL",
+  originalCurrency: sqlBill.original_currency || null,
+  originalAmount: Number(sqlBill.original_amount || 0),
+  exchangeRate: Number(sqlBill.exchange_rate || 1)
 });
 
 const mapLocalBillToSql = (bill: Bill, sessionId: string) => ({
@@ -117,6 +141,9 @@ const mapLocalBillToSql = (bill: Bill, sessionId: string) => ({
   discount_amount: bill.discountAmount,
   tax_method: bill.taxMethod,
   discount_method: bill.discountMethod,
+  original_currency: bill.originalCurrency,
+  original_amount: bill.originalAmount,
+  exchange_rate: bill.exchangeRate,
   created_at: new Date().toISOString()
 });
 
@@ -137,11 +164,16 @@ type MenuItem = {
 };
 
 type Bill = {
-  id: string; title: string; type: BillType; totalAmount: number; paidBy: string;
-  details: BillDetail[]; itemsSubtotal: number; miscAmount: number; discountAmount: number;
-  taxMethod: SplitMethod; discountMethod: SplitMethod;
-  menuItems?: MenuItem[]; 
-};
+    id: string; title: string; type: BillType; totalAmount: number; paidBy: string;
+    details: BillDetail[]; itemsSubtotal: number; miscAmount: number; discountAmount: number;
+    taxMethod: SplitMethod; discountMethod: SplitMethod;
+    menuItems?: MenuItem[]; 
+    
+    // --- V5 UPDATE: Tambah 3 field ini supaya error hilang ---
+    originalCurrency?: string; // cth: "THB"
+    originalAmount?: number;   // cth: 150
+    exchangeRate?: number;     // cth: 0.13
+  };
 type Transfer = { fromId: string; toId: string; fromName: string; toName: string; amount: number; };
 
 type Session = {
@@ -239,6 +271,9 @@ function SplitItContent() {
   const [billType, setBillType] = useState<BillType>("EQUAL");
   const [billTitle, setBillTitle] = useState("");
   const [billTotal, setBillTotal] = useState(""); 
+  const [formCurrency, setFormCurrency] = useState("RM"); // Default currency form
+  const [exchangeRate, setExchangeRate] = useState("1");  // Default rate 1:1
+  const [foreignAmount, setForeignAmount] = useState(""); // Input nilai asing (cth: 100 THB)
   const [miscFee, setMiscFee] = useState(""); 
   const [discountFee, setDiscountFee] = useState(""); 
   const [payerId, setPayerId] = useState("");
@@ -263,6 +298,27 @@ const openAuthOptions = () => {
     setShowLoginGuide(false); // Tutup warning
     setShowAuthModal(true);   // Buka AuthModal
 };
+
+// --- V5 FIX: AUTO-CALCULATE (MESIN KIRA AGRESIF) ---
+useEffect(() => {
+    // Debugging: Tengok apa yang berlaku dalam console
+    // console.log("Auto-Calc Triggered:", { formCurrency, currency, foreignAmount, exchangeRate });
+
+    // 1. Pastikan bukan mode RM biasa
+    if (formCurrency === currency) return;
+
+    // 2. Tukar string kepada nombor (Guna Number() lebih selamat dari parseFloat)
+    const amount = Number(foreignAmount);
+    const rate = Number(exchangeRate);
+
+    // 3. Kira hanya jika nombor valid (Bukan NaN dan Rate > 0)
+    if (!isNaN(amount) && !isNaN(rate) && rate > 0) {
+        const totalRM = amount * rate;
+        // console.log("New Total:", totalRM);
+        setBillTotal(totalRM.toFixed(2));
+    }
+}, [foreignAmount, exchangeRate, formCurrency, currency]); // <--- PENTING: Tambah 'currency' di sini!
+// ^ Maksudnya: Setiap kali 3 benda ni berubah, ulang kira automatik! 
 
   // --- HYBRID SYNC ENGINE ---
 
@@ -592,6 +648,10 @@ const openAuthOptions = () => {
     setDiscountFee(bill.discountAmount > 0 ? String(bill.discountAmount) : "");
     setTaxMethod(bill.taxMethod); setDiscountMethod(bill.discountMethod);
     if (bill.menuItems) { setMenuItems(bill.menuItems); } else { setMenuItems([]); }
+    setFormCurrency(bill.originalCurrency || currency);
+    setForeignAmount(bill.originalAmount ? String(bill.originalAmount) : "");
+    setExchangeRate(bill.exchangeRate ? String(bill.exchangeRate) : "1");
+    
     setMode("FORM");
   };
 
@@ -602,6 +662,9 @@ const openAuthOptions = () => {
     setTaxMethod("PROPORTIONAL"); setDiscountMethod("PROPORTIONAL"); setMode("DASHBOARD");
     setNewItemName(""); setNewItemPrice(""); setNewItemSharedBy([]); setIsMultiSelectMode(false);
     setEditingItemId(null); 
+    setFormCurrency(currency); // Ikut session currency (cth: RM)
+    setExchangeRate("1");
+    setForeignAmount("");
   };
 
   const applyQuickTax = (percentage: number) => {
@@ -652,8 +715,11 @@ const openAuthOptions = () => {
     const newBill: Bill = {
         id: editingBillId || (user ? crypto.randomUUID() : `b${Date.now()}`), 
         title: billTitle, type: billType, totalAmount: grandTotal, paidBy: payerId, 
-        details: calculatedDetails, itemsSubtotal, miscAmount: miscTotal, discountAmount: discountTotal, taxMethod, discountMethod,
+        details: calculatedDetails, itemsSubtotal, miscAmount: miscTotal, discountAmount: discountTotal, taxMethod, discountMethod,originalCurrency: formCurrency,
+        originalAmount: parseFloat(foreignAmount) || 0,
+        exchangeRate: parseFloat(exchangeRate) || 1,
         menuItems: billType === "ITEMIZED" ? menuItems : []
+        
     };
     
     let updatedBills = [...bills];
@@ -766,7 +832,7 @@ const openAuthOptions = () => {
         const fetchGemini = async (modelName: string) => {
            return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`, {
               method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ contents: [{ parts: [{ text: "Extract items, prices, tax, service charge, discount, and deposit amount from this receipt image. Return ONLY a valid raw JSON object. Structure: { \"items\": [{\"name\": \"Nasi Lemak\", \"price\": 5.00}], \"tax\": 0.00, \"serviceCharge\": 0.00, \"discount\": 0.00, \"deposit\": 0.00, \"total\": 0.00 }. 'tax' is SST/GST. 'discount' is total discount deduction. 'deposit' is any pre-payment/deposit. Prices should be numbers. Do not include currency symbols." }, { inline_data: { mime_type: "image/jpeg", data: base64Data } }] }] })
+              body: JSON.stringify({ contents: [{ parts: [{ text: "Extract items, prices, tax, service, discount, deposit, AND currency code (e.g. MYR, THB, USD) from receipt. Return valid JSON: { \"items\": [{\"name\": \"Item\", \"price\": 0.00}], \"currency\": \"MYR\", \"tax\": 0.00, \"serviceCharge\": 0.00, \"discount\": 0.00, \"deposit\": 0.00 }. If unsure, default currency to 'MYR'." }, { inline_data: { mime_type: "image/jpeg", data: base64Data } }] }] })
           });
         };
 
@@ -796,10 +862,45 @@ const openAuthOptions = () => {
         if (Array.isArray(itemsArray)) {
             const mappedItems: ScannedItem[] = itemsArray.map((item: any, idx: number) => ({ id: `scan-${Date.now()}-${idx}`, name: item.name || "Unknown Item", price: item.price ? String(item.price.toFixed(2)) : "0.00", selected: true, sharedBy: [] }));
             setScannedItems(mappedItems);
+            let aiCode = (parsedData.currency || currency).toUpperCase();
+            // Normalise common symbols
+            if (["RM","MYR"].includes(aiCode)) aiCode = "MYR";
+            else if (["$","USD"].includes(aiCode)) aiCode = "USD";
+            else if (["฿","THB","BAHT"].includes(aiCode)) aiCode = "THB";
+            else if (["RP","IDR"].includes(aiCode)) aiCode = "IDR";
+            else if (["¥","JPY"].includes(aiCode)) aiCode = "JPY";
+            else if (["€","EUR"].includes(aiCode)) aiCode = "EUR";
+            else if (["S$","SGD"].includes(aiCode)) aiCode = "SGD";
+
+            setFormCurrency(aiCode); // Update Form
+
+            if (aiCode !== currency) {
+                setScanStatus(`Mengambil rate ${aiCode} ke ${currency}...`);
+                fetchExchangeRate(aiCode, currency).then(rate => {
+                    if(rate) setExchangeRate(String(rate));
+                });
+            }
             const detectedTax = parseFloat(parsedData.tax) || 0; 
             const detectedService = parseFloat(parsedData.serviceCharge) || 0; 
             const detectedDiscount = parseFloat(parsedData.discount) || 0; 
             const detectedDeposit = parseFloat(parsedData.deposit) || 0;
+            const detectedCode = (parsedData.currency || "MYR").toUpperCase();
+            let symbol = currency; // Default ikut session (RM)
+
+            // Mapping: Kod AI -> Simbol App
+            if (["THB", "BAHT"].includes(detectedCode)) symbol = "฿";
+            else if (["IDR", "RP", "RUPIAH"].includes(detectedCode)) symbol = "Rp";
+            else if (["SGD"].includes(detectedCode)) symbol = "S$";
+            else if (["USD"].includes(detectedCode)) symbol = "$";
+            else if (["VND"].includes(detectedCode)) symbol = "₫";
+            else if (["PHP"].includes(detectedCode)) symbol = "₱";
+            
+            // Kalau currency lain dari session, update form!
+            if (symbol !== currency) {
+                setFormCurrency(symbol);
+                // Reset rate supaya user perasan kena isi
+                setExchangeRate(""); 
+            }
             setScannedExtraInfo({ tax: detectedTax, service: detectedService, discount: Math.abs(detectedDiscount), deposit: Math.abs(detectedDeposit) });
         } else { alert("AI tidak menjumpai senarai item."); }
 
@@ -1016,7 +1117,20 @@ const openAuthOptions = () => {
                                     <div key={bill.id} className={`${cardStyle} ${shadowStyle} overflow-hidden transition-all`}>
                                         <div onClick={() => setExpandedBillId(expandedBillId === bill.id ? null : bill.id)} className={`p-5 cursor-pointer flex justify-between items-center ${darkMode ? "hover:bg-[#333]" : "hover:bg-gray-50"}`}>
                                             <div><h3 className="font-black text-lg uppercase truncate">{bill.title}</h3><div className="flex gap-2 mt-1"><span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${bill.type === "EQUAL" ? (darkMode ? "border-green-400 text-green-400" : "border-green-600 text-green-700 bg-green-100") : (darkMode ? "border-blue-400 text-blue-400" : "border-blue-600 text-blue-700 bg-blue-100")}`}>{bill.type === "EQUAL" ? "KONGSI RATA" : "SPLIT ITEM"}</span><span className="text-[10px] font-bold opacity-70 self-center">Bayar: {people.find(p=>p.id === bill.paidBy)?.name}</span></div></div>
-                                            <div className="text-right"><div className="font-mono font-black text-xl">{currency}{bill.totalAmount.toFixed(2)}</div>{expandedBillId === bill.id ? <ChevronUp size={20} className="ml-auto mt-1"/> : <ChevronDown size={20} className="ml-auto mt-1"/>}</div>
+                                            <div className="text-right">
+                                                {/* Harga Utama (RM) */}
+                                                <div className="font-mono font-black text-xl">{currency}{bill.totalAmount.toFixed(2)}</div>
+                                                
+                                                {/* --- V5 DISPLAY: Tunjuk Harga Asal (THB/USD) --- */}
+                                                {bill.originalCurrency && bill.originalCurrency !== currency && (
+                                                    <div className="text-[10px] font-bold opacity-50 font-mono -mt-1 mb-1">
+                                                       ({bill.originalCurrency} {bill.originalAmount?.toFixed(2)})
+                                                    </div>
+                                                )}
+
+                                                {/* Icon Panah */}
+                                                {expandedBillId === bill.id ? <ChevronUp size={20} className="ml-auto"/> : <ChevronDown size={20} className="ml-auto"/>}
+                                            </div>
                                         </div>
                                         {expandedBillId === bill.id && (
                                             <div className={`text-sm border-t-2 p-5 space-y-3 ${darkMode ? "border-white bg-[#1a1a1a]" : "border-black bg-gray-50"}`}>
@@ -1082,10 +1196,107 @@ const openAuthOptions = () => {
                     <div className={`flex-1 space-y-8 overflow-y-auto pb-6 px-1 ${darkMode ? "scrollbar-thumb-white" : "scrollbar-thumb-black"} scrollbar-thin`}>
                         <div className={`${cardStyle} p-5 space-y-5 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
                             <div className="space-y-2"><label className="text-xs uppercase font-black tracking-wider opacity-70">Nama Kedai</label><input value={billTitle} onChange={e => setBillTitle(e.target.value)} placeholder="Contoh: Mamak Bistro" className={inputStyle}/></div>
-                            <div className="space-y-2">
-                                <label className="text-xs uppercase font-black tracking-wider opacity-70">Total Resit ({currency})</label>
-                                <input type="number" value={billTotal} onChange={e => setBillTotal(e.target.value)} placeholder="0.00" className={`${inputStyle} text-2xl font-black font-mono`}/>
-                                {/* NEW: QUICK TAX TOGGLES */}
+                            {/* --- V5 UI: SMART CURRENCY INPUT --- */}
+                            <div className="space-y-2 p-3 rounded-xl border-2 border-dashed border-current border-opacity-30 bg-current/5">
+                                <div className="flex justify-between items-center relative">
+                                    <label className="text-[10px] uppercase font-black tracking-wider opacity-70 flex items-center gap-1">
+                                        <Globe size={12}/> Mata Wang
+                                    </label>
+                                    
+                                    {/* TUKAR JADI SELECT (DROPDOWN) SUPAYA JELAS BOLEH PILIH */}
+                                    <div className="relative group">
+                                        <select 
+                                            value={formCurrency} 
+                                            onChange={async (e) => {
+                                                const code = e.target.value;
+                                                setFormCurrency(code);
+                                                
+                                                // Kalau pilih RM (Base), reset. Kalau lain, auto-fetch API.
+                                                if(code === currency) { 
+                                                    setExchangeRate("1"); 
+                                                    setForeignAmount(""); 
+                                                } else {
+                                                    // Tunjuk status loading kejap (Optional UX)
+                                                    setExchangeRate("..."); 
+                                                    const rate = await fetchExchangeRate(code, currency);
+                                                    if(rate) setExchangeRate(String(rate));
+                                                }
+                                            }}
+                                            className={`appearance-none bg-transparent font-black text-[10px] outline-none text-right pr-4 cursor-pointer border-b border-dashed border-current/30 hover:border-current transition-all uppercase w-full ${formCurrency !== currency ? "text-blue-500" : ""}`}
+                                        >
+                                            <optgroup label="Session Base">
+                                                <option value={currency}>{currency} (Duit Asal)</option>
+                                            </optgroup>
+                                            <optgroup label="Popular ASEAN">
+                                                <option value="THB">THB - Thai Baht (฿)</option>
+                                                <option value="IDR">IDR - Rupiah (Rp)</option>
+                                                <option value="SGD">SGD - Dollar (S$)</option>
+                                                <option value="VND">VND - Dong (₫)</option>
+                                                <option value="PHP">PHP - Peso (₱)</option>
+                                            </optgroup>
+                                            <optgroup label="World Major">
+                                                <option value="USD">USD - US Dollar ($)</option>
+                                                <option value="JPY">JPY - Yen (¥)</option>
+                                                <option value="CNY">CNY - Yuan (¥)</option>
+                                                <option value="KRW">KRW - Won (₩)</option>
+                                                <option value="EUR">EUR - Euro (€)</option>
+                                                <option value="GBP">GBP - Pound (£)</option>
+                                                <option value="AUD">AUD - Aus Dollar ($)</option>
+                                            </optgroup>
+                                        </select>
+                                        
+                                        {/* Ikon Panah Kecil (Supaya user nampak ini dropdown) */}
+                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                                            <ChevronDown size={12}/>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Kalau Currency ASING dipilih, tunjuk input Rate & Original */}
+                                {formCurrency !== currency && (
+                                    <div className="grid grid-cols-2 gap-2 animate-in slide-in-from-top-2">
+                                        
+                                    {/* INPUT 1: AMOUNT ASING */}
+                                    <div>
+                                        <label className="text-[10px] font-bold opacity-50 block">Amount ({formCurrency})</label>
+                                        <input 
+                                            type="number" 
+                                            placeholder="100"
+                                            value={foreignAmount}
+                                            onChange={(e) => setForeignAmount(e.target.value)} 
+                                            className={`${inputStyle} text-lg py-1`}
+                                        />
+                                    </div>
+
+                                    {/* INPUT 2: EXCHANGE RATE */}
+                                    <div>
+                                        <label className="text-[9px] font-bold opacity-50 block">Rate (ke {currency})</label>
+                                        <input 
+                                            type="number" 
+                                            placeholder="0.00" 
+                                            value={exchangeRate}
+                                            onChange={(e) => setExchangeRate(e.target.value)} 
+                                            className={`${inputStyle} text-lg py-1`}
+                                        />
+                                    </div>
+                                </div>
+                                )}
+
+                                {/* Total Akhir (RM) - Sentiasa ReadOnly kalau Foreign, atau Editable kalau Base */}
+                                <div>
+                                    <label className="text-[9px] font-bold opacity-50 block mt-1">
+                                        {formCurrency !== currency ? `Auto-Convert (${currency})` : `Total Resit (${currency})`}
+                                    </label>
+                                    <input 
+                                        type="number" 
+                                        value={billTotal} 
+                                        onChange={e => setBillTotal(e.target.value)} 
+                                        readOnly={formCurrency !== currency} // Lock kalau auto-convert
+                                        placeholder="0.00" 
+                                        className={`${inputStyle} text-2xl font-black font-mono ${formCurrency !== currency ? "opacity-50 cursor-not-allowed" : ""}`}
+                                    />
+                                </div>
+                                 {/* NEW: QUICK TAX TOGGLES */}
                                 <div className="flex gap-2 pt-2">
                                     <button onClick={() => applyQuickTax(6)} className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider border-2 rounded-lg transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`}>+6% SST</button>
                                     <button onClick={() => applyQuickTax(10)} className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider border-2 rounded-lg transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`}>+10% SC</button>
