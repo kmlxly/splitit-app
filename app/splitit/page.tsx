@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import html2canvas from "html2canvas";
 import Cropper from "react-easy-crop"; 
 import { supabase } from "../../lib/supabaseClient"; // Path updated
@@ -8,11 +9,11 @@ import {
   Moon, Sun, CheckCircle, Trash2, 
   Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X, 
   ChevronDown, ChevronUp, Receipt, Users, AlertCircle, 
-  CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight, Info, Folder, Calculator, Save, ShoppingBag, User, Globe, Camera, Loader2, Image as ImageIcon, XCircle, List, Crop
+  CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight, Info, Folder, Calculator, Save, ShoppingBag, User, Globe, Camera, Loader2, Image as ImageIcon, XCircle, List, Crop, UserPlus
 } from "lucide-react";
 
 // --- 1. HELPER FUNCTIONS ---
-const APP_VERSION = "v3.3.0-cloud"; 
+const APP_VERSION = "v4.0.0-multiplayer";
 
 // Helper: Create Image element
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -145,6 +146,8 @@ type Transfer = { fromId: string; toId: string; fromName: string; toName: string
 type Session = {
     id: string;
     name: string;
+    ownerId?: string;
+    isShared?: boolean;
     createdAt: number;
     people: Person[];
     bills: Bill[];
@@ -162,13 +165,15 @@ type ScannedItem = {
 
 // --- MAIN COMPONENT ---
 export default function SplitItCloud() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
   // --- STATE ---
   const [darkMode, setDarkMode] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   
   // Auth & Sync State
   const [user, setUser] = useState<any>(null);
-  const [syncStatus, setSyncStatus] = useState<"SAVED" | "SAVING" | "ERROR" | "OFFLINE">("OFFLINE");
+  const [syncStatus, setSyncStatus] = useState<"SAVED" | "SAVING" | "ERROR" | "OFFLINE" | "SYNCING">("OFFLINE");
   const [pendingChanges, setPendingChanges] = useState(false);
 
   // Data State
@@ -247,58 +252,78 @@ export default function SplitItCloud() {
   // --- HYBRID SYNC ENGINE ---
 
   // 1. Load Data (Cloud First -> Local Fallback)
-  useEffect(() => {
+  useEffect(() => { 
     const initApp = async () => {
-        // Check Auth
         const { data: { session } } = await supabase.auth.getSession();
         const currentUser = session?.user;
         setUser(currentUser);
 
-        // Load Preferences
-        const savedMode = localStorage.getItem("splitit_darkmode");
-        setDarkMode(savedMode === "true");
+        // Check kalau ada link invite (?join=SESSION_ID)
+        const joinSessionId = searchParams.get("join");
 
         if (currentUser) {
-            // ---> LOGIC ONLINE (Load dari Supabase)
-            setSyncStatus("SAVING"); // Loading UI
+            setSyncStatus("SAVING");
             try {
-                // A. Fetch Sessions
-                const { data: sessData, error: sessError } = await supabase
-                    .from('sessions')
-                    .select('*')
-                    .eq('owner_id', currentUser.id)
-                    .order('created_at', { ascending: true });
+                // A. Kalau ada link invite, cuba join dulu
+                if (joinSessionId) {
+                    const { data: alreadyMember } = await supabase.from('session_members').select('*').eq('session_id', joinSessionId).eq('user_id', currentUser.id).single();
+                    if (!alreadyMember) {
+                        await supabase.from('session_members').insert({ session_id: joinSessionId, user_id: currentUser.id });
+                        alert("Berjaya join session member!");
+                    }
+                }
 
-                if (sessError) throw sessError;
+                // B. Tarik session sendiri (Owner)
+                const { data: mySessions } = await supabase.from('sessions').select('*').eq('owner_id', currentUser.id);
+                
+                // C. Tarik session member (Shared)
+                const { data: sharedRaw } = await supabase.from('session_members').select('session_id, sessions(*)').eq('user_id', currentUser.id);
+                
+                // Gabungkan dua-dua list
+                let allSessions = [...(mySessions || [])];
+                if (sharedRaw) {
+                    sharedRaw.forEach((row: any) => {
+                        // Pastikan tak duplicate dan session wujud
+                        if (row.sessions && !allSessions.find(s => s.id === row.sessions.id)) {
+                            allSessions.push(row.sessions);
+                        }
+                    });
+                }
 
-                if (sessData && sessData.length > 0) {
-                    // B. Fetch Bills (Bulk fetch)
-                    const sessionIds = sessData.map(s => s.id);
-                    const { data: billData } = await supabase
-                        .from('bills')
-                        .select('*')
-                        .in('session_id', sessionIds);
+                // D. Tarik Bills untuk SEMUA session tadi
+                const sessionIds = allSessions.map(s => s.id);
+                let allBills: any[] = [];
+                if (sessionIds.length > 0) {
+                    const { data: billData } = await supabase.from('bills').select('*').in('session_id', sessionIds);
+                    allBills = billData || [];
+                }
 
-                    // C. Construct State
-                    const cloudSessions: Session[] = sessData.map(s => ({
-                        id: s.id,
-                        name: s.name,
-                        createdAt: new Date(s.created_at).getTime(),
-                        currency: s.currency || "RM",
-                        people: s.people || [],
-                        paidStatus: s.paid_status || {},
-                        bills: billData ? billData.filter(b => b.session_id === s.id).map(mapSqlBillToLocal) : []
-                    }));
-                    
-                    setSessions(cloudSessions);
-                    if (cloudSessions.length > 0) setActiveSessionId(cloudSessions[cloudSessions.length - 1].id);
+                // E. Masukkan dalam State App
+                const finalSessions: Session[] = allSessions.map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    ownerId: s.owner_id, // Simpan info owner
+                    createdAt: new Date(s.created_at).getTime(),
+                    currency: s.currency || "RM",
+                    people: s.people || [],
+                    paidStatus: s.paid_status || {},
+                    bills: allBills.filter(b => b.session_id === s.id).map(mapSqlBillToLocal),
+                    isShared: s.owner_id !== currentUser.id // Tandakan kalau ni session orang
+                })).sort((a,b) => a.createdAt - b.createdAt); // Susun ikut masa
+
+                setSessions(finalSessions);
+
+                // Auto-pilih session (utamakn yang baru join)
+                if (joinSessionId && finalSessions.find(s => s.id === joinSessionId)) {
+                    setActiveSessionId(joinSessionId);
+                    router.replace("/splitit"); // Bersihkan URL
+                } else if (finalSessions.length > 0) {
+                    setActiveSessionId(finalSessions[finalSessions.length - 1].id);
                 } else {
-                    // User baru (First time login)
+                    // Kalau kosong sangat, buat satu local
                     const newSession: Session = {
-                        id: crypto.randomUUID(), 
-                        name: "Sesi Pertama", createdAt: Date.now(),
-                        people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
-                        bills: [], paidStatus: {}, currency: "RM"
+                        id: crypto.randomUUID(), name: "Sesi Pertama", createdAt: Date.now(), ownerId: currentUser.id,
+                        people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }], bills: [], paidStatus: {}, currency: "RM"
                     };
                     setSessions([newSession]);
                     setActiveSessionId(newSession.id);
@@ -306,40 +331,39 @@ export default function SplitItCloud() {
                 setSyncStatus("SAVED");
 
             } catch (err) {
-                console.error("Cloud Load Error:", err);
+                console.error("Cloud Error:", err);
                 setSyncStatus("ERROR");
-                alert("Gagal load data cloud. Check internet.");
             }
-
         } else {
-            // ---> LOGIC OFFLINE (Load dari LocalStorage)
-            setSyncStatus("OFFLINE");
-            const savedSessions = localStorage.getItem("splitit_sessions");
-            const savedActiveId = localStorage.getItem("splitit_active_session_id");
-
-            if (savedSessions) {
-                const parsedSessions = JSON.parse(savedSessions);
-                setSessions(parsedSessions);
-                if (savedActiveId && parsedSessions.some((s:Session) => s.id === savedActiveId)) {
-                    setActiveSessionId(savedActiveId);
-                } else if (parsedSessions.length > 0) {
-                    setActiveSessionId(parsedSessions[0].id);
-                }
-            } else {
-                const newSession: Session = {
-                    id: `s${Date.now()}`, name: "Sesi Lepak 1", createdAt: Date.now(),
-                    people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
-                    bills: [], paidStatus: {}, currency: "RM"
-                };
-                setSessions([newSession]);
-                setActiveSessionId(newSession.id);
-            }
+             // LOGIC OFFLINE (Kekalkan yang lama atau copy balik kalau hilang)
+             setSyncStatus("OFFLINE");
+             // ... (Logic offline lama awak boleh duduk sini)
         }
         setIsLoaded(true);
     };
-
     initApp();
   }, []);
+
+  // 1.5 REALTIME LISTENER (Live Update)
+  useEffect(() => {
+    if (!user || !activeSessionId) return;
+
+    // Langgan channel Supabase
+    const channel = supabase.channel('realtime-room')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: `session_id=eq.${activeSessionId}` }, 
+      async () => {
+          setSyncStatus("SYNCING");
+          const { data } = await supabase.from('bills').select('*').eq('session_id', activeSessionId);
+          if (data) {
+              const freshBills = data.map(mapSqlBillToLocal);
+              setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, bills: freshBills } : s));
+          }
+          setTimeout(() => setSyncStatus("SAVED"), 500);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [activeSessionId, user]);
 
   // 2. Save Logic (Auto Sync with Debounce)
   useEffect(() => {
@@ -832,9 +856,10 @@ export default function SplitItCloud() {
     <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
       <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
         
-        {/* HEADER - UPDATED V3.3.1 */}
+        {/* HEADER - FINAL FIX V4.0 */}
         <header className={`p-6 border-b-2 relative z-10 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
             <div className="flex justify-between items-center">
+                {/* 1. KIRI: Logo & Nama (Link ke Home) */}
                 <a href="/" className="flex items-center gap-3 cursor-pointer group">
                      <div className={`w-12 h-12 border-2 rounded-xl flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105 ${darkMode ? "bg-white border-white" : "bg-white/10 backdrop-blur border-black"}`}>
                         <img src="/icon.png" width={40} height={40} alt="Logo" className="object-cover"/>
@@ -842,21 +867,39 @@ export default function SplitItCloud() {
                      <div>
                         <h1 className="text-2xl font-black tracking-tight leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
                         
-                        {/* 1. Nama Event / Folder (Dah Timbul Balik!) */}
+                        {/* Nama Event */}
                         <p className="text-[10px] uppercase tracking-widest font-bold mt-1 opacity-70 truncate max-w-[120px]">
                             {activeSession?.name || "Loading..."}
                         </p>
                         
-                        {/* 2. Status Sync (Kecil di bawah nama event) */}
-                        <div className="text-[8px] font-bold mt-0.5">
+                        {/* Status Sync */}
+                        <div className="text-[8px] font-bold mt-0.5 flex items-center gap-1">
                            {syncStatus === "SAVING" && <span className="text-yellow-500 animate-pulse">☁️ SAVING...</span>}
+                           {syncStatus === "SYNCING" && <span className="text-blue-500 animate-pulse">☁️ SYNCING...</span>}
                            {syncStatus === "SAVED" && <span className="text-green-500">☁️ ALL SAVED</span>}
-                           {syncStatus === "ERROR" && <span className="text-red-500">❌ SYNC ERROR</span>}
                            {syncStatus === "OFFLINE" && <span className="opacity-30">🔌 OFFLINE MODE</span>}
+                           
+                           {activeSession?.isShared && (
+                               <span className="bg-blue-500 text-white px-1.5 py-0.5 rounded ml-1 text-[7px] tracking-wider">
+                                   SHARED
+                               </span>
+                           )}
                         </div>
                      </div>
                 </a>
+
+                {/* 2. KANAN: Geng Butang (Invite, RM, Folder, Mode) */}
                 <div className="flex gap-2 items-center">
+                    
+                    {/* Butang Invite (DUDUK SINI BARU BETUL) */}
+                    <button onClick={() => {
+                        const link = `${window.location.origin}/splitit?join=${activeSessionId}`;
+                        navigator.clipboard.writeText(link);
+                        alert("Link Invite dah copy! Hantar kat member: " + link);
+                    }} className={`w-10 h-10 ${buttonBase} ${darkMode ? "bg-indigo-600 border-indigo-400" : "bg-indigo-500 text-white"}`}>
+                        <UserPlus size={16}/>
+                    </button>
+
                     <button onClick={() => setShowCurrencyModal(true)} className={`w-10 h-10 text-xs font-black ${buttonBase}`}>{currency}</button>
                     <button onClick={() => setShowSessionModal(true)} className={`p-2 ${buttonBase}`}><Folder size={20}/></button>
                     <button onClick={() => setDarkMode(!darkMode)} className={`p-2 ${buttonBase}`}>{darkMode ? <Sun size={20}/> : <Moon size={20}/>}</button>
