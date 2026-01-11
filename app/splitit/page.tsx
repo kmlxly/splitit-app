@@ -1198,31 +1198,30 @@ useEffect(() => {
                             <div className="space-y-2"><label className="text-xs uppercase font-black tracking-wider opacity-70">Nama Kedai</label><input value={billTitle} onChange={e => setBillTitle(e.target.value)} placeholder="Contoh: Mamak Bistro" className={inputStyle}/></div>
                             {/* --- V5 UI: SMART CURRENCY INPUT --- */}
                             <div className="space-y-2 p-3 rounded-xl border-2 border-dashed border-current border-opacity-30 bg-current/5">
-                                <div className="flex justify-between items-center relative">
+                            <div className="flex flex-col items-start gap-1 relative">
                                     <label className="text-[10px] uppercase font-black tracking-wider opacity-70 flex items-center gap-1">
                                         <Globe size={12}/> Mata Wang
                                     </label>
                                     
-                                    {/* TUKAR JADI SELECT (DROPDOWN) SUPAYA JELAS BOLEH PILIH */}
-                                    <div className="relative group">
+                                    {/* DROPDOWN - Full Width Bawah Title */}
+                                    <div className="relative group w-full">
                                         <select 
                                             value={formCurrency} 
                                             onChange={async (e) => {
                                                 const code = e.target.value;
                                                 setFormCurrency(code);
                                                 
-                                                // Kalau pilih RM (Base), reset. Kalau lain, auto-fetch API.
                                                 if(code === currency) { 
                                                     setExchangeRate("1"); 
                                                     setForeignAmount(""); 
                                                 } else {
-                                                    // Tunjuk status loading kejap (Optional UX)
                                                     setExchangeRate("..."); 
                                                     const rate = await fetchExchangeRate(code, currency);
                                                     if(rate) setExchangeRate(String(rate));
                                                 }
                                             }}
-                                            className={`appearance-none bg-transparent font-black text-[10px] outline-none text-right pr-4 cursor-pointer border-b border-dashed border-current/30 hover:border-current transition-all uppercase w-full ${formCurrency !== currency ? "text-blue-500" : ""}`}
+                                            // UPDATE: 'text-left' (sebab duduk bawah) & 'w-full'
+                                            className={`appearance-none bg-transparent font-black text-[10px] outline-none text-left pr-4 cursor-pointer border-b border-dashed border-current/30 hover:border-current transition-all uppercase w-full ${formCurrency !== currency ? "text-blue-500" : ""}`}
                                         >
                                             <optgroup label="Session Base">
                                                 <option value={currency}>{currency} (Duit Asal)</option>
@@ -1245,7 +1244,7 @@ useEffect(() => {
                                             </optgroup>
                                         </select>
                                         
-                                        {/* Ikon Panah Kecil (Supaya user nampak ini dropdown) */}
+                                        {/* Ikon Panah */}
                                         <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
                                             <ChevronDown size={12}/>
                                         </div>
