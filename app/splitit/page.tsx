@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import html2canvas from "html2canvas";
 import Cropper from "react-easy-crop"; 
@@ -164,7 +164,7 @@ type ScannedItem = {
 };
 
 // --- MAIN COMPONENT ---
-export default function SplitItCloud() {
+function SplitItContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
   // --- STATE ---
@@ -683,6 +683,7 @@ export default function SplitItCloud() {
         }
         document.body.removeChild(textArea);
     }
+    
 };
 
   const getTransferDetails = (fromId: string, toId: string) => {
@@ -700,6 +701,7 @@ export default function SplitItCloud() {
         });
         return details;
   };
+  
 
   // --- OCR / SCAN LOGIC ---
   const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1415,3 +1417,16 @@ export default function SplitItCloud() {
     </div>
   );
 }
+
+// --- WRAPPER UNTUK ELAK ERROR BUILD (STEP 3) ---
+export default function SplitItCloud() {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-black">
+          <Loader2 className="animate-spin w-10 h-10 text-blue-500" />
+        </div>
+      }>
+        <SplitItContent />
+      </Suspense>
+    );
+  }
