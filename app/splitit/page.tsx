@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 // --- 1. HELPER FUNCTIONS ---
-const APP_VERSION = "v4.1.0-mobile";
+const APP_VERSION = "v4.3.0 - Fix: Restore Offline Mode & Add Login Button";
 
 // Helper: Create Image element
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -249,6 +249,15 @@ function SplitItContent() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false); 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
+  // Function Login Google
+  const handleLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.href } // Balik ke page ni lepas login
+    });
+    if (error) alert("Error login: " + error.message);
+};
+
   // --- HYBRID SYNC ENGINE ---
 
   // 1. Load Data (Cloud First -> Local Fallback)
@@ -335,10 +344,34 @@ function SplitItContent() {
                 setSyncStatus("ERROR");
             }
         } else {
-             // LOGIC OFFLINE (Kekalkan yang lama atau copy balik kalau hilang)
-             setSyncStatus("OFFLINE");
-             // ... (Logic offline lama awak boleh duduk sini)
-        }
+            // 2. OFFLINE MODE: Load dari LocalStorage
+            if (joinSessionId) {
+                alert("Sila Login (Tekan ikon Orang kat atas) untuk join session kawan!");
+            }
+            setSyncStatus("OFFLINE");
+            
+            const savedSessions = localStorage.getItem("splitit_sessions");
+            if (savedSessions) {
+                const parsed = JSON.parse(savedSessions);
+                setSessions(parsed);
+                // Restore last active session
+                const lastActive = localStorage.getItem("splitit_active_session_id");
+                if (lastActive && parsed.find((s: Session) => s.id === lastActive)) {
+                    setActiveSessionId(lastActive);
+                } else {
+                    setActiveSessionId(parsed[0].id);
+                }
+            } else {
+                // Kalau user baru & offline, buat session default
+                const newSession: Session = {
+                   id: `s${Date.now()}`, name: "Sesi Lepak 1", createdAt: Date.now(),
+                   people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
+                   bills: [], paidStatus: {}, currency: "RM"
+               };
+               setSessions([newSession]);
+               setActiveSessionId(newSession.id);
+           }
+       }
         setIsLoaded(true);
     };
     initApp();
@@ -858,61 +891,69 @@ function SplitItContent() {
     <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
       <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
         
-        {/* HEADER - V4.1 MOBILE OPTIMIZED */}
-        <header className={`px-4 py-4 border-b-2 relative z-10 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
+        {/* HEADER - V4.3 TITLE RESTORED */}
+        <header className={`px-4 py-3 border-b-2 relative z-10 transition-colors duration-300 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
             <div className="flex justify-between items-center">
-                {/* 1. KIRI: Logo & Nama */}
-                <a href="/" className="flex items-center gap-3 cursor-pointer group min-w-0 flex-1 mr-2">
-                     <div className={`w-10 h-10 flex-shrink-0 border-2 rounded-lg flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105 ${darkMode ? "bg-white border-white" : "bg-white/10 backdrop-blur border-black"}`}>
-                        <img src="/icon.png" width={32} height={32} alt="Logo" className="object-cover"/>
+                
+                {/* 1. KIRI: Logo & Info (Vertical Stack) */}
+                <a href="/" className="flex flex-col items-start justify-center gap-0.5 cursor-pointer group min-w-0 mr-2">
+                     
+                     {/* Baris 1: Logo + Title SPLITIT (Dah Tunjuk Balik!) */}
+                     <div className="flex items-center gap-2">
+                        <div className={`w-7 h-7 flex-shrink-0 border-2 rounded-lg flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105 ${darkMode ? "bg-white border-white" : "bg-white/10 backdrop-blur border-black"}`}>
+                            <img src="/icon.png" width={24} height={24} alt="Logo" className="object-cover"/>
+                        </div>
+                        {/* Teks SPLITIT ada balik, font size dilaraskan */}
+                        <h1 className="text-lg font-black tracking-tight leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
                      </div>
-                     <div className="min-w-0 overflow-hidden">
-                        {/* Hidden kat mobile, tunjuk kat desktop (sm:block) */}
-                        <h1 className="hidden sm:block text-xl font-black tracking-tight leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
-                        
-                        {/* Nama Event (Teks Besar Sikit kat Mobile) */}
-                        <p className="text-xs sm:text-[10px] uppercase tracking-widest font-bold mt-0.5 opacity-90 truncate w-full">
+
+                     {/* Baris 2: Nama Event + Status (Bawah Logo & Title) */}
+                     <div className="flex items-center gap-2 pl-0.5">
+                        <p className="text-[10px] uppercase tracking-widest font-bold opacity-70 truncate max-w-[140px]">
                             {activeSession?.name || "Loading..."}
                         </p>
                         
-                        {/* Status Sync */}
-                        <div className="text-[9px] sm:text-[8px] font-bold flex items-center gap-1 mt-0.5">
-                           {syncStatus === "SAVING" && <span className="text-yellow-500 animate-pulse">☁️ SAVING...</span>}
-                           {syncStatus === "SYNCING" && <span className="text-blue-500 animate-pulse">☁️ SYNCING...</span>}
-                           {syncStatus === "SAVED" && <span className="text-green-500">☁️ SAVED</span>}
-                           {syncStatus === "OFFLINE" && <span className="opacity-30">🔌 OFFLINE</span>}
-                           {activeSession?.isShared && (<span className="bg-blue-500 text-white px-1 py-0 rounded ml-1 text-[7px] tracking-wider">SHARED</span>)}
+                        {/* Status Sync (Mini Badge) */}
+                        <div className="text-[8px] font-bold flex items-center gap-1 opacity-50 scale-90 origin-left">
+                           <span>|</span>
+                           {syncStatus === "SAVING" && <span className="text-yellow-500 animate-pulse">SAVING</span>}
+                           {syncStatus === "SYNCING" && <span className="text-blue-500 animate-pulse">SYNCING</span>}
+                           {syncStatus === "SAVED" && <span className="text-green-500">SAVED</span>}
+                           {syncStatus === "OFFLINE" && <span>OFFLINE</span>}
                         </div>
                      </div>
                 </a>
 
-                {/* 2. KANAN: Butang Compact (Gap Kecil, Size Kecil, Shadow Nipis) */}
+                {/* 2. KANAN: Butang Compact */}
                 <div className="flex gap-1.5 items-center flex-shrink-0">
                     
-                    {/* Invite Button */}
-                    <button onClick={() => {
-                        const link = `${window.location.origin}/splitit?join=${activeSessionId}`;
-                        if(navigator.share) {
-                             navigator.share({ title: 'Jom Split Bill!', text: 'Join session aku kat sini:', url: link }).catch(console.error);
-                        } else {
-                             navigator.clipboard.writeText(link);
-                             alert("Link dah copy!");
-                        }
-                    }} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"}`}>
-                        <UserPlus size={16}/>
-                    </button>
+                    {/* STEP 3: LOGIC BUTANG (Kalau User ada = INVITE. Kalau takde = LOGIN) */}
+                    {user ? (
+                        <button onClick={() => {
+                            const link = `${window.location.origin}/splitit?join=${activeSessionId}`;
+                            if(typeof navigator !== "undefined" && navigator.share) {
+                                 navigator.share({ title: 'Jom Split Bill!', text: 'Join session aku kat sini:', url: link }).catch(console.error);
+                            } else {
+                                 navigator.clipboard.writeText(link);
+                                 alert("Link dah copy!");
+                            }
+                        }} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"}`}>
+                            <UserPlus size={16}/>
+                        </button>
+                    ) : (
+                        <button onClick={handleLogin} className={`w-auto px-3 h-9 rounded-lg border-2 flex items-center justify-center gap-1 transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white"}`}>
+                            <span className="text-[10px] font-black uppercase">LOGIN</span>
+                        </button>
+                    )}
 
-                    {/* Currency Button */}
                     <button onClick={() => setShowCurrencyModal(true)} className={`h-9 px-2 min-w-[36px] rounded-lg border-2 text-[10px] font-black flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}>
                         {currency}
                     </button>
                     
-                    {/* Folder Button */}
                     <button onClick={() => setShowSessionModal(true)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}>
                         <Folder size={16}/>
                     </button>
                     
-                    {/* Dark Mode Button */}
                     <button onClick={() => setDarkMode(!darkMode)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-white text-black shadow-none" : "border-black bg-black text-white"}`}>
                         {darkMode ? <Sun size={16}/> : <Moon size={16}/>}
                     </button>

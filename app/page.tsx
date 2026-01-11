@@ -131,7 +131,7 @@ export default function Home() {
                     </div>
                     <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1"/>
                 </div>
-                <h3 className="text-xl font-black uppercase mb-1">SplitIt v3.2</h3>
+                <h3 className="text-xl font-black uppercase mb-1">SplitIt v4.3</h3>
                 <p className="text-xs font-bold opacity-60 leading-relaxed">
                     Kira bil makan member, support Tax, Service Charge & AI Scan.
                 </p>
