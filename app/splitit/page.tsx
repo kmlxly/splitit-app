@@ -185,6 +185,7 @@ function SplitItContent() {
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false); 
   const [showScanMethodModal, setShowScanMethodModal] = useState(false); 
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   
@@ -351,18 +352,29 @@ function SplitItContent() {
             setSyncStatus("OFFLINE");
             
             const savedSessions = localStorage.getItem("splitit_sessions");
+            let parsedSessions: Session[] = [];
+
+            // Cuba parse, kalau error jadikan array kosong
             if (savedSessions) {
-                const parsed = JSON.parse(savedSessions);
-                setSessions(parsed);
+               try {
+                   parsedSessions = JSON.parse(savedSessions);
+               } catch(e) { 
+                   parsedSessions = []; 
+               }
+            }
+
+            // SAFETY CHECK: Pastikan array TIDAK KOSONG sebelum baca
+            if (parsedSessions.length > 0) {
+                setSessions(parsedSessions);
                 // Restore last active session
                 const lastActive = localStorage.getItem("splitit_active_session_id");
-                if (lastActive && parsed.find((s: Session) => s.id === lastActive)) {
+                if (lastActive && parsedSessions.find((s: Session) => s.id === lastActive)) {
                     setActiveSessionId(lastActive);
                 } else {
-                    setActiveSessionId(parsed[0].id);
+                    setActiveSessionId(parsedSessions[0].id);
                 }
             } else {
-                // Kalau user baru & offline, buat session default
+                // Kalau array kosong atau user baru, buat session default
                 const newSession: Session = {
                    id: `s${Date.now()}`, name: "Sesi Lepak 1", createdAt: Date.now(),
                    people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
@@ -927,17 +939,9 @@ function SplitItContent() {
                 {/* 2. KANAN: Butang Compact */}
                 <div className="flex gap-1.5 items-center flex-shrink-0">
                     
-                    {/* STEP 3: LOGIC BUTANG (Kalau User ada = INVITE. Kalau takde = LOGIN) */}
+                    {/* LOGIC BUTTON: Kalau User ada = BUKA MODAL INVITE. Kalau takde = LOGIN */}
                     {user ? (
-                        <button onClick={() => {
-                            const link = `${window.location.origin}/splitit?join=${activeSessionId}`;
-                            if(typeof navigator !== "undefined" && navigator.share) {
-                                 navigator.share({ title: 'Jom Split Bill!', text: 'Join session aku kat sini:', url: link }).catch(console.error);
-                            } else {
-                                 navigator.clipboard.writeText(link);
-                                 alert("Link dah copy!");
-                            }
-                        }} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"}`}>
+                        <button onClick={() => setShowInviteModal(true)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"}`}>
                             <UserPlus size={16}/>
                         </button>
                     ) : (
@@ -1461,6 +1465,47 @@ function SplitItContent() {
                             <div className="bg-white/10 px-4 py-2 rounded-lg backdrop-blur"><p className="text-white text-[10px] font-bold uppercase tracking-wide animate-pulse">📲 iPhone: Tekan Lama (Long Press) Gambar</p><p className="text-white/50 text-[9px]">Pilih "Save to Photos" atau "Share"</p></div>
                             {typeof navigator !== "undefined" && navigator.share && (<button onClick={async () => {try {const blob = await (await fetch(previewImage)).blob();const file = new File([blob], "Settlement.png", { type: "image/png" });await navigator.share({ files: [file], title: 'Resit SplitIt' });} catch(e) {}}} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-bold rounded-full text-[10px] uppercase tracking-widest hover:bg-blue-500 transition-colors mx-auto"><ExternalLink size={12}/> Share Sekarang</button>)}
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* INVITE MODAL (New V4.3) */}
+            {showInviteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                    <div className={`w-full max-w-[340px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                        <button onClick={() => setShowInviteModal(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20}/></button>
+                        
+                        <div className="text-center mb-6">
+                            <div className={`w-16 h-16 mx-auto rounded-2xl border-2 flex items-center justify-center mb-4 ${darkMode ? "bg-indigo-600 border-white text-white" : "bg-indigo-100 border-black text-indigo-600"}`}>
+                                <Users size={32}/>
+                            </div>
+                            <h2 className="text-xl font-black uppercase leading-tight">Ajak Member Join!</h2>
+                            <p className="text-xs font-bold opacity-60 mt-2 leading-relaxed">
+                                Share link ni dekat group WhatsApp. Member boleh masuk, tolong key-in item, dan tanda makan apa sendiri.
+                            </p>
+                        </div>
+
+                        <div className={`p-4 rounded-xl border-2 mb-6 flex flex-col items-center gap-2 ${darkMode ? "bg-black border-white/20" : "bg-gray-100 border-black/10"}`}>
+                            <p className="text-[9px] font-black uppercase tracking-widest opacity-50">SESSION LINK</p>
+                            <div className="flex items-center gap-2 w-full">
+                                <Globe size={14} className="opacity-50"/>
+                                <span className="text-xs font-mono truncate flex-1 opacity-70">
+                                    {window.location.origin}/splitit?join={activeSessionId}
+                                </span>
+                            </div>
+                        </div>
+
+                        <button onClick={() => {
+                            const link = `${window.location.origin}/splitit?join=${activeSessionId}`;
+                            if(typeof navigator !== "undefined" && navigator.share) {
+                                navigator.share({ title: 'Jom Split Bill!', text: `Jom settle bill ${activeSession?.name} kat sini:`, url: link }).catch(console.error);
+                            } else {
+                                navigator.clipboard.writeText(link);
+                                alert("Link dah copy! Paste kat WhatsApp.");
+                            }
+                            setShowInviteModal(false);
+                        }} className={`w-full py-4 rounded-xl font-black uppercase text-sm border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-indigo-500 text-white border-black"}`}>
+                            <Copy size={16}/> COPY / SHARE LINK
+                        </button>
                     </div>
                 </div>
             )}
