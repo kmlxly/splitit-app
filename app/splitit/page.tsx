@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 // --- 1. HELPER FUNCTIONS ---
-const APP_VERSION = "v4.0.0-multiplayer";
+const APP_VERSION = "v4.1.0-mobile";
 
 // Helper: Create Image element
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -858,53 +858,64 @@ function SplitItContent() {
     <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
       <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
         
-        {/* HEADER - FINAL FIX V4.0 */}
-        <header className={`p-6 border-b-2 relative z-10 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
+        {/* HEADER - V4.1 MOBILE OPTIMIZED */}
+        <header className={`px-4 py-4 border-b-2 relative z-10 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
             <div className="flex justify-between items-center">
-                {/* 1. KIRI: Logo & Nama (Link ke Home) */}
-                <a href="/" className="flex items-center gap-3 cursor-pointer group">
-                     <div className={`w-12 h-12 border-2 rounded-xl flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105 ${darkMode ? "bg-white border-white" : "bg-white/10 backdrop-blur border-black"}`}>
-                        <img src="/icon.png" width={40} height={40} alt="Logo" className="object-cover"/>
+                {/* 1. KIRI: Logo & Nama */}
+                <a href="/" className="flex items-center gap-3 cursor-pointer group min-w-0 flex-1 mr-2">
+                     <div className={`w-10 h-10 flex-shrink-0 border-2 rounded-lg flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105 ${darkMode ? "bg-white border-white" : "bg-white/10 backdrop-blur border-black"}`}>
+                        <img src="/icon.png" width={32} height={32} alt="Logo" className="object-cover"/>
                      </div>
-                     <div>
-                        <h1 className="text-2xl font-black tracking-tight leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
+                     <div className="min-w-0 overflow-hidden">
+                        {/* Hidden kat mobile, tunjuk kat desktop (sm:block) */}
+                        <h1 className="hidden sm:block text-xl font-black tracking-tight leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
                         
-                        {/* Nama Event */}
-                        <p className="text-[10px] uppercase tracking-widest font-bold mt-1 opacity-70 truncate max-w-[120px]">
+                        {/* Nama Event (Teks Besar Sikit kat Mobile) */}
+                        <p className="text-xs sm:text-[10px] uppercase tracking-widest font-bold mt-0.5 opacity-90 truncate w-full">
                             {activeSession?.name || "Loading..."}
                         </p>
                         
                         {/* Status Sync */}
-                        <div className="text-[8px] font-bold mt-0.5 flex items-center gap-1">
+                        <div className="text-[9px] sm:text-[8px] font-bold flex items-center gap-1 mt-0.5">
                            {syncStatus === "SAVING" && <span className="text-yellow-500 animate-pulse">☁️ SAVING...</span>}
                            {syncStatus === "SYNCING" && <span className="text-blue-500 animate-pulse">☁️ SYNCING...</span>}
-                           {syncStatus === "SAVED" && <span className="text-green-500">☁️ ALL SAVED</span>}
-                           {syncStatus === "OFFLINE" && <span className="opacity-30">🔌 OFFLINE MODE</span>}
-                           
-                           {activeSession?.isShared && (
-                               <span className="bg-blue-500 text-white px-1.5 py-0.5 rounded ml-1 text-[7px] tracking-wider">
-                                   SHARED
-                               </span>
-                           )}
+                           {syncStatus === "SAVED" && <span className="text-green-500">☁️ SAVED</span>}
+                           {syncStatus === "OFFLINE" && <span className="opacity-30">🔌 OFFLINE</span>}
+                           {activeSession?.isShared && (<span className="bg-blue-500 text-white px-1 py-0 rounded ml-1 text-[7px] tracking-wider">SHARED</span>)}
                         </div>
                      </div>
                 </a>
 
-                {/* 2. KANAN: Geng Butang (Invite, RM, Folder, Mode) */}
-                <div className="flex gap-2 items-center">
+                {/* 2. KANAN: Butang Compact (Gap Kecil, Size Kecil, Shadow Nipis) */}
+                <div className="flex gap-1.5 items-center flex-shrink-0">
                     
-                    {/* Butang Invite (DUDUK SINI BARU BETUL) */}
+                    {/* Invite Button */}
                     <button onClick={() => {
                         const link = `${window.location.origin}/splitit?join=${activeSessionId}`;
-                        navigator.clipboard.writeText(link);
-                        alert("Link Invite dah copy! Hantar kat member: " + link);
-                    }} className={`w-10 h-10 ${buttonBase} ${darkMode ? "bg-indigo-600 border-indigo-400" : "bg-indigo-500 text-white"}`}>
+                        if(navigator.share) {
+                             navigator.share({ title: 'Jom Split Bill!', text: 'Join session aku kat sini:', url: link }).catch(console.error);
+                        } else {
+                             navigator.clipboard.writeText(link);
+                             alert("Link dah copy!");
+                        }
+                    }} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"}`}>
                         <UserPlus size={16}/>
                     </button>
 
-                    <button onClick={() => setShowCurrencyModal(true)} className={`w-10 h-10 text-xs font-black ${buttonBase}`}>{currency}</button>
-                    <button onClick={() => setShowSessionModal(true)} className={`p-2 ${buttonBase}`}><Folder size={20}/></button>
-                    <button onClick={() => setDarkMode(!darkMode)} className={`p-2 ${buttonBase}`}>{darkMode ? <Sun size={20}/> : <Moon size={20}/>}</button>
+                    {/* Currency Button */}
+                    <button onClick={() => setShowCurrencyModal(true)} className={`h-9 px-2 min-w-[36px] rounded-lg border-2 text-[10px] font-black flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}>
+                        {currency}
+                    </button>
+                    
+                    {/* Folder Button */}
+                    <button onClick={() => setShowSessionModal(true)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}>
+                        <Folder size={16}/>
+                    </button>
+                    
+                    {/* Dark Mode Button */}
+                    <button onClick={() => setDarkMode(!darkMode)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-white text-black shadow-none" : "border-black bg-black text-white"}`}>
+                        {darkMode ? <Sun size={16}/> : <Moon size={16}/>}
+                    </button>
                 </div>
             </div>
         </header>
