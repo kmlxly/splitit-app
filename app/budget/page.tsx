@@ -595,9 +595,17 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
           }
 
           const rawText = result.candidates[0].content.parts[0].text;
-          const cleanJson = rawText.replace(/```json|```/g, '').trim();
-          let parsedData;
           
+          // Logic baru: Extract JSON menggunakan Regex untuk lebih selamat (handle jika ada teks luar JSON)
+          let cleanJson = "";
+          const jsonMatch = rawText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+          if (jsonMatch) {
+              cleanJson = jsonMatch[0];
+          } else {
+              cleanJson = rawText.replace(/```json|```/g, '').trim();
+          }
+
+          let parsedData;
           try {
               parsedData = JSON.parse(cleanJson);
           } catch (e) {
