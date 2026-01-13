@@ -477,7 +477,7 @@ export default function BudgetPage() {
 
       const isPDF = file.type === "application/pdf";
       setIsScanning(true);
-      setScanStatus(isPDF ? "Memproses PDF..." : "Memproses gambar (Compressing)...");
+      setScanStatus(isPDF ? "Proses PDF..." : "Compress...");
 
       try {
           const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
@@ -501,7 +501,7 @@ export default function BudgetPage() {
               mimeType = "image/jpeg";
           }
 
-          setScanStatus(isPDF ? "AI sedang menganalisis statement bank..." : "AI sedang menganalisis resit...");
+          setScanStatus(isPDF ? "AI Analisis Bank..." : "AI Analisis Resit...");
 
           const fetchGemini = async (modelName: string) => {
              const prompt = isPDF 
@@ -579,7 +579,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
           let response = await fetchGemini("gemini-2.0-flash");
           if (!response.ok && response.status === 404) {
              console.log("Gemini 2.0 404, trying Fallback...");
-             setScanStatus("Gemini 2.0 sibuk, mencuba model backup...");
+             setScanStatus("Mencuba Backup...");
              response = await fetchGemini("gemini-1.5-flash-8b");
           }
 
@@ -1066,10 +1066,10 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                     className={`col-span-2 py-4 text-sm ${buttonBase} ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"} relative overflow-hidden`}
                 >
                     {isScanning ? (
-                        <div className="flex flex-col items-center gap-1 py-1">
-                          <div className="flex items-center gap-2">
-                            <Loader2 size={20} className="animate-spin text-white"/> 
-                            <span className="animate-pulse">{scanStatus}</span>
+                        <div className="flex flex-col items-center gap-1 py-1 w-full px-4">
+                          <div className="flex items-center gap-2 max-w-full overflow-hidden">
+                            <Loader2 size={20} className="animate-spin text-white flex-shrink-0"/> 
+                            <span className="animate-pulse text-[10px] truncate max-w-[150px]">{scanStatus}</span>
                           </div>
                           <div className="w-48 h-1 bg-white/20 rounded-full mt-1 overflow-hidden">
                             <div className="h-full bg-white animate-progress-indefinite rounded-full w-1/2"></div>
@@ -1874,10 +1874,16 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                         </button>
                         <button 
                             onClick={() => {
-                                // Auto-adjust selectedDate ke bulan rekod baru untuk pastikan rekod muncul
-                                const today = new Date();
-                                if (selectedDate.getMonth() !== today.getMonth() || selectedDate.getFullYear() !== today.getFullYear()) {
-                                    setSelectedDate(new Date(today.getFullYear(), today.getMonth(), 1));
+                                // Logic Baru: Auto-jump ke bulan transaksi tersebut
+                                const targetTx = scannedTransactions.length > 0 ? scannedTransactions[0] : scannedTransaction;
+                                
+                                if (targetTx && targetTx.isoDate) {
+                                    const txDate = new Date(targetTx.isoDate);
+                                    // Check valid date
+                                    if (!isNaN(txDate.getTime())) {
+                                        // Set SelectedDate kepada 1hb bulan transaksi tersebut supaya ia visible dalam list
+                                        setSelectedDate(new Date(txDate.getFullYear(), txDate.getMonth(), 1));
+                                    }
                                 }
 
                                 if (scannedTransactions.length > 0) {
