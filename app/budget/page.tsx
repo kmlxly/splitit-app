@@ -225,8 +225,6 @@ export default function BudgetPage() {
         setSyncStatus("ERROR");
       }
     } else {
-      // --- PERUBAHAN UTAMA: START EMPTY (No Dummy Data) ---
-      setTransactions([]);
       setSyncStatus(user ? "SAVED" : "OFFLINE");
     }
     setIsDataLoaded(true);
@@ -253,8 +251,9 @@ export default function BudgetPage() {
     // Jangan save kalau data belum loaded (elak overwrite masa first load)
     if (!isDataLoaded) return;
     
-    // SAVE walaupun kosong (untuk handle kes user delete semua item)
-    // Tapi elak overwrite masa initial render sebelum load (isDataLoaded handle ni)
+    // Elak overwrite data dengan array kosong jika baru saja load
+    // Tapi kita benarkan save array kosong jika user memadam semua data (handled by isDataLoaded logic)
+    
     setSyncStatus("SAVING");
     try {
         // Save ke localStorage
@@ -1074,6 +1073,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                           <div className="w-48 h-1 bg-white/20 rounded-full mt-1 overflow-hidden">
                             <div className="h-full bg-white animate-progress-indefinite rounded-full w-1/2"></div>
                           </div>
+                          <p className="text-[7px] font-bold opacity-70 uppercase tracking-tighter mt-1">AI sedang memproses data mendalam, mohon tunggu sebentar...</p>
                         </div>
                     ) : (
                         <><Camera size={20}/> SNAP RESIT (AI)</>
