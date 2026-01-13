@@ -512,7 +512,7 @@ export default function BudgetPage() {
       "title": "Merchant/Description",
       "amount": 0.00,
       "category": "One of: Makan, Transport, Shopping, Bills, Utility, Lain-lain",
-      "date": "DD MMM format (e.g., 15 Jan)"
+      "date": "DD MMM YYYY format (e.g., 15 Jan 2025)"
     }
   ]
 }
@@ -521,7 +521,7 @@ IMPORTANT FOR BANK STATEMENTS:
 - Extract EVERY transaction you can find (debits and credits)
 - For ALL spending/debits: amount should be positive (we'll make it negative)
 - For ALL income/credits/salary: category should be "Income"
-- Include date from statement if available, otherwise use current date format
+- Include FULL date from statement (day, month, year).
 - Group similar transactions if they appear multiple times
 
 CATEGORY GUIDELINES:
@@ -537,8 +537,11 @@ Return ONLY valid JSON array, no other text.`
 {
   "title": "Merchant/Store Name",
   "amount": 0.00,
-  "category": "One of: Makan, Transport, Shopping, Bills, Utility, Lain-lain"
+  "category": "One of: Makan, Transport, Shopping, Bills, Utility, Lain-lain",
+  "date": "DD MMM YYYY format (e.g., 12 Jan 2025)"
 }
+
+IMPORTANT: Try to find the transaction date and year from the receipt.
 
 CATEGORY GUIDELINES (Choose the MOST appropriate):
 - "Makan": Restaurants, cafes, food delivery, groceries, food stalls, mamak, fast food
@@ -624,16 +627,31 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                   const isIncome = category === "Income";
                   
                   // Parse date from AI or use current date
+                  const today = new Date();
                   let txDate = new Date();
                   if (tx.date) {
-                      // Try to parse date from format like "12 Jan"
+                      // Try to parse date from format like "12 Jan 2025" or "12 Jan"
                       const parts = tx.date.split(' ');
                       if (parts.length >= 2) {
                           const day = parseInt(parts[0]);
                           const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                           const month = monthNames.indexOf(parts[1]);
+                          
                           if (month !== -1 && !isNaN(day)) {
-                              txDate = new Date(selectedDate.getFullYear(), month, day);
+                              let year = today.getFullYear();
+                              // Ambil tahun dari AI jika ada
+                              if (parts.length >= 3 && !isNaN(parseInt(parts[2]))) {
+                                  year = parseInt(parts[2]);
+                                  // Handle 2 digit year
+                                  if (year < 100) year += 2000;
+                              } else {
+                                  // Smart Guessing: Jika bulan resit (0-11) > bulan sekarang (0-11), berkemungkinan besar ia rekod tahun lepas
+                                  // Hanya laksanakan jika ia bukan bulan yang sama
+                                  if (month > today.getMonth()) {
+                                      year = today.getFullYear() - 1;
+                                  }
+                              }
+                              txDate = new Date(year, month, day);
                           }
                       }
                   }
@@ -665,8 +683,32 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
 
               // Create preview transaction (user can edit before saving)
               const today = new Date();
-              const isoDate = today.toISOString().split('T')[0];
-              const displayDate = today.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
+              let txDate = new Date();
+
+              if (parsedData.date) {
+                  const parts = parsedData.date.split(' ');
+                  if (parts.length >= 2) {
+                      const day = parseInt(parts[0]);
+                      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const month = monthNames.indexOf(parts[1]);
+                      if (month !== -1 && !isNaN(day)) {
+                          let year = today.getFullYear();
+                          if (parts.length >= 3 && !isNaN(parseInt(parts[2]))) {
+                              year = parseInt(parts[2]);
+                              if (year < 100) year += 2000;
+                          } else {
+                              // Smart Guessing: Jika bulan resit > bulan sekarang, kemungkinan tahun lepas
+                              if (month > today.getMonth()) {
+                                  year = today.getFullYear() - 1;
+                              }
+                          }
+                          txDate = new Date(year, month, day);
+                      }
+                  }
+              }
+
+              const isoDate = txDate.toISOString().split('T')[0];
+              const displayDate = txDate.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
               
               const previewTx: Transaction = {
                   id: Date.now(),
@@ -1292,15 +1334,19 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                            </div>
                         )}
 
-                        {/* Summary Cards */}
+                        {/* Summary Cards (Optimized for Large Amounts) */}
                         <div className="grid grid-cols-2 gap-3 mb-6">
-                            <div className={`p-4 rounded-xl border-2 ${darkMode ? "bg-[#222] border-white" : "bg-orange-100 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}>
-                                <p className="text-[9px] font-black uppercase opacity-60 mb-1">Total Belanja</p>
-                                <p className="text-xl font-mono font-black">{formatCurrency(expenseMonth)}</p>
+                            <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-[#222] border-white" : "bg-orange-100 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}>
+                                <p className="text-[8px] font-black uppercase opacity-60 mb-1">Total Belanja</p>
+                                <p className="text-sm sm:text-base font-mono font-black truncate" title={formatCurrency(expenseMonth)}>
+                                    {formatCurrency(expenseMonth)}
+                                </p>
                             </div>
-                            <div className={`p-4 rounded-xl border-2 ${darkMode ? "bg-[#222] border-white" : "bg-green-100 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}>
-                                <p className="text-[9px] font-black uppercase opacity-60 mb-1">Baki Wallet</p>
-                                <p className="text-xl font-mono font-black">{formatCurrency(balance)}</p>
+                            <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-[#222] border-white" : "bg-green-100 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}>
+                                <p className="text-[8px] font-black uppercase opacity-60 mb-1">Baki Wallet</p>
+                                <p className="text-sm sm:text-base font-mono font-black truncate" title={formatCurrency(balance)}>
+                                    {formatCurrency(balance)}
+                                </p>
                             </div>
                         </div>
 
@@ -1319,14 +1365,14 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                     
                                     return (
                                         <div key={cat} className="space-y-1">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <div className="flex items-center gap-2">
-                                                    {getCategoryIcon(cat)}
-                                                    <span className="text-[10px] font-black uppercase">{cat}</span>
+                                            <div className="flex justify-between items-end mb-1">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <div className="flex-shrink-0">{getCategoryIcon(cat)}</div>
+                                                    <span className="text-[10px] font-black uppercase truncate">{cat}</span>
                                                 </div>
-                                                <div className="text-right">
-                                                    <span className="text-xs font-mono font-black">{formatCurrency(catTotal)}</span>
-                                                    <span className="text-[9px] font-bold opacity-60 ml-2">{percentage.toFixed(0)}%</span>
+                                                <div className="text-right flex-shrink-0 pl-2">
+                                                    <span className="text-[10px] font-mono font-black">{formatCurrency(catTotal)}</span>
+                                                    <span className="text-[8px] font-bold opacity-50 ml-1.5">{percentage.toFixed(0)}%</span>
                                                 </div>
                                             </div>
                                             {/* Progress Bar */}
