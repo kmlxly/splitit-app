@@ -512,7 +512,7 @@ export default function BudgetPage() {
     {
       "title": "Merchant/Description",
       "amount": 0.00,
-      "category": "One of: Makan, Transport, Shopping, Bills, Income, Utility, Lain-lain",
+      "category": "One of: Makan, Transport, Shopping, Bills, Utility, Lain-lain",
       "date": "DD MMM format (e.g., 15 Jan)"
     }
   ]
@@ -520,8 +520,8 @@ export default function BudgetPage() {
 
 IMPORTANT FOR BANK STATEMENTS:
 - Extract EVERY transaction you can find (debits and credits)
-- For debits/withdrawals: amount should be positive (we'll make it negative)
-- For credits/deposits: amount should be positive, category should be "Income"
+- For ALL spending/debits: amount should be positive (we'll make it negative)
+- For ALL income/credits/salary: category should be "Income"
 - Include date from statement if available, otherwise use current date format
 - Group similar transactions if they appear multiple times
 
@@ -530,7 +530,6 @@ CATEGORY GUIDELINES:
 - "Transport": Petrol, parking, toll, Grab, transport fees
 - "Shopping": Retail, online shopping, purchases
 - "Bills": TNB, water, internet, phone, subscriptions
-- "Income": Salary, transfers in, refunds, money received
 - "Utility": Services, maintenance, repairs
 - "Lain-lain": Other expenses
 
@@ -539,7 +538,7 @@ Return ONLY valid JSON array, no other text.`
 {
   "title": "Merchant/Store Name",
   "amount": 0.00,
-  "category": "One of: Makan, Transport, Shopping, Bills, Income, Utility, Lain-lain"
+  "category": "One of: Makan, Transport, Shopping, Bills, Utility, Lain-lain"
 }
 
 CATEGORY GUIDELINES (Choose the MOST appropriate):
@@ -547,7 +546,6 @@ CATEGORY GUIDELINES (Choose the MOST appropriate):
 - "Transport": Petrol, parking, toll, Grab/ride-hailing, public transport, car maintenance
 - "Shopping": Retail stores, online shopping, clothing, electronics, general merchandise
 - "Bills": Utilities (TNB, water), internet, phone bills, subscriptions, recurring payments
-- "Income": Salary, freelance payment, refunds, money received
 - "Utility": Similar to Bills but for services like maintenance, repairs, professional services
 - "Lain-lain": Anything that doesn't fit above categories
 
@@ -556,7 +554,7 @@ EXAMPLES:
 - McDonald's, KFC, Nasi Lemak stall → "Makan"
 - Petronas, Shell, Grab → "Transport"
 - TNB, Maxis, Unifi → "Bills"
-- Salary, payment received → "Income"
+- Salary, payment received → "Income" (Note: AI should return "Income" as category if detected as salary)
 
 Return ONLY valid JSON, no other text. Amount should be positive number.`;
 
@@ -615,7 +613,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
               
               const mappedTransactions: Transaction[] = parsedData.transactions.map((tx: any, idx: number) => {
                   const amount = parseFloat(tx.amount) || 0;
-                  const category = validCategories.includes(tx.category) ? tx.category : "Lain-lain";
+                  const category = (tx.category === "Income" || validCategories.includes(tx.category)) ? tx.category : "Lain-lain";
                   const isIncome = category === "Income";
                   
                   // Parse date from AI or use current date
@@ -1065,10 +1063,18 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 <button 
                     onClick={() => setShowScanMethodModal(true)}
                     disabled={isScanning}
-                    className={`col-span-2 py-4 text-sm ${buttonBase} ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"}`}
+                    className={`col-span-2 py-4 text-sm ${buttonBase} ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"} relative overflow-hidden`}
                 >
                     {isScanning ? (
-                        <><Loader2 size={20} className="animate-spin"/> {scanStatus}</>
+                        <div className="flex flex-col items-center gap-1 py-1">
+                          <div className="flex items-center gap-2">
+                            <Loader2 size={20} className="animate-spin text-white"/> 
+                            <span className="animate-pulse">{scanStatus}</span>
+                          </div>
+                          <div className="w-48 h-1 bg-white/20 rounded-full mt-1 overflow-hidden">
+                            <div className="h-full bg-white animate-progress-indefinite rounded-full w-1/2"></div>
+                          </div>
+                        </div>
                     ) : (
                         <><Camera size={20}/> SNAP RESIT (AI)</>
                     )}
@@ -1868,6 +1874,12 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                         </button>
                         <button 
                             onClick={() => {
+                                // Auto-adjust selectedDate ke bulan rekod baru untuk pastikan rekod muncul
+                                const today = new Date();
+                                if (selectedDate.getMonth() !== today.getMonth() || selectedDate.getFullYear() !== today.getFullYear()) {
+                                    setSelectedDate(new Date(today.getFullYear(), today.getMonth(), 1));
+                                }
+
                                 if (scannedTransactions.length > 0) {
                                     // Save all multiple transactions
                                     setTransactions([...scannedTransactions, ...transactions]);
