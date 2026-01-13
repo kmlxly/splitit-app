@@ -17,20 +17,78 @@ import {
 const APP_VERSION = "v5.0.0-beta (Multi-Currency)";
 
 // --- 2. CURRENCY API HELPER (FREE) ---
+// Mapping: App Symbol -> API Currency Code
+const CURRENCY_MAP: Record<string, string> = {
+    "RM": "MYR",
+    "MYR": "MYR",
+    "THB": "THB",
+    "฿": "THB",
+    "IDR": "IDR",
+    "Rp": "IDR",
+    "SGD": "SGD",
+    "S$": "SGD",
+    "VND": "VND",
+    "₫": "VND",
+    "PHP": "PHP",
+    "₱": "PHP",
+    "USD": "USD",
+    "$": "USD",
+    "JPY": "JPY",
+    "¥": "JPY",
+    "CNY": "CNY",
+    "KRW": "KRW",
+    "₩": "KRW",
+    "EUR": "EUR",
+    "€": "EUR",
+    "GBP": "GBP",
+    "£": "GBP",
+    "AUD": "AUD",
+};
+
+// Reverse mapping: API Code -> App Symbol (for display)
+const API_TO_SYMBOL: Record<string, string> = {
+    "MYR": "RM",
+    "THB": "฿",
+    "IDR": "Rp",
+    "SGD": "S$",
+    "VND": "₫",
+    "PHP": "₱",
+    "USD": "$",
+    "JPY": "¥",
+    "CNY": "¥",
+    "KRW": "₩",
+    "EUR": "€",
+    "GBP": "£",
+    "AUD": "$",
+};
+
 const fetchExchangeRate = async (fromCurr: string, toCurr: string) => {
     try {
-        // FIX: API global kenal "MYR", tapi app kita guna "RM".
-        // Kita tukar kod ni senyap-senyap sebelum tanya API.
-        const apiFrom = fromCurr === "RM" ? "MYR" : fromCurr;
-        const apiTo = toCurr === "RM" ? "MYR" : toCurr;
+        // Convert app symbols to API currency codes
+        const apiFrom = CURRENCY_MAP[fromCurr] || fromCurr;
+        const apiTo = CURRENCY_MAP[toCurr] || toCurr;
 
+        // If same currency, return 1
+        if (apiFrom === apiTo) return 1;
+
+        // Fetch exchange rate from API
         const res = await fetch(`https://api.exchangerate-api.com/v4/latest/${apiFrom}`);
+        if (!res.ok) {
+            console.error("Exchange rate API error:", res.status);
+            return null;
+        }
+        
         const data = await res.json();
         
-        // Ambil rate guna kod yang betul (MYR)
-        const rate = data.rates[apiTo];
+        // Get rate for target currency
+        const rate = data.rates?.[apiTo];
         
-        return rate || null; // Kalau null, biar user isi manual
+        if (!rate) {
+            console.error(`Rate not found for ${apiTo}`);
+            return null;
+        }
+        
+        return rate; // Return exact rate
     } catch (e) {
         console.error("Gagal tarik rate:", e);
         return null; 
@@ -301,10 +359,7 @@ const openAuthOptions = () => {
 
 // --- V5 FIX: AUTO-CALCULATE (MESIN KIRA AGRESIF) ---
 useEffect(() => {
-    // Debugging: Tengok apa yang berlaku dalam console
-    // console.log("Auto-Calc Triggered:", { formCurrency, currency, foreignAmount, exchangeRate });
-
-    // 1. Pastikan bukan mode RM biasa
+    // 1. Pastikan bukan mode base currency (same currency)
     if (formCurrency === currency) return;
 
     // 2. Tukar string kepada nombor (Guna Number() lebih selamat dari parseFloat)
@@ -313,12 +368,12 @@ useEffect(() => {
 
     // 3. Kira hanya jika nombor valid (Bukan NaN dan Rate > 0)
     if (!isNaN(amount) && !isNaN(rate) && rate > 0) {
-        const totalRM = amount * rate;
-        // console.log("New Total:", totalRM);
-        setBillTotal(totalRM.toFixed(2));
+        // Calculate: foreignAmount * rate = baseCurrencyAmount
+        const totalBase = amount * rate;
+        setBillTotal(totalBase.toFixed(2));
     }
-}, [foreignAmount, exchangeRate, formCurrency, currency]); // <--- PENTING: Tambah 'currency' di sini!
-// ^ Maksudnya: Setiap kali 3 benda ni berubah, ulang kira automatik! 
+}, [foreignAmount, exchangeRate, formCurrency, currency]);
+// ^ Auto-calculate setiap kali foreignAmount, exchangeRate, formCurrency, atau base currency berubah 
 
   // --- HYBRID SYNC ENGINE ---
 
@@ -862,45 +917,32 @@ useEffect(() => {
         if (Array.isArray(itemsArray)) {
             const mappedItems: ScannedItem[] = itemsArray.map((item: any, idx: number) => ({ id: `scan-${Date.now()}-${idx}`, name: item.name || "Unknown Item", price: item.price ? String(item.price.toFixed(2)) : "0.00", selected: true, sharedBy: [] }));
             setScannedItems(mappedItems);
+            // Normalize AI detected currency code
             let aiCode = (parsedData.currency || currency).toUpperCase();
-            // Normalise common symbols
-            if (["RM","MYR"].includes(aiCode)) aiCode = "MYR";
-            else if (["$","USD"].includes(aiCode)) aiCode = "USD";
-            else if (["฿","THB","BAHT"].includes(aiCode)) aiCode = "THB";
-            else if (["RP","IDR"].includes(aiCode)) aiCode = "IDR";
-            else if (["¥","JPY"].includes(aiCode)) aiCode = "JPY";
-            else if (["€","EUR"].includes(aiCode)) aiCode = "EUR";
-            else if (["S$","SGD"].includes(aiCode)) aiCode = "SGD";
+            
+            // Convert to API code first, then to app symbol
+            const apiCode = CURRENCY_MAP[aiCode] || aiCode;
+            const appSymbol = API_TO_SYMBOL[apiCode] || aiCode;
+            
+            setFormCurrency(appSymbol); // Update Form
 
-            setFormCurrency(aiCode); // Update Form
-
-            if (aiCode !== currency) {
-                setScanStatus(`Mengambil rate ${aiCode} ke ${currency}...`);
-                fetchExchangeRate(aiCode, currency).then(rate => {
-                    if(rate) setExchangeRate(String(rate));
+            if (appSymbol !== currency) {
+                setScanStatus(`Mengambil rate ${appSymbol} ke ${currency}...`);
+                fetchExchangeRate(appSymbol, currency).then(rate => {
+                    if(rate) {
+                        setExchangeRate(String(rate));
+                    } else {
+                        setExchangeRate(""); // Let user enter manually if API fails
+                    }
                 });
+            } else {
+                setExchangeRate("1");
             }
+            
             const detectedTax = parseFloat(parsedData.tax) || 0; 
             const detectedService = parseFloat(parsedData.serviceCharge) || 0; 
             const detectedDiscount = parseFloat(parsedData.discount) || 0; 
             const detectedDeposit = parseFloat(parsedData.deposit) || 0;
-            const detectedCode = (parsedData.currency || "MYR").toUpperCase();
-            let symbol = currency; // Default ikut session (RM)
-
-            // Mapping: Kod AI -> Simbol App
-            if (["THB", "BAHT"].includes(detectedCode)) symbol = "฿";
-            else if (["IDR", "RP", "RUPIAH"].includes(detectedCode)) symbol = "Rp";
-            else if (["SGD"].includes(detectedCode)) symbol = "S$";
-            else if (["USD"].includes(detectedCode)) symbol = "$";
-            else if (["VND"].includes(detectedCode)) symbol = "₫";
-            else if (["PHP"].includes(detectedCode)) symbol = "₱";
-            
-            // Kalau currency lain dari session, update form!
-            if (symbol !== currency) {
-                setFormCurrency(symbol);
-                // Reset rate supaya user perasan kena isi
-                setExchangeRate(""); 
-            }
             setScannedExtraInfo({ tax: detectedTax, service: detectedService, discount: Math.abs(detectedDiscount), deposit: Math.abs(detectedDeposit) });
         } else { alert("AI tidak menjumpai senarai item."); }
 
@@ -1198,7 +1240,7 @@ useEffect(() => {
                             <div className="space-y-2"><label className="text-xs uppercase font-black tracking-wider opacity-70">Nama Kedai</label><input value={billTitle} onChange={e => setBillTitle(e.target.value)} placeholder="Contoh: Mamak Bistro" className={inputStyle}/></div>
                             {/* --- V5 UI: SMART CURRENCY INPUT --- */}
                             <div className="space-y-2 p-3 rounded-xl border-2 border-dashed border-current border-opacity-30 bg-current/5">
-                            <div className="flex flex-col items-start gap-1 relative">
+                                <div className="flex flex-col items-start gap-1 relative">
                                     <label className="text-[10px] uppercase font-black tracking-wider opacity-70 flex items-center gap-1">
                                         <Globe size={12}/> Mata Wang
                                     </label>
@@ -1212,12 +1254,18 @@ useEffect(() => {
                                                 setFormCurrency(code);
                                                 
                                                 if(code === currency) { 
+                                                    // Same as base currency, no conversion needed
                                                     setExchangeRate("1"); 
                                                     setForeignAmount(""); 
                                                 } else {
+                                                    // Fetch live exchange rate from foreign currency to base currency
                                                     setExchangeRate("..."); 
                                                     const rate = await fetchExchangeRate(code, currency);
-                                                    if(rate) setExchangeRate(String(rate));
+                                                    if(rate) {
+                                                        setExchangeRate(String(rate));
+                                                    } else {
+                                                        setExchangeRate(""); // Let user enter manually if API fails
+                                                    }
                                                 }
                                             }}
                                             // UPDATE: 'text-left' (sebab duduk bawah) & 'w-full'

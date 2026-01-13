@@ -13,11 +13,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "SplitIt - Bill Splitter",
-  description: "Split bill dengan member cara brutal.",
+  title: "Kmlxly Apps",
+  description: "Finance & Utility Apps by kmlxly.",
   manifest: "/manifest.json", // Link ke fail manifest tadi
   icons: {
-    icon: "/icon.png",       // Ini untuk tab browser
+    icon: "/apple-icon.png",  // Menggunakan logo grid (apple-icon.png) untuk favicon
     apple: "/apple-icon.png", // Ini KHAS untuk iPhone 
   },
   appleWebApp: {
