@@ -115,29 +115,45 @@ export default function Home() {
         let currentBalance = 0;
         let nextBillLabel = "Tiada Data";
 
-        // 1. SPLITIT: Fetch Sessions (with People) & Bills
-        const { data: mySessions } = await supabase
+        // 1. SPLITIT: Fetch Sessions & Bills (Decoupled for Safety)
+        const { data: mySessions, error: sessionError } = await supabase
           .from('sessions')
-          .select('id, people, bills(total_amount, paid_by, details)')
+          .select('id, people')
           .eq('owner_id', userId);
 
-        if (mySessions) {
-          mySessions.forEach((sess: any) => {
-            // Identify "Me" (Owner is usually first person)
-            const myPersonId = sess.people && sess.people.length > 0 ? sess.people[0].id : 'p1';
+        if (sessionError) console.error("Dashboard Session Error:", sessionError);
 
-            if (sess.bills) {
-              sess.bills.forEach((b: any) => {
-                // If "I" paid
+        if (mySessions && mySessions.length > 0) {
+          const sessionIds = mySessions.map(s => s.id);
+
+          // Fetch Bills separately to guarantee data
+          const { data: myBills, error: billError } = await supabase
+            .from('bills')
+            .select('*')
+            .in('session_id', sessionIds);
+
+          if (billError) console.error("Dashboard Bill Error:", billError);
+
+          if (myBills) {
+            // Map bills to sessions to calculate totals
+            mySessions.forEach(sess => {
+              // Assumption: Owner is the first person ('p1') or the one named "Aku" if we want to be fancy.
+              // For now, sticking to Index 0 as per SplitIt logic for Creator.
+              const myPersonId = sess.people && sess.people.length > 0 ? sess.people[0].id : 'p1';
+
+              const sessBills = myBills.filter((b: any) => b.session_id === sess.id);
+
+              sessBills.forEach((b: any) => {
                 if (b.paid_by === myPersonId) {
-                  // Calculate how much others owe me (Total - My Share)
+                  // People owe ME
                   const myDetail = b.details?.find((d: any) => d.personId === myPersonId);
+                  // If myDetail missing, assume 0 share (I paid for everyone else completely)
                   const myShare = myDetail ? myDetail.total : 0;
                   totalOwed += (b.total_amount - myShare);
                 }
               });
-            }
-          });
+            });
+          }
         }
 
         // 2. BUDGET.AI: "Baki Poket"
