@@ -111,72 +111,97 @@ export default function Home() {
 
       try {
         const userId = session.user.id;
-
-        // 1. SPLITIT: "Nak Kutip" (Owed to Me)
-        // Logic: Get my sessions -> my bills -> sum (total - my_share)
-        // Note: Assuming 'p1' is me for now based on typical flow. 
-        // A more robust way would be to check the session member mapping.
         let totalOwed = 0;
+        let currentBalance = 0;
+        let nextBillLabel = "Tiada Data";
 
+        // 1. SPLITIT: Fetch Sessions & Bills Separate (More Robust)
         const { data: mySessions } = await supabase
           .from('sessions')
-          .select('id, bills(total_amount, paid_by, details)')
+          .select('id')
           .eq('owner_id', userId);
 
-        if (mySessions) {
-          mySessions.forEach((sess: any) => {
-            if (sess.bills) {
-              sess.bills.forEach((b: any) => {
-                // Kalau "Aku" (p1) yang bayar
-                if (b.paid_by === 'p1') {
-                  // Kira bhg orang lain (Total - Bhg Aku)
-                  // Cari detail untuk p1
-                  const myDetail = b.details?.find((d: any) => d.personId === 'p1');
-                  const myShare = myDetail ? myDetail.total : 0;
-                  totalOwed += (b.total_amount - myShare);
-                }
-              });
-            }
-          });
+        if (mySessions && mySessions.length > 0) {
+          const sessionIds = mySessions.map(s => s.id);
+          const { data: bills } = await supabase
+            .from('bills')
+            .select('total_amount, paid_by, details')
+            .in('session_id', sessionIds);
+
+          if (bills) {
+            bills.forEach((b: any) => {
+              // Logic: If I (p1) paid, how much do others owe me?
+              // Note: 'p1' is a placeholder. ideally we check based on user mapping.
+              // For now, assuming p1 is Owner.
+              if (b.paid_by === 'p1') {
+                const myDetail = b.details?.find((d: any) => d.personId === 'p1');
+                const myShare = myDetail ? myDetail.total : 0;
+                totalOwed += (b.total_amount - myShare);
+              }
+            });
+          }
         }
 
-        // 2. BUDGET.AI: "Baki Poket" (Total Transactions)
-        // Assuming table 'budget_transactions' exists.
-        // Fallback to 0 if error (Table not created yet).
-        let currentBalance = 0;
-        const { data: budgetData, error: budgetError } = await supabase
-          .from('budget_transactions') // Potential table name
-          .select('amount')
-          .eq('user_id', userId);
+        // 2. BUDGET.AI: "Baki Poket"
+        try {
+          const { data: budgetData } = await supabase
+            .from('budget_transactions')
+            .select('amount')
+            .eq('user_id', userId);
 
-        if (!budgetError && budgetData) {
-          currentBalance = budgetData.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-        }
+          if (budgetData) {
+            // Formula: Sum of valid amounts
+            currentBalance = budgetData.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+          }
+        } catch (e) { console.log("Budget Table likely missing"); }
 
         // 3. SUB.TRACKER: "Next Bill"
-        // Assuming table 'subscriptions' exists.
-        let nextBillLabel = "Tiada Data";
-        const { data: subData, error: subError } = await supabase
-          .from('subscriptions') // Potential table name
-          .select('name, price, next_payment_date')
-          .eq('user_id', userId)
-          .gte('next_payment_date', new Date().toISOString().split('T')[0]) // Upcoming only
-          .order('next_payment_date', { ascending: true })
-          .limit(1);
+        try {
+          const { data: subData } = await supabase
+            .from('subscriptions')
+            .select('title, price, first_bill_date, cycle')
+            .eq('user_id', userId);
 
-        if (!subError && subData && subData.length > 0) {
-          const next = subData[0];
-          nextBillLabel = `${next.name} (RM${next.price})`;
-        }
+          if (subData && subData.length > 0) {
+            // Find nearest bill logic
+            const today = new Date();
+            let nearestDays = Infinity;
+            let nearestSub = null;
+
+            subData.forEach((sub: any) => {
+              if (!sub.first_bill_date) return;
+              const firstDate = new Date(sub.first_bill_date);
+              const dayOfMonth = firstDate.getDate();
+
+              // Calculate next occurrence
+              const nextDate = new Date(today.getFullYear(), today.getMonth(), dayOfMonth);
+              if (nextDate < today) {
+                nextDate.setMonth(nextDate.getMonth() + 1);
+              }
+
+              const diffTime = Math.abs(nextDate.getTime() - today.getTime());
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+              if (diffDays < nearestDays) {
+                nearestDays = diffDays;
+                nearestSub = sub;
+              }
+            });
+
+            if (nearestSub) {
+              nextBillLabel = `${(nearestSub as any).title} (${nearestDays} hari)`;
+            }
+          }
+        } catch (e) { console.log("Sub Table likely missing"); }
 
         setStats({
           toCollect: totalOwed,
           pocketBalance: currentBalance,
-          nextBill: nextBillLabel || "Tiada Data"
+          nextBill: nextBillLabel
         });
 
-      } catch (err) {
-        console.error("Error loading stats:", err);
+      } catch (error) {
+        console.error("Error loading dashboard stats:", error);
       } finally {
         setLoadingStats(false);
       }
