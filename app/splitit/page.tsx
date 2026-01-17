@@ -444,13 +444,25 @@ function SplitItContent() {
                         try { localSessions = JSON.parse(savedSessions); } catch (e) { console.error("Local Parse Error", e); }
                     }
 
-                    // Gabung: Ambil semua Cloud + (Local yang tiada di Cloud)
+                    // Gabung: Ambil semua Cloud + Local dengan Smart Conflict Resolution
                     const mergedSessions = [...cloudSessions];
+
                     localSessions.forEach(localS => {
-                        const existsInCloud = cloudSessions.find(c => c.id === localS.id);
-                        if (!existsInCloud) {
-                            // Ini session local yang belum naik cloud / sync failed
+                        const cloudIndex = mergedSessions.findIndex(c => c.id === localS.id);
+
+                        if (cloudIndex === -1) {
+                            // CASE 1: Session tiada di Cloud (Belum sync) -> Add Local
                             mergedSessions.push(localS);
+                        } else {
+                            // CASE 2: Conflict - Session wujud di Cloud & Local. Compare!
+                            const cloudS = mergedSessions[cloudIndex];
+
+                            // Logik Mudah: Kalau Local ada lagi banyak bills dari Cloud, kita percaya Local 
+                            // (Sebab mungkin Save Bill ke DB fail tadi tapi Session header lepas)
+                            if (localS.bills.length > cloudS.bills.length) {
+                                console.log(`Restoring Local Session [${localS.name}] (Local: ${localS.bills.length} bills vs Cloud: ${cloudS.bills.length})`);
+                                mergedSessions[cloudIndex] = localS;
+                            }
                         }
                     });
 
