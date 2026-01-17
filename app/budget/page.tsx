@@ -174,21 +174,75 @@ export default function BudgetPage() {
 
     // --- EFFECT: LOAD & SAVE DATA ---
 
-    // 0. Check Supabase Session (Link dengan Home Page)
+    // 0. Check Supabase Session & Load Cloud Data
     useEffect(() => {
-        // Check session dari Supabase
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        const initSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
             setUser(session?.user || null);
-        });
 
-        // Listen untuk auth state changes (sync dengan home page)
+            // LOAD DATA FROM CLOUD
+            if (session?.user) {
+                const { data: cloudTx, error } = await supabase
+                    .from('budget_transactions')
+                    .select('*')
+                    .eq('user_id', session.user.id);
+
+                if (cloudTx && cloudTx.length > 0) {
+                    // Map DB snake_case -> TS camelCase
+                    const validTx = cloudTx.map((t: any) => ({
+                        id: t.id,
+                        title: t.title,
+                        amount: t.amount,
+                        category: t.category,
+                        date: t.date,
+                        isoDate: t.iso_date // DB uses iso_date
+                    }));
+
+                    // Merge with local? For now just OVERWRITE/SET to ensure sync.
+                    // Or keep local if offline? Complex. Let's set cloud as truth for now.
+                    setTransactions(validTx);
+                }
+            }
+        };
+        initSession();
+
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setUser(session?.user || null);
-            // TODO: Load data dari cloud jika ada
+            if (_event === 'SIGNED_IN') initSession();
         });
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // 0.1 SYNC TO CLOUD (Auto-Save)
+    useEffect(() => {
+        const syncToCloud = async () => {
+            if (!user || transactions.length === 0) return;
+
+            // Map TS camelCase -> DB snake_case
+            const payload = transactions.map(t => ({
+                id: t.id,
+                user_id: user.id,
+                title: t.title,
+                amount: t.amount,
+                category: t.category,
+                date: t.date,
+                iso_date: t.isoDate, // Map to DB column
+                updated_at: new Date().toISOString()
+            }));
+
+            // Upsert all (Efficient? For <100 rows ok. For large data needs diffing)
+            const { error } = await supabase
+                .from('budget_transactions')
+                .upsert(payload);
+
+            if (error) console.error("Sync Error:", error);
+        };
+
+        // Debounce sync (2s)
+        const timeout = setTimeout(syncToCloud, 2000);
+        return () => clearTimeout(timeout);
+    }, [transactions, user]);
 
     // 1. Load data bila app mula buka (Run sekali je)
     useEffect(() => {
