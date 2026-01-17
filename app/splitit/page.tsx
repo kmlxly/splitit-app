@@ -424,27 +424,47 @@ function SplitItContent() {
                         allBills = billData || [];
                     }
 
-                    // E. Masukkan dalam State App
-                    const finalSessions: Session[] = allSessions.map(s => ({
+                    // E. Convert Cloud Data to App Format
+                    const cloudSessions: Session[] = allSessions.map(s => ({
                         id: s.id,
                         name: s.name,
-                        ownerId: s.owner_id, // Simpan info owner
+                        ownerId: s.owner_id,
                         createdAt: new Date(s.created_at).getTime(),
                         currency: s.currency || "RM",
                         people: s.people || [],
                         paidStatus: s.paid_status || {},
                         bills: allBills.filter(b => b.session_id === s.id).map(mapSqlBillToLocal),
-                        isShared: s.owner_id !== currentUser.id // Tandakan kalau ni session orang
-                    })).sort((a, b) => a.createdAt - b.createdAt); // Susun ikut masa
+                        isShared: s.owner_id !== currentUser.id
+                    }));
 
-                    setSessions(finalSessions);
+                    // F. MERGE WITH LOCAL STORAGE (Critical for Offline/Unsynced Data)
+                    const savedSessions = localStorage.getItem("splitit_sessions");
+                    let localSessions: Session[] = [];
+                    if (savedSessions) {
+                        try { localSessions = JSON.parse(savedSessions); } catch (e) { console.error("Local Parse Error", e); }
+                    }
+
+                    // Gabung: Ambil semua Cloud + (Local yang tiada di Cloud)
+                    const mergedSessions = [...cloudSessions];
+                    localSessions.forEach(localS => {
+                        const existsInCloud = cloudSessions.find(c => c.id === localS.id);
+                        if (!existsInCloud) {
+                            // Ini session local yang belum naik cloud / sync failed
+                            mergedSessions.push(localS);
+                        }
+                    });
+
+                    // Sort descending (latest first)
+                    mergedSessions.sort((a, b) => b.createdAt - a.createdAt);
+
+                    setSessions(mergedSessions);
 
                     // Auto-pilih session (utamakn yang baru join)
-                    if (joinSessionId && finalSessions.find(s => s.id === joinSessionId)) {
+                    if (joinSessionId && mergedSessions.find(s => s.id === joinSessionId)) {
                         setActiveSessionId(joinSessionId);
                         router.replace("/splitit"); // Bersihkan URL
-                    } else if (finalSessions.length > 0) {
-                        setActiveSessionId(finalSessions[finalSessions.length - 1].id);
+                    } else if (mergedSessions.length > 0) {
+                        setActiveSessionId(mergedSessions[0].id); // First item is latest
                     } else {
                         // Kalau kosong sangat, buat satu local
                         const newSession: Session = {
