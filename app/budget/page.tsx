@@ -1772,43 +1772,55 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {/* --- MODAL: REVIEW SCAN RESULT --- */}
                 {showScanResultModal && (scannedTransaction || scannedTransactions.length > 0) && (
                     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                        <div className={`w-full max-w-sm max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
+                        <div className={`w-full max-w-sm max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in slide-in-from-bottom-10`}>
 
-                            <div className="flex justify-between items-center p-6 border-b-2 border-current border-opacity-20 flex-shrink-0">
+                            <div className={`flex justify-between items-center p-6 border-b-2 ${darkMode ? "border-white" : "border-black"} bg-opacity-20 flex-shrink-0`}>
                                 <h2 className="text-xl font-black uppercase italic flex items-center gap-2">
-                                    <ScanLine size={20} /> Review Scan Result
+                                    <ScanLine size={20} /> Preview Scan
                                 </h2>
                                 <button onClick={() => {
                                     setShowScanResultModal(false);
                                     setScannedTransaction(null);
                                     setScannedTransactions([]);
-                                }} className="opacity-50 hover:opacity-100"><X size={24} /></button>
+                                }} className="opacity-50 hover:opacity-100 transition-opacity"><X size={24} /></button>
                             </div>
 
                             {scannedTransactions.length > 0 ? (
                                 /* Multiple Transactions (PDF) */
-                                <div className="flex-1 overflow-y-auto p-6 space-y-3">
-                                    <p className="text-xs font-bold opacity-70 mb-4">
-                                        Ditemui {scannedTransactions.length} transaksi. Edit sebelum simpan:
-                                    </p>
-                                    {scannedTransactions.map((tx, idx) => (
-                                        <div key={tx.id} className={`${cardStyle} p-3 ${shadowStyle}`}>
-                                            <div className="flex items-center gap-3 mb-3">
-                                                <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center flex-shrink-0 ${darkMode ? "border-white bg-white/10" : "border-black bg-yellow-300"}`}>
-                                                    {getCategoryIcon(tx.category)}
+                                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                                    <div className={`p-4 rounded-xl border-2 border-dashed ${darkMode ? "border-white/50 bg-white/5" : "border-black/50 bg-yellow-50"}`}>
+                                        <p className="text-xs font-bold leading-relaxed opacity-80">
+                                            Found <span className="text-blue-500 font-black">{scannedTransactions.length} items</span> from your file.
+                                            Please verify details before saving.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {scannedTransactions.map((tx, idx) => (
+                                            <div key={tx.id} className={`${cardStyle} p-4 relative group`}>
+
+                                                {/* Header Bar */}
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <div className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${darkMode ? "border-white bg-white/10" : "border-black bg-white"}`}>
+                                                        <span className="text-xs font-black">{idx + 1}</span>
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        value={tx.title}
+                                                        onChange={(e) => {
+                                                            const updated = [...scannedTransactions];
+                                                            updated[idx].title = e.target.value;
+                                                            setScannedTransactions(updated);
+                                                        }}
+                                                        className={`${inputStyle} text-sm font-bold py-1.5 h-auto flex-1`}
+                                                        placeholder="Sila isi tajuk..."
+                                                    />
                                                 </div>
-                                                <div className="flex-1">
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="text"
-                                                            value={tx.title}
-                                                            onChange={(e) => {
-                                                                const updated = [...scannedTransactions];
-                                                                updated[idx].title = e.target.value;
-                                                                setScannedTransactions(updated);
-                                                            }}
-                                                            className={`${inputStyle} text-xs py-2 mb-0 flex-1`}
-                                                        />
+
+                                                {/* Details Row */}
+                                                <div className="flex gap-2 mb-3">
+                                                    <div className="flex-1">
+                                                        <label className="text-[9px] font-black uppercase opacity-50 mb-1 block">Date</label>
                                                         <input
                                                             type="date"
                                                             value={tx.isoDate || ""}
@@ -1820,152 +1832,138 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                                                 updated[idx].date = dateObj.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
                                                                 setScannedTransactions(updated);
                                                             }}
-                                                            className={`${inputStyle} text-xs py-2 mb-0 w-24`}
+                                                            className={`${inputStyle} text-xs py-1.5 h-auto w-full`}
                                                         />
                                                     </div>
+                                                    <div className="flex-1">
+                                                        <label className="text-[9px] font-black uppercase opacity-50 mb-1 block">Category</label>
+                                                        <select
+                                                            value={tx.category}
+                                                            onChange={(e) => {
+                                                                const updated = [...scannedTransactions];
+                                                                updated[idx].category = e.target.value;
+                                                                setScannedTransactions(updated);
+                                                            }}
+                                                            className={`${inputStyle} text-xs py-1.5 h-auto w-full appearance-none`}
+                                                        >
+                                                            {ALL_CATEGORIES.map(cat => (
+                                                                <option key={cat} value={cat}>{cat}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
                                                 </div>
-                                                <div className={`text-right font-mono font-black text-sm ${tx.amount > 0 ? "text-green-500" : (darkMode ? "text-red-400" : "text-red-600")}`}>
-                                                    {isGhostMode ? "RM ****" : `${tx.amount > 0 ? "+" : ""}${tx.amount.toFixed(2)}`}
+
+                                                {/* Amount Row */}
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase opacity-50 mb-1 block">Amount</label>
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="number"
+                                                            value={Math.abs(tx.amount)}
+                                                            onChange={(e) => {
+                                                                const updated = [...scannedTransactions];
+                                                                const val = parseFloat(e.target.value) || 0;
+                                                                updated[idx].amount = tx.category === "Income" ? Math.abs(val) : -Math.abs(val);
+                                                                setScannedTransactions(updated);
+                                                            }}
+                                                            className={`${inputStyle} text-sm font-mono font-black py-1.5 h-auto flex-1`}
+                                                        />
+                                                        <button
+                                                            onClick={() => {
+                                                                const updated = scannedTransactions.filter((_, i) => i !== idx);
+                                                                setScannedTransactions(updated);
+                                                            }}
+                                                            className="p-2 text-red-500 border-2 border-transparent hover:border-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                                            title="Buang Item"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2">
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : scannedTransaction ? (
+                                /* Single Transaction (Image) */
+                                <div className="flex-1 overflow-y-auto p-6 space-y-5">
+
+                                    {/* Edit Form */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Title / Merchant</label>
+                                            <input
+                                                type="text"
+                                                value={scannedTransaction.title}
+                                                onChange={(e) => setScannedTransaction({ ...scannedTransaction, title: e.target.value })}
+                                                className={`${inputStyle} text-sm font-bold`}
+                                                autoFocus
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Date</label>
                                                 <input
-                                                    type="number"
-                                                    value={Math.abs(tx.amount)}
+                                                    type="date"
+                                                    value={scannedTransaction.isoDate || ""}
                                                     onChange={(e) => {
-                                                        const updated = [...scannedTransactions];
-                                                        const val = parseFloat(e.target.value) || 0;
-                                                        updated[idx].amount = tx.category === "Income" ? Math.abs(val) : -Math.abs(val);
-                                                        setScannedTransactions(updated);
+                                                        const newIso = e.target.value;
+                                                        const dateObj = new Date(newIso);
+                                                        const newDateStr = dateObj.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
+                                                        setScannedTransaction({ ...scannedTransaction, isoDate: newIso, date: newDateStr });
                                                     }}
-                                                    className={`${inputStyle} flex-1 text-sm py-2 mb-0`}
+                                                    className={inputStyle}
                                                 />
+                                            </div>
+                                            <div>
+                                                <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Category</label>
                                                 <select
-                                                    value={tx.category}
+                                                    value={scannedTransaction.category}
                                                     onChange={(e) => {
-                                                        const updated = [...scannedTransactions];
-                                                        const newCat = e.target.value;
-                                                        updated[idx].category = newCat;
-                                                        // Auto adjust amount sign based on category
-                                                        if (newCat === "Income" && updated[idx].amount < 0) {
-                                                            updated[idx].amount = Math.abs(updated[idx].amount);
-                                                        } else if (newCat !== "Income" && updated[idx].amount > 0) {
-                                                            updated[idx].amount = -Math.abs(updated[idx].amount);
-                                                        }
-                                                        setScannedTransactions(updated);
+                                                        const newCategory = e.target.value;
+                                                        const isIncome = newCategory === "Income";
+                                                        setScannedTransaction({
+                                                            ...scannedTransaction,
+                                                            category: newCategory,
+                                                            amount: isIncome ? Math.abs(scannedTransaction.amount) : -Math.abs(scannedTransaction.amount)
+                                                        });
                                                     }}
-                                                    className={`${inputStyle} flex-1 text-xs py-2 mb-0 appearance-none`}
+                                                    className={`${inputStyle} appearance-none`}
                                                 >
                                                     {ALL_CATEGORIES.map(cat => (
                                                         <option key={cat} value={cat}>{cat}</option>
                                                     ))}
                                                 </select>
-                                                <button
-                                                    onClick={() => {
-                                                        const updated = scannedTransactions.filter((_, i) => i !== idx);
-                                                        setScannedTransactions(updated);
-                                                    }}
-                                                    className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                            ) : scannedTransaction ? (
-                                /* Single Transaction (Image) */
-                                <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                                    {/* Preview Card */}
-                                    <div className={`${cardStyle} p-4 ${shadowStyle}`}>
-                                        <div className="flex items-center gap-3 mb-3">
-                                            <div className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center flex-shrink-0 ${darkMode ? "border-white bg-white/10" : "border-black bg-yellow-300"}`}>
-                                                {getCategoryIcon(scannedTransaction.category)}
-                                            </div>
-                                            <div className="flex-1">
-                                                <h3 className="text-sm font-black uppercase leading-tight">{scannedTransaction.title}</h3>
-                                                <div className="flex gap-2 text-[9px] font-bold opacity-60 mt-0.5">
-                                                    <span>{scannedTransaction.category}</span>
-                                                    <span>•</span>
-                                                    <span>{scannedTransaction.date}</span>
-                                                </div>
-                                            </div>
-                                            <div className={`text-right font-mono font-black text-lg ${scannedTransaction.amount > 0 ? "text-green-500" : (darkMode ? "text-red-400" : "text-red-600")}`}>
-                                                {isGhostMode ? "RM ****" : `${scannedTransaction.amount > 0 ? "+" : ""}${scannedTransaction.amount.toFixed(2)}`}
-                                            </div>
-                                        </div>
-                                    </div>
 
-                                    {/* Editable Fields */}
-                                    <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Tarikh</label>
-                                        <input
-                                            type="date"
-                                            value={scannedTransaction.isoDate || ""}
-                                            onChange={(e) => {
-                                                const newIso = e.target.value;
-                                                const dateObj = new Date(newIso);
-                                                const newDateStr = dateObj.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
-                                                setScannedTransaction({ ...scannedTransaction, isoDate: newIso, date: newDateStr });
-                                            }}
-                                            className={inputStyle}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Tajuk / Kedai</label>
-                                        <input
-                                            type="text"
-                                            value={scannedTransaction.title}
-                                            onChange={(e) => setScannedTransaction({ ...scannedTransaction, title: e.target.value })}
-                                            className={inputStyle}
-                                            autoFocus
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Jumlah (RM)</label>
-                                        <input
-                                            type="number"
-                                            value={Math.abs(scannedTransaction.amount)}
-                                            onChange={(e) => {
-                                                const val = parseFloat(e.target.value) || 0;
-                                                setScannedTransaction({ ...scannedTransaction, amount: scannedTransaction.category === "Income" ? Math.abs(val) : -Math.abs(val) });
-                                            }}
-                                            className={`${inputStyle} text-xl font-mono`}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Kategori</label>
-                                        <select
-                                            value={scannedTransaction.category}
-                                            onChange={(e) => {
-                                                const newCategory = e.target.value;
-                                                const isIncome = newCategory === "Income";
-                                                setScannedTransaction({
-                                                    ...scannedTransaction,
-                                                    category: newCategory,
-                                                    amount: isIncome ? Math.abs(scannedTransaction.amount) : -Math.abs(scannedTransaction.amount)
-                                                });
-                                            }}
-                                            className={`${inputStyle} appearance-none`}
-                                        >
-                                            {ALL_CATEGORIES.map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
-                                            ))}
-                                        </select>
+                                        <div className={`p-4 rounded-xl border-2 ${darkMode ? "bg-white/5 border-white/20" : "bg-gray-50 border-black/10"}`}>
+                                            <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider text-center">Amount (RM)</label>
+                                            <input
+                                                type="number"
+                                                value={Math.abs(scannedTransaction.amount)}
+                                                onChange={(e) => {
+                                                    const val = parseFloat(e.target.value) || 0;
+                                                    setScannedTransaction({ ...scannedTransaction, amount: scannedTransaction.category === "Income" ? Math.abs(val) : -Math.abs(val) });
+                                                }}
+                                                className={`w-full bg-transparent text-center text-3xl font-black font-mono outline-none ${darkMode ? "text-white" : "text-black"}`}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             ) : null}
 
-                            <div className="flex gap-2 p-6 border-t-2 border-current border-opacity-20 flex-shrink-0">
+                            <div className={`flex gap-3 p-6 border-t-2 ${darkMode ? "border-white" : "border-black"} bg-opacity-20 flex-shrink-0`}>
                                 <button
                                     onClick={() => {
                                         setShowScanResultModal(false);
                                         setScannedTransaction(null);
                                         setScannedTransactions([]);
                                     }}
-                                    className={`flex-1 py-3 text-sm ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"}`}
+                                    className={`flex-1 py-3.5 rounded-xl border-2 text-xs font-black uppercase transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-gray-100"}`}
                                 >
-                                    BATAL
+                                    Cancel
                                 </button>
                                 <button
                                     onClick={() => {
@@ -1995,9 +1993,9 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                             alert("Transaksi berjaya disimpan!");
                                         }
                                     }}
-                                    className={`flex-1 py-3 text-sm ${buttonBase} ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
+                                    className={`flex-1 py-3.5 rounded-xl border-2 text-xs font-black uppercase transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
                                 >
-                                    {scannedTransactions.length > 0 ? `SIMPAN ${scannedTransactions.length} ITEM` : "SIMPAN"}
+                                    {scannedTransactions.length > 0 ? `Confirm All (${scannedTransactions.length})` : "Confirm & Save"}
                                 </button>
                             </div>
 
