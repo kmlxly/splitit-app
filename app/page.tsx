@@ -135,6 +135,7 @@ export default function Home() {
           if (billError) console.error("Dashboard Bill Error:", billError);
 
           if (myBills) {
+            console.log(`[Dashboard] Found ${myBills.length} bills.`);
             // Map bills to sessions to calculate totals
             mySessions.forEach(sess => {
               // Assumption: Owner is the first person ('p1') or the one named "Aku" if we want to be fancy.
@@ -148,8 +149,14 @@ export default function Home() {
                   // People owe ME
                   const myDetail = b.details?.find((d: any) => d.personId === myPersonId);
                   // If myDetail missing, assume 0 share (I paid for everyone else completely)
-                  const myShare = myDetail ? myDetail.total : 0;
-                  totalOwed += (b.total_amount - myShare);
+                  const myShare = myDetail ? Number(myDetail.total) : 0;
+                  const totalAmt = Number(b.total_amount);
+
+                  const owed = totalAmt - myShare;
+
+                  if (!isNaN(owed)) {
+                    totalOwed += owed;
+                  }
                 }
               });
             });
