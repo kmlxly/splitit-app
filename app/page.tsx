@@ -115,31 +115,29 @@ export default function Home() {
         let currentBalance = 0;
         let nextBillLabel = "Tiada Data";
 
-        // 1. SPLITIT: Fetch Sessions & Bills Separate (More Robust)
+        // 1. SPLITIT: Fetch Sessions (with People) & Bills
         const { data: mySessions } = await supabase
           .from('sessions')
-          .select('id')
+          .select('id, people, bills(total_amount, paid_by, details)')
           .eq('owner_id', userId);
 
-        if (mySessions && mySessions.length > 0) {
-          const sessionIds = mySessions.map(s => s.id);
-          const { data: bills } = await supabase
-            .from('bills')
-            .select('total_amount, paid_by, details')
-            .in('session_id', sessionIds);
+        if (mySessions) {
+          mySessions.forEach((sess: any) => {
+            // Identify "Me" (Owner is usually first person)
+            const myPersonId = sess.people && sess.people.length > 0 ? sess.people[0].id : 'p1';
 
-          if (bills) {
-            bills.forEach((b: any) => {
-              // Logic: If I (p1) paid, how much do others owe me?
-              // Note: 'p1' is a placeholder. ideally we check based on user mapping.
-              // For now, assuming p1 is Owner.
-              if (b.paid_by === 'p1') {
-                const myDetail = b.details?.find((d: any) => d.personId === 'p1');
-                const myShare = myDetail ? myDetail.total : 0;
-                totalOwed += (b.total_amount - myShare);
-              }
-            });
-          }
+            if (sess.bills) {
+              sess.bills.forEach((b: any) => {
+                // If "I" paid
+                if (b.paid_by === myPersonId) {
+                  // Calculate how much others owe me (Total - My Share)
+                  const myDetail = b.details?.find((d: any) => d.personId === myPersonId);
+                  const myShare = myDetail ? myDetail.total : 0;
+                  totalOwed += (b.total_amount - myShare);
+                }
+              });
+            }
+          });
         }
 
         // 2. BUDGET.AI: "Baki Poket"
