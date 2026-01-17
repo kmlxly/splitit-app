@@ -138,14 +138,18 @@ export default function Home() {
             console.log(`[Dashboard] Found ${myBills.length} bills.`);
             // Map bills to sessions to calculate totals
             mySessions.forEach(sess => {
-              // Assumption: Owner is the first person ('p1') or the one named "Aku" if we want to be fancy.
-              // For now, sticking to Index 0 as per SplitIt logic for Creator.
-              const myPersonId = sess.people && sess.people.length > 0 ? sess.people[0].id : 'p1';
+              // HARDENED LOGIC: Find "Me"
+              // 1. Try to find person with id "p1" (Standard Creator ID)
+              // 2. Fallback to first person in list
+              const p1Exists = sess.people?.find((p: any) => p.id === 'p1');
+              const myPersonId = p1Exists ? 'p1' : (sess.people && sess.people.length > 0 ? sess.people[0].id : 'p1');
 
               const sessBills = myBills.filter((b: any) => b.session_id === sess.id);
 
               sessBills.forEach((b: any) => {
-                if (b.paid_by === myPersonId) {
+                const paidBy = b.paid_by || "";
+
+                if (paidBy === myPersonId) {
                   // People owe ME
                   const myDetail = b.details?.find((d: any) => d.personId === myPersonId);
                   // If myDetail missing, assume 0 share (I paid for everyone else completely)
