@@ -144,10 +144,13 @@ export default function Home() {
               const p1Exists = sess.people?.find((p: any) => p.id === 'p1');
               const myPersonId = p1Exists ? 'p1' : (sess.people && sess.people.length > 0 ? sess.people[0].id : 'p1');
 
+              console.log(`[Dashboard Debug] Session: ${sess.id}, Me: ${myPersonId}`);
+
               const sessBills = myBills.filter((b: any) => b.session_id === sess.id);
 
               sessBills.forEach((b: any) => {
                 const paidBy = b.paid_by || "";
+                console.log(`[Dashboard Debug] Bill: ${b.title}, PaidBy: ${paidBy}, Total: ${b.total_amount}`);
 
                 if (paidBy === myPersonId) {
                   // People owe ME
@@ -157,6 +160,7 @@ export default function Home() {
                   const totalAmt = Number(b.total_amount);
 
                   const owed = totalAmt - myShare;
+                  console.log(`   -> My Share: ${myShare}, Owed to Me: ${owed}`);
 
                   if (!isNaN(owed)) {
                     totalOwed += owed;
