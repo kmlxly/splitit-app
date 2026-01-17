@@ -1129,6 +1129,7 @@ function SplitItContent() {
 
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
+            <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
 
 
 
@@ -1136,55 +1137,55 @@ function SplitItContent() {
 
 
 
-            {/* Header Mobile Style */}
-            <div className={`sticky top-0 z-50 px-4 py-3 shadow-sm flex items-center justify-between transition-colors ${darkMode ? "bg-gray-900/90 border-b border-gray-800" : "bg-white/90 border-b border-gray-200"} backdrop-blur-md`}>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => router.push("/")} className={`p-2 rounded-full ${darkMode ? "hover:bg-gray-800" : "hover:bg-gray-100"}`}>
-                        <ArrowRight className="w-5 h-5 rotate-180" />
-                    </button>
-                    <div>
-                        <h1 className="font-bold text-lg leading-tight flex items-center gap-2">
-                            {activeSession?.name || "SplitIt"}
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold tracking-wider">BETA</span>
-                        </h1>
-                        <div className="flex items-center gap-2 text-xs opacity-70">
-                            <span>{isLoaded ? (user ? (syncStatus === "SAVING" ? "Saving..." : syncStatus === "SAVED" ? "Cloud Synced" : "Error Saving") : "Offline Mode") : "Loading..."}</span>
+                {/* Header Mobile Style */}
+                <div className={`sticky top-0 z-50 px-4 py-3 shadow-sm flex items-center justify-between transition-colors ${darkMode ? "bg-gray-900/90 border-b border-gray-800" : "bg-white/90 border-b border-gray-200"} backdrop-blur-md`}>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => router.push("/")} className={`p-2 rounded-full ${darkMode ? "hover:bg-gray-800" : "hover:bg-gray-100"}`}>
+                            <ArrowRight className="w-5 h-5 rotate-180" />
+                        </button>
+                        <div>
+                            <h1 className="font-bold text-lg leading-tight flex items-center gap-2">
+                                {activeSession?.name || "SplitIt"}
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold tracking-wider">BETA</span>
+                            </h1>
+                            <div className="flex items-center gap-2 text-xs opacity-70">
+                                <span>{isLoaded ? (user ? (syncStatus === "SAVING" ? "Saving..." : syncStatus === "SAVED" ? "Cloud Synced" : "Error Saving") : "Offline Mode") : "Loading..."}</span>
+                            </div>
                         </div>
                     </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {/* DEBUG SYNC BUTTON */}
+                        {user && (
+                            <button onClick={forceSync} className="h-9 px-2 rounded-lg bg-blue-600 text-white text-[10px] font-bold flex items-center shadow-md active:scale-95">
+                                SYNC
+                            </button>
+                        )}
+
+                        {/* LOGIC BUTTON: Invite / Login */}
+                        {user ? (
+                            <button onClick={() => setShowInviteModal(true)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"}`}>
+                                <UserPlus size={16} />
+                            </button>
+                        ) : (
+                            <button onClick={handleLoginClick} className={`w-auto px-3 h-9 rounded-lg border-2 flex items-center justify-center gap-1 transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white"}`}>
+                                <span className="text-[10px] font-black uppercase">LOGIN</span>
+                            </button>
+                        )}
+
+                        <button onClick={() => setShowCurrencyModal(true)} className={`h-9 px-2 min-w-[36px] rounded-lg border-2 text-[10px] font-black flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}>
+                            {currency}
+                        </button>
+
+                        <button onClick={() => setShowSessionModal(true)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}>
+                            <Folder size={16} />
+                        </button>
+
+                        <button onClick={() => setDarkMode(!darkMode)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-white text-black shadow-none" : "border-black bg-black text-white"}`}>
+                            {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+                        </button>
+                    </div>
                 </div>
-
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {/* DEBUG SYNC BUTTON */}
-                    {user && (
-                        <button onClick={forceSync} className="h-9 px-2 rounded-lg bg-blue-600 text-white text-[10px] font-bold flex items-center shadow-md active:scale-95">
-                            SYNC
-                        </button>
-                    )}
-
-                    {/* LOGIC BUTTON: Invite / Login */}
-                    {user ? (
-                        <button onClick={() => setShowInviteModal(true)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"}`}>
-                            <UserPlus size={16} />
-                        </button>
-                    ) : (
-                        <button onClick={handleLoginClick} className={`w-auto px-3 h-9 rounded-lg border-2 flex items-center justify-center gap-1 transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white"}`}>
-                            <span className="text-[10px] font-black uppercase">LOGIN</span>
-                        </button>
-                    )}
-
-                    <button onClick={() => setShowCurrencyModal(true)} className={`h-9 px-2 min-w-[36px] rounded-lg border-2 text-[10px] font-black flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}>
-                        {currency}
-                    </button>
-
-                    <button onClick={() => setShowSessionModal(true)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}>
-                        <Folder size={16} />
-                    </button>
-
-                    <button onClick={() => setDarkMode(!darkMode)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-white text-black shadow-none" : "border-black bg-black text-white"}`}>
-                        {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-                    </button>
-                </div>
-
 
                 <main className="flex-1 p-6 flex flex-col gap-8 relative z-10">
                     {/* DASHBOARD */}
