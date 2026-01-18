@@ -842,21 +842,73 @@ function SplitItContent() {
     };
 
     const calculateSettlement = () => {
-        let bal: Record<string, number> = {}; people.forEach(p => bal[p.id] = 0);
+        // 1. Kira Net Balance Individu (Untuk Kad Atas) - Kekal Logik Asal
+        let bal: Record<string, number> = {};
+        people.forEach(p => bal[p.id] = 0);
+
         bills.forEach(b => {
-            bal[b.paidBy] += b.totalAmount;
-            b.details.forEach(d => { bal[d.personId] -= d.total; });
+            // Payer dapat Credit (+)
+            if (bal[b.paidBy] !== undefined) bal[b.paidBy] += b.totalAmount;
+
+            // Consumer dapat Debit (-)
+            b.details.forEach(d => {
+                if (bal[d.personId] !== undefined) bal[d.personId] -= d.total;
+            });
         });
-        const netPeople = people.map(p => ({ ...p, net: bal[p.id] || 0 }));
-        let debtors = netPeople.filter(p => p.net < -0.01).map(p => ({ ...p, net: Math.abs(p.net) })).sort((a, b) => b.net - a.net);
-        let creditors = netPeople.filter(p => p.net > 0.01).sort((a, b) => b.net - a.net);
-        let txs: Transfer[] = []; let i = 0, j = 0;
-        while (i < debtors.length && j < creditors.length) {
-            let amt = Math.min(debtors[i].net, creditors[j].net);
-            if (amt > 0.01) txs.push({ fromId: debtors[i].id, fromName: debtors[i].name, toId: creditors[j].id, toName: creditors[j].name, amount: amt });
-            debtors[i].net -= amt; creditors[j].net -= amt;
-            if (debtors[i].net < 0.01) i++; if (creditors[j].net < 0.01) j++;
-        }
+
+        const netPeople = people.map(p => ({ ...p, net: bal[p.id] || 0 })).sort((a, b) => b.net - a.net);
+
+        // 2. Kira Settlement (PAIRWISE - Siapa hutang Siapa directly)
+        // V5 FIX: Guna Pairwise Matriks, bukan Global Simplification.
+        // Ini memastikan A hutang B, B hutang C tidak diringkaskan jadi A hutang C (sebab user confuse).
+
+        let debtMap: Record<string, Record<string, number>> = {};
+
+        people.forEach(p => debtMap[p.id] = {});
+
+        bills.forEach(b => {
+            const payerId = b.paidBy;
+            b.details.forEach(d => {
+                const consumerId = d.personId;
+                // Jika Consumer bukan Payer, dia berhutang dengan Payer
+                if (consumerId !== payerId && d.total > 0) {
+                    if (!debtMap[consumerId]) debtMap[consumerId] = {};
+                    debtMap[consumerId][payerId] = (debtMap[consumerId][payerId] || 0) + d.total;
+                }
+            });
+        });
+
+        let txs: Transfer[] = [];
+        let processed = new Set<string>();
+
+        people.forEach(pA => {
+            people.forEach(pB => {
+                if (pA.id === pB.id) return;
+
+                // Kunci unik untuk pasangan A-B
+                const key = [pA.id, pB.id].sort().join("-");
+                if (processed.has(key)) return;
+
+                // Tengok siapa hutang siapa lagi banyak
+                const aOwesB = debtMap[pA.id]?.[pB.id] || 0;
+                const bOwesA = debtMap[pB.id]?.[pA.id] || 0;
+
+                if (aOwesB > bOwesA) {
+                    const netAmt = aOwesB - bOwesA;
+                    if (netAmt > 0.01) {
+                        txs.push({ fromId: pA.id, fromName: pA.name, toId: pB.id, toName: pB.name, amount: netAmt });
+                    }
+                } else if (bOwesA > aOwesB) {
+                    const netAmt = bOwesA - aOwesB;
+                    if (netAmt > 0.01) {
+                        txs.push({ fromId: pB.id, fromName: pB.name, toId: pA.id, toName: pA.name, amount: netAmt });
+                    }
+                }
+
+                processed.add(key);
+            });
+        });
+
         return { netPeople, txs };
     };
     const { netPeople, txs } = calculateSettlement(); const taxGap = getCalcStatus();
