@@ -139,8 +139,7 @@ export default function Home() {
             // Map bills to sessions to calculate totals
             mySessions.forEach(sess => {
               // HARDENED LOGIC: Find "Me"
-              // 1. Try to find person with id "p1" (Standard Creator ID)
-              // 2. Fallback to first person in list
+              // Priority: ID 'p1' (Default Creator) -> First Person in List
               const p1Exists = sess.people?.find((p: any) => p.id === 'p1');
               const myPersonId = p1Exists ? 'p1' : (sess.people && sess.people.length > 0 ? sess.people[0].id : 'p1');
 
@@ -148,25 +147,34 @@ export default function Home() {
 
               const sessBills = myBills.filter((b: any) => b.session_id === sess.id);
 
+              let mySessionPaid = 0;
+              let mySessionConsumed = 0;
+
               sessBills.forEach((b: any) => {
+                // 1. Credit: Amount I Paid
                 const paidBy = b.paid_by || "";
-                console.log(`[Dashboard Debug] Bill: ${b.title}, PaidBy: ${paidBy}, Total: ${b.total_amount}`);
-
                 if (paidBy === myPersonId) {
-                  // People owe ME
-                  const myDetail = b.details?.find((d: any) => d.personId === myPersonId);
-                  // If myDetail missing, assume 0 share (I paid for everyone else completely)
-                  const myShare = myDetail ? Number(myDetail.total) : 0;
-                  const totalAmt = Number(b.total_amount);
+                  mySessionPaid += Number(b.total_amount);
+                }
 
-                  const owed = totalAmt - myShare;
-                  console.log(`   -> My Share: ${myShare}, Owed to Me: ${owed}`);
-
-                  if (!isNaN(owed)) {
-                    totalOwed += owed;
-                  }
+                // 2. Debit: Amount I Consumed (My Share)
+                const myDetail = b.details?.find((d: any) => d.personId === myPersonId);
+                if (myDetail) {
+                  mySessionConsumed += Number(myDetail.total);
                 }
               });
+
+              // NET BALANCE = PAID - CONSUMED
+              // Postive = Orang hutang aku (Nak Kutip)
+              // Negative = Aku hutang orang (Nak Bayar)
+              const netBalance = mySessionPaid - mySessionConsumed;
+              console.log(`   -> Paid: ${mySessionPaid}, Consumed: ${mySessionConsumed}, Net: ${netBalance}`);
+
+              if (!isNaN(netBalance)) {
+                // Dashboard "Nak Kutip" usually implies "Net Worth" or "Receivables".
+                // Adding positive and negative values gives the true "Pocket Effect".
+                totalOwed += netBalance;
+              }
             });
           }
         }
