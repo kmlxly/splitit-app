@@ -7,7 +7,7 @@ import {
     TrendingUp, TrendingDown, MoreHorizontal,
     ShoppingBag, Coffee, Car, Home, Zap,
     Moon, Sun, ChevronDown, ScanLine, X, Loader2, Utensils, Fuel, Trash2, Pencil, Image as ImageIcon, Calendar, User, Receipt, AlertCircle, ArrowRight, Eye, EyeOff, Target, Search, RotateCcw, Link as LinkIcon, Link2Off,
-    ShieldCheck, AlertTriangle, Activity
+    ShieldCheck, AlertTriangle, Activity, BookOpen
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
 import { supabase } from "@/lib/supabaseClient";
@@ -76,6 +76,13 @@ const getCategoryIcon = (category: string) => {
         case "Bills": return <Zap size={16} />;
         case "Income": return <Wallet size={16} />;
         case "Utility": return <Zap size={16} />;
+        case "Loan": return <Home size={16} />;
+        case "Insurance": return <ShieldCheck size={16} />;
+        case "Savings": return <Target size={16} />;
+        case "Entertainment": return <Coffee size={16} />;
+        case "Digital Service": return <Zap size={16} />;
+        case "Lifestyle": return <Activity size={16} />;
+        case "Education": return <BookOpen size={16} />;
         default: return <ScanLine size={16} />;
     }
 };
@@ -89,7 +96,14 @@ const getCategoryColor = (category: string) => {
         case "Bills": return { bg: "bg-orange-300", text: "text-orange-700", border: "border-orange-700" };
         case "Income": return { bg: "bg-green-300", text: "text-green-700", border: "border-green-700" };
         case "Utility": return { bg: "bg-yellow-300", text: "text-yellow-700", border: "border-yellow-700" };
-        case "Lain-lain": return { bg: "bg-indigo-300", text: "text-indigo-700", border: "border-indigo-700" };
+        case "Loan": return { bg: "bg-red-300", text: "text-red-700", border: "border-red-700" };
+        case "Insurance": return { bg: "bg-indigo-300", text: "text-indigo-700", border: "border-indigo-700" };
+        case "Savings": return { bg: "bg-teal-300", text: "text-teal-700", border: "border-teal-700" };
+        case "Entertainment": return { bg: "bg-fuchsia-300", text: "text-fuchsia-700", border: "border-fuchsia-700" };
+        case "Digital Service": return { bg: "bg-sky-300", text: "text-sky-700", border: "border-sky-700" };
+        case "Lifestyle": return { bg: "bg-rose-300", text: "text-rose-700", border: "border-rose-700" };
+        case "Education": return { bg: "bg-amber-300", text: "text-amber-700", border: "border-amber-700" };
+        case "Lain-lain": return { bg: "bg-gray-300", text: "text-gray-700", border: "border-gray-700" };
         default: return { bg: "bg-gray-300", text: "text-gray-700", border: "border-gray-700" };
     }
 };
@@ -149,9 +163,9 @@ export default function BudgetPage() {
     const [searchQuery, setSearchQuery] = useState("");
 
     // Senarai Kategori (Kita extract keluar supaya senang nak map)
-    const EXPENSE_CATEGORIES = ["Makan", "Transport", "Shopping", "Bills", "Utility", "Lain-lain"];
+    const EXPENSE_CATEGORIES = ["Makan", "Transport", "Shopping", "Bills", "Utility", "Loan", "Insurance", "Savings", "Entertainment", "Digital Service", "Lifestyle", "Education", "Lain-lain"];
     const INCOME_CATEGORIES = ["Income", "Lain-lain"];
-    const ALL_CATEGORIES = ["Makan", "Transport", "Shopping", "Bills", "Income", "Utility", "Lain-lain"];
+    const ALL_CATEGORIES = ["Makan", "Transport", "Shopping", "Bills", "Income", "Utility", "Loan", "Insurance", "Savings", "Entertainment", "Digital Service", "Lifestyle", "Education", "Lain-lain"];
 
     // Form State (Untuk Manual Input)
     const [newTitle, setNewTitle] = useState("");
@@ -213,6 +227,44 @@ export default function BudgetPage() {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // 0.2 Real-time Sync (Listen to Cloud Changes)
+    useEffect(() => {
+        if (user) {
+            const channel = supabase.channel('budget-realtime')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_transactions' }, () => {
+                    // Re-run initSession to get latest data
+                    const syncCloud = async () => {
+                        const { data: cloudTx } = await supabase
+                            .from('budget_transactions')
+                            .select('*')
+                            .eq('user_id', user.id);
+
+                        if (cloudTx) {
+                            const validTx = cloudTx.map((t: any) => ({
+                                id: t.id,
+                                title: t.title,
+                                amount: t.amount,
+                                category: t.category,
+                                date: t.date,
+                                isoDate: t.iso_date
+                            }));
+                            setTransactions(validTx);
+                        }
+                    };
+                    syncCloud();
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => {
+                    // Update commitments if subs change in cloud
+                    // Note: Budget.AI currently loads from local for commitments breakdown, 
+                    // but we should sync it too.
+                    window.dispatchEvent(new Event('storage')); // Trigger internal listener
+                })
+                .subscribe();
+
+            return () => { supabase.removeChannel(channel); };
+        }
+    }, [user]);
 
     // 0.1 SYNC TO CLOUD (Auto-Save)
     useEffect(() => {
@@ -508,11 +560,25 @@ export default function BudgetPage() {
     };
 
     // 2. Delete Handler
-    const handleDelete = (id: number) => {
+    const handleDelete = async (id: number) => {
         // Tanya user dulu (Safety)
         if (confirm("Betul nak buang rekod ni?")) {
+            // 1. Padam dari local state
             const updatedList = transactions.filter(t => t.id !== id);
             setTransactions(updatedList);
+
+            // 2. Padam dari cloud (Jika user login)
+            if (user) {
+                const { error } = await supabase
+                    .from('budget_transactions')
+                    .delete()
+                    .eq('id', id)
+                    .eq('user_id', user.id);
+
+                if (error) {
+                    console.error("Gagal padam rekod di cloud:", error);
+                }
+            }
         }
     };
 

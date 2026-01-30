@@ -315,9 +315,23 @@ export default function SubTrackerPage() {
     };
 
     // Handler: Delete Subscription
-    const handleDelete = (id: number) => {
+    const handleDelete = async (id: number) => {
         if (confirm("Betul nak buang komitmen ni?")) {
+            // 1. Remove from Local State
             setSubs(subs.filter(s => s.id !== id));
+
+            // 2. Remove from Cloud (If Logged In)
+            if (user) {
+                const { error } = await supabase
+                    .from('subscriptions')
+                    .delete()
+                    .eq('id', id)
+                    .eq('user_id', user.id);
+
+                if (error) {
+                    console.error("Gagal padam cloud:", error);
+                }
+            }
         }
     };
 
@@ -334,7 +348,7 @@ export default function SubTrackerPage() {
     };
 
     // Handler: Bayar (Update Date & Sync to Budget.AI)
-    const handlePay = (sub: Subscription) => {
+    const handlePay = async (sub: Subscription) => {
         // 1. Kira tarikh baru
         const currentDue = new Date(sub.nextPaymentDate);
         const nextDue = new Date(currentDue);
@@ -365,17 +379,36 @@ export default function SubTrackerPage() {
 
                 const newTx = {
                     id: Date.now(),
+                    user_id: user?.id, // Link to user if logged in
                     title: `Bayar: ${sub.name}`,
                     amount: -Math.abs(sub.price), // Mesti negatif
-                    category: "Bills",
+                    category: sub.category === "Gym/Health" ? "Lifestyle" : sub.category, // Map category
                     date: displayDate,
                     isoDate: isoDate
                 };
 
+                // Save to localStorage
                 const updatedBudget = [newTx, ...budgetTransactions];
                 localStorage.setItem("budget_data", JSON.stringify(updatedBudget));
 
-                alert(`Berjaya! Tarikh updated ke ${nextDateStr} & Sync ke Budget.AI`);
+                // SYNC TO CLOUD IMMEDIATELY (If logged in)
+                if (user) {
+                    const { error: cloudError } = await supabase
+                        .from('budget_transactions')
+                        .insert([{
+                            id: newTx.id,
+                            user_id: user.id,
+                            title: newTx.title,
+                            amount: newTx.amount,
+                            category: newTx.category,
+                            date: newTx.date,
+                            iso_date: newTx.isoDate // Map to DB column
+                        }]);
+
+                    if (cloudError) console.error("Gagal sync transaksi ke cloud:", cloudError);
+                }
+
+                alert(`Berjaya! Tarikh updated ke ${nextDateStr} & Transaksi direkod dalam Budget.AI (${newTx.category})`);
             } catch (e) {
                 console.error("Failed to sync with budget:", e);
                 alert("Tarikh updated, tapi gagal sync ke Budget.AI");
@@ -682,27 +715,30 @@ export default function SubTrackerPage() {
                                                 </div>
 
                                                 <div className="text-right ml-2">
-                                                    {/* Butang Bayar (Lifestyle) */}
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handlePay(sub);
-                                                        }}
-                                                        className={`mb-1 px-2 py-0.5 rounded border text-[8px] font-black uppercase transition-all active:scale-90 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
-                                                    >
-                                                        BAYAR
-                                                    </button>
                                                     <h3 className={`text-base font-mono font-black ${isUrgent && !darkMode ? "text-black" : darkMode ? "text-white" : "text-black"}`}>{formatPrice(sub.price)}</h3>
-                                                    {/* Countdown Badge dengan Auto-renew indicator */}
-                                                    <div className="flex items-center justify-end gap-1 mt-0.5">
-                                                        {isAutoRenew && (
-                                                            <span title="Tarikh auto-renew bulan depan" className="flex-shrink-0">
-                                                                <RefreshCw size={8} className={darkMode ? "text-blue-400" : "text-blue-600"} />
-                                                            </span>
-                                                        )}
-                                                        <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border inline-block ${isUrgent ? "bg-red-600 text-white border-red-600 animate-pulse" : (darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black")}`}>
+
+                                                    {/* Row: Countdown + Pay Button */}
+                                                    <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                                                        {/* Countdown Badge */}
+                                                        <span className={`text-[8px] font-black uppercase px-2 py-1 rounded border inline-block ${isUrgent ? "bg-red-600 text-white border-red-600 animate-pulse" : (darkMode ? "bg-white/10 text-white border-white/20" : "bg-gray-100 text-black border-black/10")}`}>
                                                             {daysLeft < 0 ? "OVERDUE" : daysLeft === 0 ? "HARI NI!" : `${daysLeft} Hari`}
                                                         </span>
+
+                                                        {/* Butang Bayar (Clean & Linked Design) */}
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handlePay(sub);
+                                                            }}
+                                                            className={`px-3 py-1 rounded border-2 text-[8px] font-black uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[1px] active:translate-y-[1px] flex items-center gap-1 ${darkMode
+                                                                    ? "bg-green-500 border-white text-black hover:bg-green-400"
+                                                                    : "bg-green-400 border-black text-black hover:bg-green-500"
+                                                                }`}
+                                                            title={syncWithBudget ? "Bayar & Rekod ke Budget.AI" : "Bayar (Tanpa Sync)"}
+                                                        >
+                                                            {syncWithBudget && <LinkIcon size={8} />}
+                                                            BAYAR
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -991,9 +1027,21 @@ export default function SubTrackerPage() {
                                     </div>
                                 )}
 
+                                {editingId && (
+                                    <button
+                                        onClick={() => {
+                                            handleDelete(editingId);
+                                            setShowAddModal(false);
+                                        }}
+                                        className={`w-full py-2.5 mt-2 text-[10px] font-black uppercase rounded-xl border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-95`}
+                                    >
+                                        <Trash2 size={12} className="inline mr-1" /> PADAM KOMITMEN
+                                    </button>
+                                )}
+
                                 <button
                                     onClick={handleSaveSubscription}
-                                    className={`w-full py-2.5 mt-1 text-xs ${buttonBase} ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
+                                    className={`w-full py-2.5 mt-2 text-xs ${buttonBase} ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
                                 >
                                     {editingId ? "KEMASKINI" : "SIMPAN"}
                                 </button>

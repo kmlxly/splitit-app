@@ -7,7 +7,7 @@ import {
   LogIn, LogOut, User, Loader2,
   AlertCircle, ArrowRight, X,
   Wallet, Calculator, Sparkles, HelpCircle, ChevronDown, ChevronUp, // Tambah icon Wallet untuk Budget App
-  ArrowDownLeft, CalendarClock, Lock, // Tambah icons untuk Quick Stats
+  ArrowDownLeft, CalendarClock, Lock, RefreshCw, // Tambah icons untuk Quick Stats
   Bot, MessageSquare, Send // Tambah icons untuk AI Chat
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
@@ -104,169 +104,198 @@ export default function Home() {
     }
   };
 
-  // --- EFFECT: Load Stats from Supabase ---
-  useEffect(() => {
-    async function loadStats() {
-      if (!session?.user) return;
+  // --- FUNCTION: Load Stats from Supabase ---
+  const loadStats = React.useCallback(async () => {
+    if (!session?.user) return;
+    setLoadingStats(true);
 
-      try {
-        const userId = session.user.id;
-        let totalOwed = 0;
-        let currentBalance = 0;
-        let nextBillLabel = "Tiada Data";
+    try {
+      const userId = session.user.id;
+      const myEmailPrefix = session.user.email?.split('@')[0].toLowerCase() || "";
 
-        // 1. SPLITIT: Fetch Sessions & Bills (Decoupled for Safety)
-        const { data: mySessions, error: sessionError } = await supabase
-          .from('sessions')
-          .select('id, people')
-          .eq('owner_id', userId);
+      let finalToCollect = 0;
+      let finalPocketBalance = 0;
+      let finalNextBill = "Tiada Data";
 
-        if (sessionError) console.error("Dashboard Session Error:", sessionError);
+      // 1. SPLITIT DATA
+      const { data: membershipData } = await supabase.from('session_members').select('session_id').eq('user_id', userId);
+      const sharedSessionIds = membershipData?.map(m => m.session_id) || [];
 
-        if (mySessions && mySessions.length > 0) {
-          const sessionIds = mySessions.map(s => s.id);
+      const { data: allSessions } = await supabase
+        .from('sessions')
+        .select('id, people, owner_id, paid_status')
+        .or(`owner_id.eq.${userId}${sharedSessionIds.length > 0 ? `,id.in.(${sharedSessionIds.join(',')})` : ''}`);
 
-          // Fetch Bills separately to guarantee data
-          const { data: myBills, error: billError } = await supabase
-            .from('bills')
-            .select('*')
-            .in('session_id', sessionIds);
+      if (allSessions && allSessions.length > 0) {
+        const sessionIds = allSessions.map(s => s.id);
+        const { data: myBills } = await supabase.from('bills').select('*').in('session_id', sessionIds);
 
-          if (billError) console.error("Dashboard Bill Error:", billError);
+        if (myBills) {
+          let totalReceivable = 0;
+          let totalPayable = 0;
 
-          if (myBills) {
-            console.log(`[Dashboard] Found ${myBills.length} bills.`);
-            // Map bills to sessions to calculate totals
-            mySessions.forEach(sess => {
-              // HARDENED LOGIC: Find "Me"
-              // Priority: ID 'p1' (Default Creator) -> First Person in List
-              const p1Exists = sess.people?.find((p: any) => p.id === 'p1');
-              const myPersonId = p1Exists ? 'p1' : (sess.people && sess.people.length > 0 ? sess.people[0].id : 'p1');
+          allSessions.forEach(sess => {
+            const isOwner = sess.owner_id === userId;
+            const people = sess.people || [];
+            const paidStatus = sess.paid_status || {};
+            const peopleIds = people.map((p: any) => p.id);
 
-              console.log(`[Dashboard Debug] Session: ${sess.id}, Me: ${myPersonId}`);
+            // Robust Identity Check
+            let myPersonId = isOwner ? 'p1' : '';
+            const nameMatch = people.find((p: any) => {
+              const n = p.name.toLowerCase();
+              return n === 'aku' || n === 'me' || n === myEmailPrefix;
+            });
 
-              const sessBills = myBills.filter((b: any) => b.session_id === sess.id);
+            if (nameMatch) {
+              if (!isOwner || (isOwner && nameMatch.id === 'p1')) myPersonId = nameMatch.id;
+            }
 
-              let mySessionPaid = 0;
-              let mySessionConsumed = 0;
+            if (!myPersonId) {
+              const guest = people.find((p: any) => p.id !== 'p1');
+              myPersonId = guest ? guest.id : (people[0]?.id || 'p1');
+            }
 
-              sessBills.forEach((b: any) => {
-                // 1. Credit: Amount I Paid
-                const paidBy = b.paid_by || "";
-                if (paidBy === myPersonId) {
-                  mySessionPaid += Number(b.total_amount);
-                }
+            const sessBills = myBills.filter((b: any) => b.session_id === sess.id);
+            let debtMap: Record<string, Record<string, number>> = {};
+            peopleIds.forEach((id: string) => debtMap[id] = {});
 
-                // 2. Debit: Amount I Consumed (My Share)
-                const myDetail = b.details?.find((d: any) => d.personId === myPersonId);
-                if (myDetail) {
-                  mySessionConsumed += Number(myDetail.total);
+            sessBills.forEach((b: any) => {
+              const payerId = b.paid_by;
+              if (!debtMap[payerId]) return;
+              b.details?.forEach((d: any) => {
+                const consumerId = d.personId;
+                if (consumerId !== payerId && d.total > 0 && debtMap[consumerId]) {
+                  debtMap[consumerId][payerId] = (debtMap[consumerId][payerId] || 0) + Number(d.total);
                 }
               });
-
-              // NET BALANCE = PAID - CONSUMED
-              // Postive = Orang hutang aku (Nak Kutip)
-              // Negative = Aku hutang orang (Nak Bayar)
-              const netBalance = mySessionPaid - mySessionConsumed;
-              console.log(`   -> Paid: ${mySessionPaid}, Consumed: ${mySessionConsumed}, Net: ${netBalance}`);
-
-              if (!isNaN(netBalance)) {
-                // Dashboard "Nak Kutip" usually implies "Net Worth" or "Receivables".
-                // Adding positive and negative values gives the true "Pocket Effect".
-                totalOwed += netBalance;
-              }
             });
-          }
+
+            let processed = new Set<string>();
+            peopleIds.forEach((idA: string) => {
+              peopleIds.forEach((idB: string) => {
+                if (idA === idB) return;
+                const key = [idA, idB].sort().join("-");
+                if (processed.has(key)) return;
+
+                const aOwesB = debtMap[idA]?.[idB] || 0;
+                const bOwesA = debtMap[idB]?.[idA] || 0;
+
+                let transfer = null;
+                if (aOwesB > bOwesA) transfer = { from: idA, to: idB, amount: aOwesB - bOwesA };
+                else if (bOwesA > aOwesB) transfer = { from: idB, to: idA, amount: bOwesA - aOwesB };
+
+                if (transfer && transfer.amount > 0.05) {
+                  const isPaid = paidStatus[`${transfer.from}-${transfer.to}`];
+                  if (!isPaid) {
+                    if (transfer.to === myPersonId) totalReceivable += transfer.amount;
+                    if (transfer.from === myPersonId) totalPayable += transfer.amount;
+                  }
+                }
+                processed.add(key);
+              });
+            });
+          });
+          finalToCollect = totalReceivable - totalPayable;
         }
+      }
 
-        // 2. BUDGET.AI: "Baki Poket"
-        try {
-          const { data: budgetData } = await supabase
-            .from('budget_transactions')
-            .select('amount')
-            .eq('user_id', userId);
+      // 2. BUDGET DATA (Current Month Only)
+      const currentMonthStr = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+      const { data: budgetData } = await supabase
+        .from('budget_transactions')
+        .select('amount')
+        .eq('user_id', userId)
+        .gte('iso_date', `${currentMonthStr}-01`)
+        .lte('iso_date', `${currentMonthStr}-31`);
 
-          if (budgetData) {
-            // Formula: Sum of valid amounts
-            currentBalance = budgetData.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      if (budgetData) {
+        finalPocketBalance = budgetData.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      }
+
+      // 3. SUB DATA
+      const { data: subData } = await supabase.from('subscriptions').select('*').eq('user_id', userId);
+      if (subData && subData.length > 0) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let nearestDays = Infinity;
+        let nearestSub: any = null;
+
+        subData.forEach((sub: any) => {
+          if (!sub.first_bill_date) return;
+          const due = new Date(sub.first_bill_date);
+          due.setHours(0, 0, 0, 0);
+          let diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (sub.cycle === "Monthly" && diffDays < 0) {
+            const nextMonth = new Date(due);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            if (nextMonth.getDate() !== due.getDate()) nextMonth.setDate(0);
+            diffDays = Math.ceil((nextMonth.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
           }
-        } catch (e) { console.log("Budget Table likely missing"); }
 
-        // 3. SUB.TRACKER: "Next Bill"
-        try {
-          const { data: subData } = await supabase
-            .from('subscriptions')
-            .select('title, price, first_bill_date, cycle')
-            .eq('user_id', userId);
-
-          if (subData && subData.length > 0) {
-            // Find nearest bill logic
-            const today = new Date();
-            let nearestDays = Infinity;
-            let nearestSub = null;
-
-            subData.forEach((sub: any) => {
-              if (!sub.first_bill_date) return;
-              const firstDate = new Date(sub.first_bill_date);
-              const dayOfMonth = firstDate.getDate();
-
-              // Calculate next occurrence
-              const nextDate = new Date(today.getFullYear(), today.getMonth(), dayOfMonth);
-              if (nextDate < today) {
-                nextDate.setMonth(nextDate.getMonth() + 1);
-              }
-
-              const diffTime = Math.abs(nextDate.getTime() - today.getTime());
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-              if (diffDays < nearestDays) {
-                nearestDays = diffDays;
-                nearestSub = sub;
-              }
-            });
-
-            if (nearestSub) {
-              nextBillLabel = `${(nearestSub as any).title} (${nearestDays} hari)`;
-            }
+          if (diffDays >= 0 && diffDays < nearestDays) {
+            nearestDays = diffDays;
+            nearestSub = sub;
           }
-        } catch (e) { console.log("Sub Table likely missing"); }
-
-        setStats({
-          toCollect: totalOwed,
-          pocketBalance: currentBalance,
-          nextBill: nextBillLabel
         });
 
-      } catch (error) {
-        console.error("Error loading dashboard stats:", error);
-      } finally {
-        setLoadingStats(false);
+        if (nearestSub) {
+          const label = nearestDays === 0 ? "HARI NI!" : `${nearestDays} hari`;
+          finalNextBill = `${nearestSub.title} (${label})`;
+        }
       }
-    }
 
-    if (session) {
-      loadStats();
+      if (Math.abs(finalToCollect) < 0.05) finalToCollect = 0;
+
+      setStats({
+        toCollect: finalToCollect,
+        pocketBalance: finalPocketBalance,
+        nextBill: finalNextBill
+      });
+
+    } catch (err) {
+      console.error("Dashboard Stats Error:", err);
+    } finally {
+      setLoadingStats(false);
     }
   }, [session]);
 
-  // --- EFFECT: Load Dark Mode & Session ---
+  // --- EFFECT: Auth & Initial Load ---
   useEffect(() => {
-    // 1. Dark Mode Check
+    // 1. Dark Mode
     const savedMode = localStorage.getItem("splitit_darkmode");
     if (savedMode !== null) setDarkMode(savedMode === "true");
 
-    // 2. Supabase Session Check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    // 2. Initial Session
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
       setLoadingSession(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    // 3. Auth Listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // --- EFFECT: Real-time Stats ---
+  useEffect(() => {
+    if (session) {
+      loadStats();
+
+      const channel = supabase.channel('dashboard-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'bills' }, () => loadStats())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => loadStats())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_transactions' }, () => loadStats())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => loadStats())
+        .subscribe();
+
+      return () => { supabase.removeChannel(channel); };
+    }
+  }, [session, loadStats]);
 
   // --- HANDLERS ---
   const toggleDarkMode = () => {
@@ -369,81 +398,62 @@ export default function Home() {
           </p>
         </div>
 
-        {/* --- QUICK STATS DASHBOARD (NEW) --- */}
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* --- QUICK STATS DASHBOARD (PILL V3) --- */}
+        <section className="grid grid-cols-3 gap-3 mb-6">
 
-          {/* CARD 1: SPLITIT (Indigo) */}
-          <div className={`border-2 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden ${darkMode ? "border-white bg-[#1E1E1E]" : "border-black bg-white"} shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`}>
-            <div className="flex justify-between items-start mb-2">
-              <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${darkMode ? "bg-indigo-500 text-white border-indigo-400" : "bg-indigo-100 text-indigo-800 border-indigo-800"}`}>
-                NAK KUTIP
+          {/* STAT 1: SPLITIT (KUTIP/BAYAR) */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between items-center px-1">
+              <span className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>
+                {stats.toCollect >= 0 ? "KUTIP" : "BAYAR"}
               </span>
-              <div className={`p-1.5 rounded-lg border ${darkMode ? "border-indigo-400 text-indigo-400" : "border-indigo-800 text-indigo-800"}`}>
-                <ArrowDownLeft size={14} />
+              <div className={stats.toCollect >= 0
+                ? (darkMode ? "text-indigo-400" : "text-indigo-600")
+                : (darkMode ? "text-red-500" : "text-red-600")
+              }>
+                {stats.toCollect >= 0 ? <ArrowDownLeft size={12} /> : <ArrowUpRight size={12} />}
               </div>
             </div>
-
-            <div className="relative">
-              <p className={`text-xl font-mono font-black tracking-tighter ${!session ? "blur-sm opacity-50 select-none" : ""}`}>
-                RM {stats.toCollect.toFixed(2)}
+            <div className={`relative h-8 rounded-full border-2 flex items-center justify-center px-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${stats.toCollect >= 0
+                ? (darkMode ? "bg-indigo-600 border-white text-white" : "bg-indigo-100 border-black text-indigo-900")
+                : (darkMode ? "bg-red-600 border-white text-white" : "bg-red-100 border-black text-red-900")
+              }`}>
+              <p className={`text-[11px] font-black font-mono tracking-tighter truncate ${!session ? "blur-[2px] opacity-50" : ""}`}>
+                RM {Math.abs(stats.toCollect).toFixed(0)}
               </p>
-              {!session && (
-                <div className="absolute inset-0 flex items-center justify-center -translate-y-1">
-                  <Lock size={16} className="opacity-70" />
-                </div>
-              )}
+              {!session && <div className="absolute inset-0 flex items-center justify-center"><Lock size={10} /></div>}
             </div>
-            {!session && <p className="text-[8px] font-bold uppercase opacity-40 mt-1">Login to View</p>}
           </div>
 
-          {/* CARD 2: BUDGET (Orange) */}
-          <div className={`border-2 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden ${darkMode ? "border-white bg-[#1E1E1E]" : "border-black bg-white"} shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`}>
-            <div className="flex justify-between items-start mb-2">
-              <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${darkMode ? "bg-orange-600 text-white border-white" : "bg-orange-100 text-orange-900 border-orange-900"}`}>
-                BAKI POKET
-              </span>
-              <div className={`p-1.5 rounded-lg border ${darkMode ? "border-orange-400 text-orange-400" : "border-orange-900 text-orange-900"}`}>
-                <Wallet size={14} />
-              </div>
+          {/* STAT 2: BUDGET (BAKI) */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between items-center px-1">
+              <span className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>BAKI</span>
+              <Wallet size={12} className={darkMode ? "text-orange-400" : "text-orange-600"} />
             </div>
-
-            <div className="relative">
-              <p className={`text-xl font-mono font-black tracking-tighter ${!session ? "blur-sm opacity-50 select-none" : ""}`}>
-                RM {stats.pocketBalance.toFixed(2)}
+            <div className={`relative h-8 rounded-full border-2 flex items-center justify-center px-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-orange-600 border-white text-white" : "bg-orange-100 border-black text-orange-900"
+              }`}>
+              <p className={`text-[11px] font-black font-mono tracking-tighter truncate ${!session ? "blur-[2px] opacity-50" : ""}`}>
+                RM {stats.pocketBalance.toFixed(0)}
               </p>
-              {!session && (
-                <div className="absolute inset-0 flex items-center justify-center -translate-y-1">
-                  <Lock size={16} className="opacity-70" />
-                </div>
-              )}
+              {!session && <div className="absolute inset-0 flex items-center justify-center"><Lock size={10} /></div>}
             </div>
-            {!session && <p className="text-[8px] font-bold uppercase opacity-40 mt-1">Login to View</p>}
           </div>
 
-          {/* CARD 3: SUB.TRACKER (Pink) */}
-          <div className={`border-2 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden ${darkMode ? "border-white bg-[#1E1E1E]" : "border-black bg-white"} shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`}>
-            <div className="flex justify-between items-start mb-2">
-              <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${darkMode ? "bg-pink-500 text-white border-white" : "bg-pink-100 text-pink-900 border-pink-900"}`}>
-                NEXT BILL
-              </span>
-              <div className={`p-1.5 rounded-lg border ${darkMode ? "border-pink-400 text-pink-400" : "border-pink-900 text-pink-900"}`}>
-                <CalendarClock size={14} />
-              </div>
+          {/* STAT 3: SUB.TRACKER (BIL) */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between items-center px-1">
+              <span className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>BIL</span>
+              <CalendarClock size={12} className={darkMode ? "text-pink-400" : "text-pink-600"} />
             </div>
-
-            <div className="relative">
-              <p className={`text-sm font-mono font-black tracking-tight leading-tight pt-1 ${!session ? "blur-sm opacity-50 select-none" : ""}`}>
-                {stats.nextBill}
+            <div className={`relative h-8 rounded-full border-2 flex items-center justify-center px-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-pink-600 border-white text-white" : "bg-pink-100 border-black text-pink-900"
+              }`}>
+              <p className={`text-[9px] font-black uppercase truncate leading-none text-center ${!session ? "blur-[2px] opacity-50" : ""}`}>
+                {stats.nextBill.split(' (')[0]}
               </p>
-              {!session && (
-                <div className="absolute inset-0 flex items-center justify-center -translate-y-1">
-                  <Lock size={16} className="opacity-70" />
-                </div>
-              )}
+              {!session && <div className="absolute inset-0 flex items-center justify-center"><Lock size={10} /></div>}
             </div>
-            {!session && <p className="text-[8px] font-bold uppercase opacity-40 mt-1">Login to View</p>}
           </div>
-
         </section>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -492,28 +502,30 @@ export default function Home() {
             </div>
           </Link>
 
-          {/* APP 3: SUB.TRACKER (COMING SOON) */}
-          <div className={disabledCardStyle}>
+          {/* APP 3: SUB.TRACKER (ACTIVE) */}
+          <Link href="/sub-tracker" className={cardStyle}>
             <div className="flex justify-between items-start mb-4">
-              <div className={`p-3 rounded-xl border-2 grayscale opacity-70 ${darkMode ? "bg-pink-500 border-white text-white" : "bg-pink-100 border-pink-900 text-pink-900"}`}>
-                <Sparkles size={24} />
+              <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-pink-600 border-white text-white" : "bg-pink-100 border-pink-900 text-pink-900"}`}>
+                <RefreshCw size={24} />
               </div>
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-gray-500/20 text-gray-500 border border-current">COMING SOON</span>
+              <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
             </div>
 
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-xl font-black uppercase opacity-60">Sub.Tracker</h3>
-              <span className="bg-gray-400 text-white text-[9px] px-1.5 py-0.5 rounded border border-black font-black grayscale opacity-70">NEW</span>
+              <h3 className="text-xl font-black uppercase">Sub.Tracker</h3>
+              <span className="bg-pink-500 text-white text-[9px] px-1.5 py-0.5 rounded border border-black font-black flex items-center gap-1">
+                LIVE
+              </span>
             </div>
 
-            <p className="text-xs font-bold opacity-40 leading-relaxed">
+            <p className="text-xs font-bold opacity-60 leading-relaxed">
               Urus komitmen wajib & subscription lifestyle. Realiti check kos setahun.
             </p>
-            <div className="mt-4 pt-4 border-t border-dashed border-current border-opacity-20 flex gap-2 opacity-50">
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current">Fixed Cost</span>
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current">Lifestyle</span>
+            <div className="mt-4 pt-4 border-t border-dashed border-current border-opacity-20 flex gap-2">
+              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Fixed Cost</span>
+              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Lifestyle</span>
             </div>
-          </div>
+          </Link>
 
           {/* APP 4: NEXT PROJECT IDEA (Kekal Asal) */}
           <div className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-50 ${darkMode ? "border-white" : "border-black"}`}>

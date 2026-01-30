@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 // --- 1. HELPER FUNCTIONS ---
-const APP_VERSION = "v5.0.0-beta (Multi-Currency)";
+const APP_VERSION = "v5.1.0 (Real-time Sync)";
 
 // --- 2. CURRENCY API HELPER (FREE) ---
 // Mapping: App Symbol -> API Currency Code
