@@ -6,7 +6,7 @@ import {
     ArrowLeft, Camera, Plus, Wallet,
     TrendingUp, TrendingDown, MoreHorizontal,
     ShoppingBag, Coffee, Car, Home, Zap,
-    Moon, Sun, ChevronDown, ScanLine, X, Loader2, Utensils, Fuel, Trash2, Pencil, Image as ImageIcon, Calendar, User, Receipt, AlertCircle, ArrowRight, Eye, EyeOff, Target, Search, RotateCcw, Link as LinkIcon, Link2Off,
+    Moon, Sun, ChevronDown, ChevronLeft, ChevronRight, ScanLine, X, Loader2, Utensils, Fuel, Trash2, Pencil, Image as ImageIcon, Calendar, User, Receipt, AlertCircle, ArrowRight, Eye, EyeOff, Target, Search, RotateCcw, Link as LinkIcon, Link2Off, Sparkles,
     ShieldCheck, AlertTriangle, Activity, BookOpen
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
@@ -162,6 +162,10 @@ export default function BudgetPage() {
     // Smart Search Bar State
     const [searchQuery, setSearchQuery] = useState("");
 
+    // NEW: Month Slider Offset
+    const [monthOffset, setMonthOffset] = useState(0);
+    const [showWrappedModal, setShowWrappedModal] = useState(false);
+
     // Senarai Kategori (Kita extract keluar supaya senang nak map)
     const EXPENSE_CATEGORIES = ["Makan", "Transport", "Shopping", "Bills", "Utility", "Loan", "Insurance", "Savings", "Entertainment", "Digital Service", "Lifestyle", "Education", "Lain-lain"];
     const INCOME_CATEGORIES = ["Income", "Lain-lain"];
@@ -185,6 +189,16 @@ export default function BudgetPage() {
 
     // Ref untuk Input Kamera
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const monthScrollRef = useRef<HTMLDivElement>(null);
+
+    const scrollToMonth = (year: number, month: number, isSmooth = true) => {
+        const element = document.getElementById(`month-${year}-${month}`);
+        if (element && monthScrollRef.current) {
+            const container = monthScrollRef.current;
+            const scrollLeft = element.offsetLeft - container.offsetWidth / 2 + element.offsetWidth / 2;
+            container.scrollTo({ left: scrollLeft, behavior: isSmooth ? 'smooth' : 'auto' });
+        }
+    };
 
     // --- EFFECT: LOAD & SAVE DATA ---
 
@@ -227,6 +241,16 @@ export default function BudgetPage() {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // Initial Scroll to current month
+    useEffect(() => {
+        if (transactions.length > 0) {
+            const now = new Date();
+            setTimeout(() => {
+                scrollToMonth(now.getFullYear(), now.getMonth(), false);
+            }, 500);
+        }
+    }, [transactions.length > 0]);
 
     // 0.2 Real-time Sync (Listen to Cloud Changes)
     useEffect(() => {
@@ -1097,27 +1121,127 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {/* --- MAIN CONTENT --- */}
                 <main className="flex-1 p-6 flex flex-col gap-6">
 
+                    {/* QUICK MONTH SELECTOR & REVIEW */}
+                    <section className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-[10px] font-black uppercase tracking-widest opacity-60 flex items-center gap-2">
+                                <Calendar size={12} /> Review Belanja
+                            </h2>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowWrappedModal(true)}
+                                    className={`text-[8px] font-black uppercase px-2 py-1 rounded border-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white border-transparent animate-shimmer shadow-lg active:scale-95`}
+                                >
+                                    <Sparkles size={8} className="inline mr-1" /> Wrapped
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const now = new Date();
+                                        setSelectedDate(new Date(now.getFullYear(), now.getMonth(), 1));
+                                        scrollToMonth(now.getFullYear(), now.getMonth());
+                                    }}
+                                    className={`text-[8px] font-black uppercase px-2 py-1 rounded border-2 transition-all active:scale-95 ${darkMode ? "border-white/20 hover:border-white" : "border-black/20 hover:border-black"}`}
+                                >
+                                    Bulan Ini
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="relative group">
+                            {/* SUBTLE ARROWS FOR AFFORDANCE */}
+                            <button
+                                onClick={() => {
+                                    if (monthScrollRef.current) monthScrollRef.current.scrollBy({ left: -200, behavior: 'smooth' });
+                                }}
+                                className={`absolute -left-2 top-1/2 -translate-y-1/2 z-20 p-1 rounded-full border-2 bg-white/10 backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 ${darkMode ? "border-white text-white" : "border-black text-black"}`}
+                            >
+                                <ChevronLeft size={14} />
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    if (monthScrollRef.current) monthScrollRef.current.scrollBy({ left: 200, behavior: 'smooth' });
+                                }}
+                                className={`absolute -right-2 top-1/2 -translate-y-1/2 z-20 p-1 rounded-full border-2 bg-white/10 backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 ${darkMode ? "border-white text-white" : "border-black text-black"}`}
+                            >
+                                <ChevronRight size={14} />
+                            </button>
+
+                            <div
+                                ref={monthScrollRef}
+                                className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide flex-nowrap snap-x snap-mandatory touch-pan-x"
+                            >
+                                {(() => {
+                                    const months = [];
+                                    const now = new Date();
+                                    // Range yang lebih luas tapi butang lebih kecil
+                                    for (let i = -12; i <= 12; i++) {
+                                        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+                                        months.push(d);
+                                    }
+                                    return months.map((m, idx) => {
+                                        const isSelected = m.getMonth() === selectedDate.getMonth() && m.getFullYear() === selectedDate.getFullYear();
+                                        const isRealCurrentMonth = m.getMonth() === now.getMonth() && m.getFullYear() === now.getFullYear();
+                                        const monthName = m.toLocaleDateString('default', { month: 'short' });
+                                        const yearLabel = m.getFullYear();
+                                        const mYear = m.getFullYear();
+                                        const mMonth = m.getMonth();
+
+                                        const mTotal = transactions.filter(t => {
+                                            if (!t.isoDate) return false;
+                                            const td = new Date(t.isoDate);
+                                            return td.getFullYear() === mYear && td.getMonth() === mMonth && t.amount < 0;
+                                        }).reduce((acc, curr) => acc + Math.abs(curr.amount), 0);
+
+                                        return (
+                                            <button
+                                                key={idx}
+                                                id={`month-${mYear}-${mMonth}`}
+                                                onClick={() => setSelectedDate(new Date(m.getFullYear(), m.getMonth(), 1))}
+                                                className={`flex-shrink-0 min-w-[65px] p-2 rounded-xl border-2 transition-all active:scale-95 flex flex-col items-center gap-0 relative snap-center ${isSelected
+                                                    ? (darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]")
+                                                    : (darkMode ? "bg-white/5 border-white/10 opacity-60" : "bg-white border-black opacity-60")
+                                                    }`}
+                                            >
+                                                {isRealCurrentMonth && (
+                                                    <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                                    </span>
+                                                )}
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-[10px] font-black uppercase tracking-tighter">{monthName}</span>
+                                                    <span className="text-[6px] font-bold opacity-40 -mt-1">{yearLabel}</span>
+                                                </div>
+                                                <span className="text-[8px] font-mono font-bold">RM {mTotal.toFixed(0)}</span>
+                                            </button>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                    </section>
+
                     {/* 1. BALANCE CARD */}
                     <section className={`${cardStyle} p-6 ${shadowStyle} relative overflow-hidden transition-all duration-500 ${darkMode ? "bg-[#222]" : showSafeToSpend ? "bg-emerald-400" : "bg-orange-400"}`}>
                         <div className="absolute -right-4 -top-4 opacity-20"><Wallet size={120} /></div>
-
-                        {/* Toggle Link Sub.Tracker */}
-                        <button
-                            onClick={() => setShowSafeToSpend(!showSafeToSpend)}
-                            className={`absolute top-4 right-4 p-2 rounded-lg border-2 z-20 transition-all active:scale-95 ${darkMode ? "border-white/20 bg-black/40 hover:bg-black" : "border-black/20 bg-white/40 hover:bg-white"}`}
-                            title={showSafeToSpend ? "Unlink Sub.Tracker" : "Link Sub.Tracker"}
-                        >
-                            {showSafeToSpend ? <LinkIcon size={14} /> : <Link2Off size={14} />}
-                        </button>
 
                         <div className="relative z-10">
                             {!showSafeToSpend ? (
                                 /* MODE BIASA: Baki Wallet Sahaja */
                                 <div className="animate-in fade-in slide-in-from-left-4 duration-300">
-                                    <div className="flex justify-between items-start mb-4">
+                                    <div className="flex justify-between items-center mb-4">
                                         <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                                            Baki Wallet
+                                            Baki Wallet • {selectedDate.toLocaleDateString('default', { month: 'short' }).toUpperCase()} {selectedDate.getFullYear()}
                                         </span>
+
+                                        <button
+                                            onClick={() => setShowSafeToSpend(!showSafeToSpend)}
+                                            className={`p-2 rounded-lg border-2 transition-all active:scale-95 ${darkMode ? "border-white/20 hover:border-white" : "border-black/20 hover:border-black"}`}
+                                            title={showSafeToSpend ? "Unlink Sub.Tracker" : "Link Sub.Tracker"}
+                                        >
+                                            {showSafeToSpend ? <LinkIcon size={14} /> : <Link2Off size={14} />}
+                                        </button>
                                     </div>
                                     <h2 className="text-4xl font-mono font-black tracking-tighter mb-1">
                                         {formatCurrency(balance)}
@@ -1129,10 +1253,18 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                             ) : (
                                 /* MODE SAFE-TO-SPEND: Kiraan Bersih */
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                                    <div className="flex justify-between items-start mb-2">
+                                    <div className="flex justify-between items-center mb-2">
                                         <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                                            Safe-To-Spend
+                                            Safe-To-Spend • {selectedDate.toLocaleDateString('default', { month: 'short' }).toUpperCase()} {selectedDate.getFullYear()}
                                         </span>
+
+                                        <button
+                                            onClick={() => setShowSafeToSpend(!showSafeToSpend)}
+                                            className={`p-2 rounded-lg border-2 transition-all active:scale-95 ${darkMode ? "border-white/20 hover:border-white" : "border-black/20 hover:border-black"}`}
+                                            title={showSafeToSpend ? "Unlink Sub.Tracker" : "Link Sub.Tracker"}
+                                        >
+                                            {showSafeToSpend ? <LinkIcon size={14} /> : <Link2Off size={14} />}
+                                        </button>
                                     </div>
 
                                     <div className="space-y-1 mb-3">
@@ -1604,6 +1736,56 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                         ) : (
                             // --- TRANSACTION LIST VIEW ---
                             <div className="space-y-3 pb-20">
+                                {/* QUICK MONTH REVIEW CARD */}
+                                {(() => {
+                                    const filtered = getFilteredTransactions();
+                                    const totalOut = filtered.filter(t => t.amount < 0).reduce((acc, curr) => acc + Math.abs(curr.amount), 0);
+
+                                    // Find Top Category
+                                    const catTotals: Record<string, number> = {};
+                                    filtered.filter(t => t.amount < 0).forEach(t => {
+                                        catTotals[t.category] = (catTotals[t.category] || 0) + Math.abs(t.amount);
+                                    });
+                                    const topCat = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0];
+
+                                    if (totalOut === 0) return null;
+
+                                    return (
+                                        <div className={`${cardStyle} p-4 bg-indigo-50 border-indigo-200 mb-4 animate-in fade-in zoom-in-95`}>
+                                            <div className="flex justify-between items-center mb-3">
+                                                <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-900">Ringkasan {selectedDate.toLocaleDateString('default', { month: 'short' })}</h3>
+                                                <TrendingDown size={14} className="text-indigo-600" />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-[8px] font-bold uppercase opacity-60">Total Belanja</p>
+                                                    <p className="text-sm font-black text-indigo-900">RM {totalOut.toFixed(2)}</p>
+                                                </div>
+                                                {topCat && (
+                                                    <div>
+                                                        <p className="text-[8px] font-bold uppercase opacity-60">Top Kategori</p>
+                                                        <p className="text-sm font-black text-indigo-900 truncate">{topCat[0]}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {budgetLimit > 0 && (
+                                                <div className="mt-3">
+                                                    <div className="flex justify-between text-[7px] font-black uppercase mb-1">
+                                                        <span>Budget Used</span>
+                                                        <span>{((totalOut / budgetLimit) * 100).toFixed(0)}%</span>
+                                                    </div>
+                                                    <div className="h-1.5 w-full bg-indigo-200 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full ${totalOut > budgetLimit ? "bg-red-500" : "bg-indigo-600"}`}
+                                                            style={{ width: `${Math.min(100, (totalOut / budgetLimit) * 100)}%` }}
+                                                        ></div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
                                 {(() => {
                                     const filtered = getFilteredTransactions();
 
@@ -2335,6 +2517,115 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                     </button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- MODAL: BUDGET WRAPPED (YEAR REVIEW) --- */}
+                {showWrappedModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in">
+                        <div className={`w-full max-w-sm p-8 rounded-3xl border-4 ${darkMode ? "bg-black border-indigo-500 text-white" : "bg-white border-indigo-600 text-black"} shadow-[8px_8px_0px_0px_rgba(99,102,241,1)] relative animate-in zoom-in-95 overflow-y-auto max-h-[90vh] scrollbar-hide`}>
+
+                            <button onClick={() => setShowWrappedModal(false)} className="absolute top-6 right-6 opacity-60 hover:opacity-100 transition-opacity"><X size={24} /></button>
+
+                            {(() => {
+                                const currentYear = selectedDate.getFullYear();
+                                const yearTx = transactions.filter(t => {
+                                    if (!t.isoDate) return false;
+                                    return new Date(t.isoDate).getFullYear() === currentYear && t.amount < 0;
+                                });
+
+                                const totalYearOut = yearTx.reduce((acc, curr) => acc + Math.abs(curr.amount), 0);
+
+                                // Month stats
+                                const monthTotals: Record<number, number> = {};
+                                yearTx.forEach(t => {
+                                    const m = new Date(t.isoDate).getMonth();
+                                    monthTotals[m] = (monthTotals[m] || 0) + Math.abs(t.amount);
+                                });
+                                const peakMonthIdx = Object.entries(monthTotals).sort((a, b) => b[1] - a[1])[0];
+                                const peakMonthName = peakMonthIdx ? new Date(2025, parseInt(peakMonthIdx[0]), 1).toLocaleDateString('default', { month: 'long' }) : "Tiada Data";
+
+                                // Category stats
+                                const catTotals: Record<string, number> = {};
+                                yearTx.forEach(t => {
+                                    catTotals[t.category] = (catTotals[t.category] || 0) + Math.abs(t.amount);
+                                });
+                                const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+                                const topCat = sortedCats[0];
+
+                                return (
+                                    <div className="space-y-8 py-4">
+                                        <div className="text-center">
+                                            <div className="inline-block p-4 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white mb-4 animate-bounce">
+                                                <Sparkles size={32} />
+                                            </div>
+                                            <h2 className="text-3xl font-black uppercase italic leading-none tracking-tight">Budget<br />Wrapped {currentYear}</h2>
+                                            <p className="text-[10px] font-bold uppercase opacity-50 tracking-widest mt-2">{user?.email || "Boss Mode"}</p>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            {/* Stat 1: Total Spent */}
+                                            <div className="text-center p-6 rounded-2xl border-2 border-indigo-500 bg-indigo-500/5">
+                                                <p className="text-[10px] font-black uppercase opacity-60 mb-1">Duit Keluar Setahun</p>
+                                                <h3 className="text-4xl font-mono font-black tracking-tighter">RM {totalYearOut.toLocaleString("en-MY", { minimumFractionDigits: 0 })}</h3>
+                                            </div>
+
+                                            {/* Stat 2: Top Category */}
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-xl border-2 border-black bg-orange-400 flex items-center justify-center flex-shrink-0 animate-pulse">
+                                                    <TrendingUp size={24} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase opacity-60">Paling Kuat Belanja</p>
+                                                    <h4 className="text-lg font-black uppercase">{topCat ? topCat[0] : "Lain-lain"}</h4>
+                                                    <p className="text-[10px] font-bold">RM {topCat ? Math.abs(topCat[1]).toFixed(0) : "0"}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Stat 3: Peak Month */}
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-xl border-2 border-black bg-indigo-400 flex items-center justify-center flex-shrink-0">
+                                                    <Calendar size={24} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase opacity-60">Bulan Paling "Parah"</p>
+                                                    <h4 className="text-lg font-black uppercase">{peakMonthName}</h4>
+                                                    <p className="text-[10px] font-bold">Terpaksa lepaskan RM {peakMonthIdx ? Math.abs(peakMonthIdx[1]).toFixed(0) : "0"}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Visual Breakdown */}
+                                            <div className="space-y-2 pt-4">
+                                                <div className="flex justify-between items-end">
+                                                    <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">Spending Breakdown</p>
+                                                    <p className="text-[8px] font-bold uppercase italic">Year Summary</p>
+                                                </div>
+                                                <div className="h-6 w-full flex rounded-lg border-2 border-black overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                                                    {sortedCats.slice(0, 3).map(([name, val], i) => (
+                                                        <div
+                                                            key={name}
+                                                            className={`h-full border-r-[1px] border-black flex items-center justify-center overflow-hidden
+                                                                ${i === 0 ? "bg-indigo-500" : i === 1 ? "bg-purple-500" : "bg-pink-500 text-white"}`}
+                                                            style={{ width: `${(val / totalYearOut) * 100}%` }}
+                                                        >
+                                                            <span className="text-[7px] font-black uppercase text-white px-1 truncate">{name}</span>
+                                                        </div>
+                                                    ))}
+                                                    <div className="h-full bg-gray-200 flex-1"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={() => setShowWrappedModal(false)}
+                                            className="w-full py-4 bg-indigo-600 text-white border-2 border-indigo-700 rounded-2xl font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all active:shadow-none active:translate-x-1 active:translate-y-1"
+                                        >
+                                            MANTAP, TERUSKAN SIMPAN!
+                                        </button>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}

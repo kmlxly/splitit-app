@@ -6,7 +6,7 @@ import {
   Grid, Layout, Moon, Sun, ArrowUpRight,
   LogIn, LogOut, User, Loader2,
   AlertCircle, ArrowRight, X,
-  Wallet, Calculator, Sparkles, HelpCircle, ChevronDown, ChevronUp, Target, // Tambah icon Wallet & Target
+  Wallet, Calculator, Sparkles, HelpCircle, ChevronDown, ChevronUp, // Tambah icon Wallet untuk Budget App
   ArrowDownLeft, CalendarClock, Lock, RefreshCw, // Tambah icons untuk Quick Stats
   Bot, MessageSquare, Send // Tambah icons untuk AI Chat
 } from "lucide-react";
@@ -32,8 +32,7 @@ export default function Home() {
   const [stats, setStats] = useState({
     toCollect: 0,
     pocketBalance: 0,
-    nextBill: "Tiada Data",
-    totalSavings: 0
+    nextBill: "Tiada Data"
   });
   const [loadingStats, setLoadingStats] = useState(true);
 
@@ -117,7 +116,6 @@ export default function Home() {
       let finalToCollect = 0;
       let finalPocketBalance = 0;
       let finalNextBill = "Tiada Data";
-      let finalTotalSavings = 0;
 
       // 1. SPLITIT DATA
       const { data: membershipData } = await supabase.from('session_members').select('session_id').eq('user_id', userId);
@@ -250,17 +248,10 @@ export default function Home() {
 
       if (Math.abs(finalToCollect) < 0.05) finalToCollect = 0;
 
-      // 4. SAVINGS DATA
-      const { data: savingsData } = await supabase.from('savings_goals').select('current_amount').eq('user_id', userId);
-      if (savingsData) {
-        finalTotalSavings = savingsData.reduce((acc, curr) => acc + (curr.current_amount || 0), 0);
-      }
-
       setStats({
         toCollect: finalToCollect,
         pocketBalance: finalPocketBalance,
-        nextBill: finalNextBill,
-        totalSavings: finalTotalSavings
+        nextBill: finalNextBill
       });
 
     } catch (err) {
@@ -300,7 +291,6 @@ export default function Home() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => loadStats())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_transactions' }, () => loadStats())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => loadStats())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'savings_goals' }, () => loadStats())
         .subscribe();
 
       return () => { supabase.removeChannel(channel); };
@@ -538,31 +528,12 @@ export default function Home() {
             </div>
           </Link>
 
-          {/* APP 4: TABUNG.AI (NEW) */}
-          <Link href="/tabung" className={cardStyle}>
-            <div className="flex justify-between items-start mb-4">
-              <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-indigo-600 border-white text-white" : "bg-indigo-100 border-indigo-900 text-indigo-900"}`}>
-                <Target size={24} />
-              </div>
-              <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
-            </div>
-
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-xl font-black uppercase">Tabung.AI</h3>
-              <span className="bg-indigo-500 text-white text-[9px] px-1.5 py-0.5 rounded border border-black font-black animate-pulse flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-white animate-pulse"></span>
-                NEW
-              </span>
-            </div>
-
-            <p className="text-xs font-bold opacity-60 leading-relaxed">
-              Simpan duit ikut matlamat. Pantau progres tabung secara visual.
-            </p>
-            <div className="mt-4 pt-4 border-t border-dashed border-current border-opacity-20 flex gap-2">
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Savings</span>
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Goals</span>
-            </div>
-          </Link>
+          {/* APP 4: NEXT PROJECT IDEA (Kekal Asal) */}
+          <div className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-50 ${darkMode ? "border-white" : "border-black"}`}>
+            <Layout size={32} className="mb-3" />
+            <h3 className="text-lg font-black uppercase">Next Project?</h3>
+            <p className="text-xs font-bold mt-1">Ada Idea App Apa Next?</p>
+          </div>
 
         </div>
 
