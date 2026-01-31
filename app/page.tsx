@@ -7,7 +7,7 @@ import {
   LogIn, LogOut, User, Loader2,
   AlertCircle, ArrowRight, X,
   Wallet, Calculator, Sparkles, HelpCircle, ChevronDown, ChevronUp, // Tambah icon Wallet untuk Budget App
-  ArrowDownLeft, CalendarClock, Lock, RefreshCw, // Tambah icons untuk Quick Stats
+  ArrowDownLeft, CalendarClock, Lock, RefreshCw, Plane, // Tambah icons untuk Quick Stats
   Bot, MessageSquare, Send // Tambah icons untuk AI Chat
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
@@ -336,7 +336,7 @@ export default function Home() {
     <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle} flex flex-col`}>
 
       {/* HEADER */}
-      <header className={`p-6 border-b-2 flex justify-between items-center ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
+      <header className={`px-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-6 border-b-2 flex justify-between items-center ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
 
         {/* Logo Area */}
         <div className="flex items-center gap-3">
@@ -528,7 +528,28 @@ export default function Home() {
             </div>
           </Link>
 
-          {/* APP 4: NEXT PROJECT IDEA (Kekal Asal) */}
+          {/* APP 4: TRIPIT (COMING SOON) */}
+          {/* APP 4: TRIPIT (COMING SOON) */}
+          <div className={disabledCardStyle}>
+            <div className="flex justify-between items-start mb-4">
+              <div className={`p-3 rounded-xl border-2 grayscale ${darkMode ? "bg-indigo-600 border-white text-white" : "bg-indigo-100 border-indigo-900 text-indigo-900"}`}>
+                <Plane size={24} />
+              </div>
+              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">COMING SOON</span>
+            </div>
+
+            <h3 className="text-xl font-black uppercase mb-1">TripIt</h3>
+            <p className="text-xs font-bold opacity-60 leading-relaxed">
+              Travel Planner + Budget. Itinerary, Target Belanja & Split Bill dalam satu app.
+            </p>
+            <div className="mt-4 pt-4 border-t border-dashed border-current border-opacity-20 flex gap-2">
+              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Itinerary</span>
+              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Budget</span>
+              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Split</span>
+            </div>
+          </div>
+
+          {/* APP 5: NEXT PROJECT IDEA */}
           <div className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-50 ${darkMode ? "border-white" : "border-black"}`}>
             <Layout size={32} className="mb-3" />
             <h3 className="text-lg font-black uppercase">Next Project?</h3>

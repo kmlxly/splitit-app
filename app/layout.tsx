@@ -10,6 +10,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false, // Rasa macam native app, tak boleh pinch zoom
   themeColor: "#000000",
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {

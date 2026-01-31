@@ -1041,7 +1041,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
             <div className="max-w-md mx-auto min-h-screen flex flex-col relative">
 
                 {/* --- HEADER --- */}
-                <header className={`px-4 py-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
+                <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
                     <div className="flex justify-between items-center">
 
                         {/* 1. KIRI: Logo & Info (Vertical Stack) */}
