@@ -537,6 +537,65 @@ function SplitItContent() {
         initApp();
     }, []);
 
+    useEffect(() => {
+        if (!isLoaded) return;
+
+        // 1. Check for single item import (existing)
+        const extTitle = searchParams.get("title");
+        const extAmount = searchParams.get("amount");
+        const extCurrency = searchParams.get("currency");
+        if (extTitle || extAmount) {
+            setBillTitle(extTitle || "");
+            setBillTotal(extAmount || "");
+            if (extCurrency) setFormCurrency(extCurrency);
+            setMode("FORM");
+            setBillType("EQUAL");
+            router.replace("/splitit");
+            return;
+        }
+
+        // 2. Check for FULL TRIP IMPORT
+        const importType = searchParams.get("import");
+        if (importType === 'trip') {
+            const rawImport = localStorage.getItem('splitit_trip_import');
+            if (rawImport) {
+                try {
+                    const data = JSON.parse(rawImport);
+                    const newSession: Session = {
+                        id: `trip-${Date.now()}`,
+                        name: data.tripName,
+                        createdAt: Date.now(),
+                        ownerId: user?.id,
+                        people: data.people,
+                        currency: data.currency || "MYR",
+                        bills: data.bills.map((b: any) => ({
+                            ...b,
+                            paidBy: data.people[0]?.id || 'p1',
+                            details: data.people.map((p: any) => ({
+                                personId: p.id,
+                                base: b.totalAmount / data.people.length,
+                                tax: 0,
+                                misc: 0,
+                                discount: 0,
+                                total: b.totalAmount / data.people.length
+                            }))
+                        })),
+                        paidStatus: {},
+                    };
+
+                    setSessions(prev => [newSession, ...prev]);
+                    setActiveSessionId(newSession.id);
+                    setMode("DASHBOARD");
+                    localStorage.removeItem('splitit_trip_import');
+                    router.replace("/splitit");
+                    alert(`✅ Trip "${data.tripName}" successfully imported as a new session!`);
+                } catch (e) {
+                    console.error("Import error", e);
+                }
+            }
+        }
+    }, [isLoaded, searchParams, router, user, sessions.length]);
+
     // 1.5 REALTIME LISTENER (Live Update)
     useEffect(() => {
         if (!user || !activeSessionId) return;

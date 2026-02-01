@@ -12,6 +12,18 @@ import Cropper from 'react-easy-crop';
 import { supabase } from "@/lib/supabaseClient";
 import AuthModal from "@/components/Auth";
 
+const CURRENCY_MAP: Record<string, string> = {
+    "RM": "MYR", "MYR": "MYR", "THB": "THB", "฿": "THB", "IDR": "IDR", "Rp": "IDR",
+    "SGD": "SGD", "S$": "SGD", "VND": "VND", "₫": "VND", "PHP": "PHP", "₱": "PHP",
+    "USD": "USD", "$": "USD", "JPY": "JPY", "¥": "JPY", "CNY": "CNY", "KRW": "KRW",
+    "₩": "KRW", "EUR": "EUR", "€": "EUR", "GBP": "GBP", "£": "GBP", "AUD": "AUD",
+};
+
+const API_TO_SYMBOL: Record<string, string> = {
+    "MYR": "RM", "THB": "฿", "IDR": "Rp", "SGD": "S$", "VND": "₫", "PHP": "₱",
+    "USD": "$", "JPY": "¥", "CNY": "¥", "KRW": "₩", "EUR": "€", "GBP": "£", "AUD": "$",
+};
+
 // Helper to create an image from a URL
 const createImage = (url: string): Promise<HTMLImageElement> =>
     new Promise((resolve, reject) => {
@@ -72,6 +84,8 @@ export default function TripListPage() {
     const [newEndDate, setNewEndDate] = useState("");
     const [newBudget, setNewBudget] = useState("");
     const [newCoverImage, setNewCoverImage] = useState("");
+    const [newCurrency, setNewCurrency] = useState("MYR");
+    const [newDestCurrency, setNewDestCurrency] = useState("SGD");
     const [uploading, setUploading] = useState(false);
 
     // Edit Modal State
@@ -82,6 +96,8 @@ export default function TripListPage() {
     const [editEndDate, setEditEndDate] = useState("");
     const [editBudget, setEditBudget] = useState("");
     const [editCoverImage, setEditCoverImage] = useState("");
+    const [editCurrency, setEditCurrency] = useState("MYR");
+    const [editDestCurrency, setEditDestCurrency] = useState("SGD");
 
     // Cropper State
     const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -89,6 +105,28 @@ export default function TripListPage() {
     const [zoom, setZoom] = useState(1);
     const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
     const [cropMode, setCropMode] = useState<'create' | 'edit'>('create');
+
+    // Offline Mode State
+    const [isOffline, setIsOffline] = useState(false);
+
+    // Monitor Network Status
+    React.useEffect(() => {
+        const handleOnline = () => setIsOffline(false);
+        const handleOffline = () => setIsOffline(true);
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('online', handleOnline);
+            window.addEventListener('offline', handleOffline);
+            if (!navigator.onLine) setIsOffline(true);
+        }
+
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('online', handleOnline);
+                window.removeEventListener('offline', handleOffline);
+            }
+        };
+    }, []);
 
     // --- EFFECT: LOAD DATA ---
     React.useEffect(() => {
@@ -172,6 +210,11 @@ export default function TripListPage() {
 
     const fetchTrips = async (userId: string) => {
         try {
+            // Check offline
+            if (!navigator.onLine) {
+                throw new Error("Offline");
+            }
+
             const { data, error } = await supabase
                 .from('trips')
                 .select('*')
@@ -179,9 +222,26 @@ export default function TripListPage() {
                 .order('start_date', { ascending: true });
 
             if (error) throw error;
+
+            // Save to Cache
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(`offline_trips_list_${userId}`, JSON.stringify(data || []));
+            }
+
             setTrips(data || []);
-        } catch (e) {
-            console.error("Error fetching trips:", e);
+            setIsOffline(false);
+        } catch (e: any) {
+            console.error("Error/Offline fetching trips:", e);
+            setIsOffline(true);
+
+            // Load from Cache
+            if (typeof window !== 'undefined') {
+                const cachedTrips = localStorage.getItem(`offline_trips_list_${userId}`);
+                if (cachedTrips) {
+                    console.log("Loaded trips list from offline cache");
+                    setTrips(JSON.parse(cachedTrips));
+                }
+            }
         } finally {
             setLoading(false);
         }
@@ -203,7 +263,9 @@ export default function TripListPage() {
             start_date: newStartDate,
             end_date: newEndDate || null,
             budget_limit: newBudget ? parseFloat(newBudget) : 0,
-            cover_image: newCoverImage || defaultImages[Math.floor(Math.random() * defaultImages.length)]
+            cover_image: newCoverImage || defaultImages[Math.floor(Math.random() * defaultImages.length)],
+            currency: newCurrency,
+            destination_currency: newDestCurrency
         }).select().single();
 
         if (error) {
@@ -236,6 +298,8 @@ export default function TripListPage() {
         setEditEndDate(trip.end_date || "");
         setEditBudget(trip.budget_limit?.toString() || "");
         setEditCoverImage(trip.cover_image || "");
+        setEditCurrency(trip.currency || "MYR");
+        setEditDestCurrency(trip.destination_currency || "SGD");
         setShowEditModal(true);
     };
 
@@ -248,7 +312,9 @@ export default function TripListPage() {
                 start_date: editStartDate,
                 end_date: editEndDate || null,
                 budget_limit: parseFloat(editBudget) || 0,
-                cover_image: editCoverImage
+                cover_image: editCoverImage,
+                currency: editCurrency,
+                destination_currency: editDestCurrency
             })
             .eq('id', editingTripId);
 
@@ -261,7 +327,9 @@ export default function TripListPage() {
                 start_date: editStartDate,
                 end_date: editEndDate,
                 budget_limit: parseFloat(editBudget),
-                cover_image: editCoverImage
+                cover_image: editCoverImage,
+                currency: editCurrency,
+                destination_currency: editDestCurrency
             } : t));
             setShowEditModal(false);
         }
@@ -432,8 +500,35 @@ export default function TripListPage() {
                                 </div>
                             </div>
 
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="col-span-1">
+                                    <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">Home Currency</label>
+                                    <select
+                                        value={newCurrency}
+                                        onChange={e => setNewCurrency(e.target.value)}
+                                        className={`w-full p-2.5 rounded-xl border-2 font-black outline-none text-sm ${darkMode ? "bg-black border-white" : "bg-gray-50 border-black"}`}
+                                    >
+                                        {Object.keys(API_TO_SYMBOL).map(curr => (
+                                            <option key={curr} value={curr}>{curr} ({API_TO_SYMBOL[curr]})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">Destination</label>
+                                    <select
+                                        value={newDestCurrency}
+                                        onChange={e => setNewDestCurrency(e.target.value)}
+                                        className={`w-full p-2.5 rounded-xl border-2 font-black outline-none text-sm ${darkMode ? "bg-black border-white" : "bg-gray-50 border-black"}`}
+                                    >
+                                        {Object.keys(API_TO_SYMBOL).map(curr => (
+                                            <option key={curr} value={curr}>{curr} ({API_TO_SYMBOL[curr]})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
                             <div>
-                                <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">Budget (RM)</label>
+                                <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">Budget ({API_TO_SYMBOL[newCurrency] || newCurrency})</label>
                                 <input
                                     type="number"
                                     value={newBudget}
@@ -558,8 +653,35 @@ export default function TripListPage() {
                                 </div>
                             </div>
 
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="col-span-1">
+                                    <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">Home Currency</label>
+                                    <select
+                                        value={editCurrency}
+                                        onChange={e => setEditCurrency(e.target.value)}
+                                        className={`w-full p-2.5 rounded-xl border-2 font-black outline-none text-sm ${darkMode ? "bg-black border-white" : "bg-gray-50 border-black"}`}
+                                    >
+                                        {Object.keys(API_TO_SYMBOL).map(curr => (
+                                            <option key={curr} value={curr}>{curr} ({API_TO_SYMBOL[curr]})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">Destination</label>
+                                    <select
+                                        value={editDestCurrency}
+                                        onChange={e => setEditDestCurrency(e.target.value)}
+                                        className={`w-full p-2.5 rounded-xl border-2 font-black outline-none text-sm ${darkMode ? "bg-black border-white" : "bg-gray-50 border-black"}`}
+                                    >
+                                        {Object.keys(API_TO_SYMBOL).map(curr => (
+                                            <option key={curr} value={curr}>{curr} ({API_TO_SYMBOL[curr]})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
                             <div>
-                                <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">Budget (RM)</label>
+                                <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">Budget ({API_TO_SYMBOL[editCurrency] || editCurrency})</label>
                                 <input
                                     type="number"
                                     value={editBudget}
