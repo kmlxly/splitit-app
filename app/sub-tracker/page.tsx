@@ -459,7 +459,7 @@ export default function SubTrackerPage() {
             <div className="max-w-md mx-auto min-h-screen flex flex-col relative">
 
                 {/* --- HEADER (Matched with Budget.AI) --- */}
-                <header className={`px-4 py-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
+                <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
                     <div className="flex justify-between items-center">
 
                         {/* 1. KIRI: Logo & Info (Vertical Stack) */}
@@ -731,8 +731,8 @@ export default function SubTrackerPage() {
                                                                 handlePay(sub);
                                                             }}
                                                             className={`px-3 py-1 rounded border-2 text-[8px] font-black uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[1px] active:translate-y-[1px] flex items-center gap-1 ${darkMode
-                                                                    ? "bg-green-500 border-white text-black hover:bg-green-400"
-                                                                    : "bg-green-400 border-black text-black hover:bg-green-500"
+                                                                ? "bg-green-500 border-white text-black hover:bg-green-400"
+                                                                : "bg-green-400 border-black text-black hover:bg-green-500"
                                                                 }`}
                                                             title={syncWithBudget ? "Bayar & Rekod ke Budget.AI" : "Bayar (Tanpa Sync)"}
                                                         >

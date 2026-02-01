@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
 import { supabase } from "@/lib/supabaseClient";
+import { motion, AnimatePresence } from "framer-motion";
 
 // --- 1. CONFIG & STYLES ---
 const APP_NAME = "Budget.AI";
@@ -1128,12 +1129,17 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                 <Calendar size={12} /> Review Belanja
                             </h2>
                             <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setShowWrappedModal(true)}
-                                    className={`text-[8px] font-black uppercase px-2 py-1 rounded border-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white border-transparent animate-shimmer shadow-lg active:scale-95`}
-                                >
-                                    <Sparkles size={8} className="inline mr-1" /> Wrapped
-                                </button>
+                                <div className="relative group">
+                                    <div className="absolute -inset-[2px] bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 rounded blur opacity-75 bg-[length:200%_auto] animate-[shimmer_4s_linear_infinite]"></div>
+                                    <motion.button
+                                        layoutId="wrapped-modal-trigger"
+                                        onClick={() => setShowWrappedModal(true)}
+                                        className="relative block text-[8px] font-black uppercase px-3 py-1.5 rounded bg-gradient-to-r from-indigo-600 to-purple-600 text-white border border-white/20 active:scale-95 transition-transform flex items-center gap-1 shadow-sm"
+                                    >
+                                        <Sparkles size={10} className="text-yellow-300 animate-[spin_4s_linear_infinite]" />
+                                        WRAPPED
+                                    </motion.button>
+                                </div>
                                 <button
                                     onClick={() => {
                                         const now = new Date();
@@ -2521,114 +2527,142 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                     </div>
                 )}
 
-                {/* --- MODAL: BUDGET WRAPPED (YEAR REVIEW) --- */}
-                {showWrappedModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in">
-                        <div className={`w-full max-w-sm p-8 rounded-3xl border-4 ${darkMode ? "bg-black border-indigo-500 text-white" : "bg-white border-indigo-600 text-black"} shadow-[8px_8px_0px_0px_rgba(99,102,241,1)] relative animate-in zoom-in-95 overflow-y-auto max-h-[90vh] scrollbar-hide`}>
+                {/* --- MODAL: BUDGET WRAPPED (LIQUID MOTION) --- */}
+                <AnimatePresence>
+                    {showWrappedModal && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                            key="wrapped-overlay"
+                        >
+                            <div className="relative w-full max-w-[320px]">
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.5, duration: 1 }}
+                                    className="absolute -inset-[4px] rounded-3xl z-0 overflow-hidden blur-xl"
+                                >
+                                    <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,#6366f1,#a855f7,#ec4899,#6366f1)] animate-[spin_4s_linear_infinite] opacity-100"></div>
+                                    <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_80deg,#6366f1_100deg,transparent_120deg,transparent_260deg,#ec4899_280deg,transparent_300deg)] animate-[spin_4s_linear_infinite] opacity-100 mix-blend-screen"></div>
+                                </motion.div>
+                                <motion.div
+                                    layoutId="wrapped-modal-trigger"
+                                    className={`w-full p-5 rounded-3xl border-4 ${darkMode ? "bg-black border-indigo-500 text-white" : "bg-white border-indigo-600 text-black"} shadow-[6px_6px_0px_0px_rgba(99,102,241,1)] relative overflow-y-auto max-h-[90vh] scrollbar-hide`}
+                                >
 
-                            <button onClick={() => setShowWrappedModal(false)} className="absolute top-6 right-6 opacity-60 hover:opacity-100 transition-opacity"><X size={24} /></button>
+                                    <button onClick={() => setShowWrappedModal(false)} className="absolute top-4 right-4 opacity-60 hover:opacity-100 transition-opacity"><X size={20} /></button>
 
-                            {(() => {
-                                const currentYear = selectedDate.getFullYear();
-                                const yearTx = transactions.filter(t => {
-                                    if (!t.isoDate) return false;
-                                    return new Date(t.isoDate).getFullYear() === currentYear && t.amount < 0;
-                                });
+                                    {(() => {
+                                        const currentYear = selectedDate.getFullYear();
+                                        const yearTx = transactions.filter(t => {
+                                            if (!t.isoDate) return false;
+                                            return new Date(t.isoDate).getFullYear() === currentYear && t.amount < 0;
+                                        });
 
-                                const totalYearOut = yearTx.reduce((acc, curr) => acc + Math.abs(curr.amount), 0);
+                                        const totalYearOut = yearTx.reduce((acc, curr) => acc + Math.abs(curr.amount), 0);
 
-                                // Month stats
-                                const monthTotals: Record<number, number> = {};
-                                yearTx.forEach(t => {
-                                    const m = new Date(t.isoDate).getMonth();
-                                    monthTotals[m] = (monthTotals[m] || 0) + Math.abs(t.amount);
-                                });
-                                const peakMonthIdx = Object.entries(monthTotals).sort((a, b) => b[1] - a[1])[0];
-                                const peakMonthName = peakMonthIdx ? new Date(2025, parseInt(peakMonthIdx[0]), 1).toLocaleDateString('default', { month: 'long' }) : "Tiada Data";
+                                        // Month stats
+                                        const monthTotals: Record<number, number> = {};
+                                        yearTx.forEach(t => {
+                                            const m = new Date(t.isoDate).getMonth();
+                                            monthTotals[m] = (monthTotals[m] || 0) + Math.abs(t.amount);
+                                        });
+                                        const peakMonthIdx = Object.entries(monthTotals).sort((a, b) => b[1] - a[1])[0];
+                                        const peakMonthName = peakMonthIdx ? new Date(2025, parseInt(peakMonthIdx[0]), 1).toLocaleDateString('default', { month: 'long' }) : "Tiada Data";
 
-                                // Category stats
-                                const catTotals: Record<string, number> = {};
-                                yearTx.forEach(t => {
-                                    catTotals[t.category] = (catTotals[t.category] || 0) + Math.abs(t.amount);
-                                });
-                                const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-                                const topCat = sortedCats[0];
+                                        // Category stats
+                                        const catTotals: Record<string, number> = {};
+                                        yearTx.forEach(t => {
+                                            catTotals[t.category] = (catTotals[t.category] || 0) + Math.abs(t.amount);
+                                        });
+                                        const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+                                        const topCat = sortedCats[0];
 
-                                return (
-                                    <div className="space-y-8 py-4">
-                                        <div className="text-center">
-                                            <div className="inline-block p-4 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white mb-4 animate-bounce">
-                                                <Sparkles size={32} />
-                                            </div>
-                                            <h2 className="text-3xl font-black uppercase italic leading-none tracking-tight">Budget<br />Wrapped {currentYear}</h2>
-                                            <p className="text-[10px] font-bold uppercase opacity-50 tracking-widest mt-2">{user?.email || "Boss Mode"}</p>
-                                        </div>
-
-                                        <div className="space-y-6">
-                                            {/* Stat 1: Total Spent */}
-                                            <div className="text-center p-6 rounded-2xl border-2 border-indigo-500 bg-indigo-500/5">
-                                                <p className="text-[10px] font-black uppercase opacity-60 mb-1">Duit Keluar Setahun</p>
-                                                <h3 className="text-4xl font-mono font-black tracking-tighter">RM {totalYearOut.toLocaleString("en-MY", { minimumFractionDigits: 0 })}</h3>
-                                            </div>
-
-                                            {/* Stat 2: Top Category */}
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-xl border-2 border-black bg-orange-400 flex items-center justify-center flex-shrink-0 animate-pulse">
-                                                    <TrendingUp size={24} />
+                                        return (
+                                            <motion.div
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                transition={{ delay: 0.2 }}
+                                                className="space-y-5 py-2"
+                                            >
+                                                <div className="text-center">
+                                                    <div className="inline-block p-3 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white mb-2 animate-bounce">
+                                                        <Sparkles size={24} />
+                                                    </div>
+                                                    <h2 className="text-2xl font-black uppercase italic leading-none tracking-tight">Budget<br />Wrapped {currentYear}</h2>
+                                                    <p className="text-[9px] font-bold uppercase opacity-50 tracking-widest mt-1">{user?.email || "Boss Mode"}</p>
                                                 </div>
-                                                <div>
-                                                    <p className="text-[10px] font-black uppercase opacity-60">Paling Kuat Belanja</p>
-                                                    <h4 className="text-lg font-black uppercase">{topCat ? topCat[0] : "Lain-lain"}</h4>
-                                                    <p className="text-[10px] font-bold">RM {topCat ? Math.abs(topCat[1]).toFixed(0) : "0"}</p>
-                                                </div>
-                                            </div>
 
-                                            {/* Stat 3: Peak Month */}
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-xl border-2 border-black bg-indigo-400 flex items-center justify-center flex-shrink-0">
-                                                    <Calendar size={24} />
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-black uppercase opacity-60">Bulan Paling "Parah"</p>
-                                                    <h4 className="text-lg font-black uppercase">{peakMonthName}</h4>
-                                                    <p className="text-[10px] font-bold">Terpaksa lepaskan RM {peakMonthIdx ? Math.abs(peakMonthIdx[1]).toFixed(0) : "0"}</p>
-                                                </div>
-                                            </div>
+                                                <div className="space-y-3">
+                                                    {/* Stat 1: Total Spent */}
+                                                    <div className="text-center p-4 rounded-xl border-2 border-indigo-500 bg-indigo-500/5">
+                                                        <p className="text-[9px] font-black uppercase opacity-60 mb-1">Duit Keluar Setahun</p>
+                                                        <h3 className="text-3xl font-mono font-black tracking-tighter">RM {totalYearOut.toLocaleString("en-MY", { minimumFractionDigits: 0 })}</h3>
+                                                    </div>
 
-                                            {/* Visual Breakdown */}
-                                            <div className="space-y-2 pt-4">
-                                                <div className="flex justify-between items-end">
-                                                    <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">Spending Breakdown</p>
-                                                    <p className="text-[8px] font-bold uppercase italic">Year Summary</p>
-                                                </div>
-                                                <div className="h-6 w-full flex rounded-lg border-2 border-black overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                                                    {sortedCats.slice(0, 3).map(([name, val], i) => (
-                                                        <div
-                                                            key={name}
-                                                            className={`h-full border-r-[1px] border-black flex items-center justify-center overflow-hidden
-                                                                ${i === 0 ? "bg-indigo-500" : i === 1 ? "bg-purple-500" : "bg-pink-500 text-white"}`}
-                                                            style={{ width: `${(val / totalYearOut) * 100}%` }}
-                                                        >
-                                                            <span className="text-[7px] font-black uppercase text-white px-1 truncate">{name}</span>
+                                                    {/* Stat 2: Top Category */}
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-lg border-2 border-black bg-orange-400 flex items-center justify-center flex-shrink-0 animate-pulse">
+                                                            <TrendingUp size={20} />
                                                         </div>
-                                                    ))}
-                                                    <div className="h-full bg-gray-200 flex-1"></div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                                        <div>
+                                                            <p className="text-[9px] font-black uppercase opacity-60">Paling Kuat Belanja</p>
+                                                            <h4 className="text-sm font-black uppercase">{topCat ? topCat[0] : "Lain-lain"}</h4>
+                                                            <p className="text-[10px] font-bold">RM {topCat ? Math.abs(topCat[1]).toFixed(0) : "0"}</p>
+                                                        </div>
+                                                    </div>
 
-                                        <button
-                                            onClick={() => setShowWrappedModal(false)}
-                                            className="w-full py-4 bg-indigo-600 text-white border-2 border-indigo-700 rounded-2xl font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all active:shadow-none active:translate-x-1 active:translate-y-1"
-                                        >
-                                            MANTAP, TERUSKAN SIMPAN!
-                                        </button>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    </div>
-                )}
+                                                    {/* Stat 3: Peak Month */}
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-lg border-2 border-black bg-indigo-400 flex items-center justify-center flex-shrink-0">
+                                                            <Calendar size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[9px] font-black uppercase opacity-60">Bulan Paling "Parah"</p>
+                                                            <h4 className="text-sm font-black uppercase">{peakMonthName}</h4>
+                                                            <p className="text-[10px] font-bold">Terpaksa lepaskan RM {peakMonthIdx ? Math.abs(peakMonthIdx[1]).toFixed(0) : "0"}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Visual Breakdown */}
+                                                    <div className="space-y-1 pt-2">
+                                                        <div className="flex justify-between items-end">
+                                                            <p className="text-[9px] font-black uppercase opacity-60 tracking-widest">Spending Breakdown</p>
+                                                            <p className="text-[8px] font-bold uppercase italic">Year Summary</p>
+                                                        </div>
+                                                        <div className="h-5 w-full flex rounded-lg border-2 border-black overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                                                            {sortedCats.slice(0, 3).map(([name, val], i) => (
+                                                                <div
+                                                                    key={name}
+                                                                    className={`h-full border-r-[1px] border-black flex items-center justify-center overflow-hidden
+                                                                    ${i === 0 ? "bg-indigo-500" : i === 1 ? "bg-purple-500" : "bg-pink-500 text-white"}`}
+                                                                    style={{ width: `${(val / totalYearOut) * 100}%` }}
+                                                                >
+                                                                    <span className="text-[7px] font-black uppercase text-white px-1 truncate">{name}</span>
+                                                                </div>
+                                                            ))}
+                                                            <div className="h-full bg-gray-200 flex-1"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => setShowWrappedModal(false)}
+                                                    className="w-full py-3 bg-indigo-600 text-white border-2 border-indigo-700 rounded-xl font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all active:shadow-none active:translate-x-1 active:translate-y-1 text-xs"
+                                                >
+                                                    MANTAP, TERUSKAN SIMPAN!
+                                                </button>
+                                            </motion.div>
+                                        );
+                                    })()}
+                                </motion.div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* --- AUTH MODAL --- */}
                 <AuthModal
@@ -2638,6 +2672,6 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 />
 
             </div>
-        </div>
+        </div >
     );
 }

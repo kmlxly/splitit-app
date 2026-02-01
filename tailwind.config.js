@@ -3,7 +3,7 @@ module.exports = {
   content: [
     // Ini sapu bersih semua file dalam folder src
     "./src/**/*.{js,ts,jsx,tsx,mdx}",
-    
+
     // Ini backup kalau file kau duduk luar src
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -14,6 +14,12 @@ module.exports = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+      },
+      keyframes: {
+        shimmer: {
+          "0%": { backgroundPosition: "200% 0" },
+          "100%": { backgroundPosition: "-200% 0" },
+        },
       },
     },
   },
