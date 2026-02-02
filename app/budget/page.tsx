@@ -2446,21 +2446,21 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                     <div className="flex-1 overflow-y-auto p-6 space-y-5">
 
                                         {/* Edit Form */}
-                                        <div className="space-y-4">
+                                        <div className="space-y-5">
                                             <div>
-                                                <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Title / Merchant</label>
+                                                <label className="text-[9px] font-black uppercase opacity-50 mb-1.5 block tracking-wider pl-1">Title / Merchant</label>
                                                 <input
                                                     type="text"
                                                     value={scannedTransaction.title}
                                                     onChange={(e) => setScannedTransaction({ ...scannedTransaction, title: e.target.value })}
-                                                    className={`${inputStyle} text-sm font-bold`}
+                                                    className={`${inputStyle} !text-sm !font-black !mb-0 h-12 bg-yellow-50/10`}
                                                     autoFocus
                                                 />
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div>
-                                                    <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Date</label>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black uppercase opacity-50 block tracking-wider pl-1">Date</label>
                                                     <input
                                                         type="date"
                                                         value={scannedTransaction.isoDate || ""}
@@ -2470,34 +2470,39 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                                             const newDateStr = dateObj.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
                                                             setScannedTransaction({ ...scannedTransaction, isoDate: newIso, date: newDateStr });
                                                         }}
-                                                        className={`${inputStyle} !text-xs !p-2 h-11 w-full box-border !mb-0`}
+                                                        className={`${inputStyle} !text-[11px] !font-black !px-2 h-12 w-full box-border !mb-0 text-center`}
                                                     />
                                                 </div>
-                                                <div>
-                                                    <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Category</label>
-                                                    <select
-                                                        value={scannedTransaction.category}
-                                                        onChange={(e) => {
-                                                            const newCategory = e.target.value;
-                                                            const isIncome = newCategory === "Income";
-                                                            setScannedTransaction({
-                                                                ...scannedTransaction,
-                                                                category: newCategory,
-                                                                amount: isIncome ? Math.abs(scannedTransaction.amount) : -Math.abs(scannedTransaction.amount)
-                                                            });
-                                                        }}
-                                                        className={`${inputStyle} !text-xs !p-2 h-11 w-full appearance-none !mb-0`}
-                                                    >
-                                                        {ALL_CATEGORIES.map(cat => (
-                                                            <option key={cat} value={cat}>{cat}</option>
-                                                        ))}
-                                                    </select>
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black uppercase opacity-50 block tracking-wider pl-1">Category</label>
+                                                    <div className="relative">
+                                                        <select
+                                                            value={scannedTransaction.category}
+                                                            onChange={(e) => {
+                                                                const newCategory = e.target.value;
+                                                                const isIncome = newCategory === "Income";
+                                                                setScannedTransaction({
+                                                                    ...scannedTransaction,
+                                                                    category: newCategory,
+                                                                    amount: isIncome ? Math.abs(scannedTransaction.amount) : -Math.abs(scannedTransaction.amount)
+                                                                });
+                                                            }}
+                                                            className={`${inputStyle} !text-[11px] !font-black !px-2 h-12 w-full appearance-none !mb-0 pr-8`}
+                                                        >
+                                                            {ALL_CATEGORIES.map(cat => (
+                                                                <option key={cat} value={cat}>{cat}</option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                                                            <ChevronDown size={14} />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            <div>
-                                                <label className="text-center text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Total Amount (RM)</label>
-                                                <div className="relative">
+                                            <div className="text-center py-2">
+                                                <label className="text-[9px] font-black uppercase opacity-40 mb-1 block tracking-widest">Total Amount (RM)</label>
+                                                <div className="relative flex justify-center">
                                                     <input
                                                         type="number"
                                                         value={Math.abs(scannedTransaction.amount)}
@@ -2505,7 +2510,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                                             const val = parseFloat(e.target.value) || 0;
                                                             setScannedTransaction({ ...scannedTransaction, amount: scannedTransaction.category === "Income" ? Math.abs(val) : -Math.abs(val) });
                                                         }}
-                                                        className={`w-full bg-transparent text-center text-3xl font-black font-mono outline-none ${darkMode ? "text-white" : "text-black"}`}
+                                                        className={`w-full bg-transparent text-center text-4xl font-black font-mono outline-none ${darkMode ? "text-white" : "text-black"}`}
                                                     />
                                                 </div>
                                             </div>
