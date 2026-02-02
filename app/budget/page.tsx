@@ -1988,33 +1988,33 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                                     }}
                                                     className={`${cardStyle} p-3 flex justify-between items-center transition-transform active:scale-95 group relative overflow-hidden cursor-pointer ${darkMode ? "hover:bg-white/5" : "hover:bg-gray-50"} ${isExpanded ? (darkMode ? "border-blue-500 bg-white/5" : "border-blue-500 bg-blue-50") : ""}`}
                                                 >
-                                                    <div className="flex items-center gap-3 relative z-10">
+                                                    <div className="flex items-center gap-3 relative z-10 flex-1 min-w-0">
                                                         <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center flex-shrink-0 ${darkMode ? "border-white bg-white/10" : "border-black bg-yellow-300"}`}>
                                                             {getCategoryIcon(t.category)}
                                                         </div>
-                                                        <div>
-                                                            <div className="flex items-center gap-2">
-                                                                <h3 className="text-xs font-black uppercase leading-tight">{t.title}</h3>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                                <h3 className="text-xs font-black uppercase leading-tight line-clamp-2 overflow-hidden">{t.title}</h3>
                                                                 {hasItems && (
-                                                                    <div className={`text-[7px] font-black px-1 rounded border ${darkMode ? "bg-blue-500/20 border-blue-400 text-blue-400" : "bg-blue-100 border-blue-500 text-blue-600"}`}>
+                                                                    <div className={`text-[7px] font-black px-1 rounded border whitespace-nowrap ${darkMode ? "bg-blue-500/20 border-blue-400 text-blue-400" : "bg-blue-100 border-blue-500 text-blue-600"}`}>
                                                                         {t.items?.length} ITEMS
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                            <div className="flex gap-2 text-[9px] font-bold opacity-60 mt-0.5">
-                                                                <span>{t.category}</span>
+                                                            <div className="flex gap-2 text-[9px] font-bold opacity-60 mt-0.5 whitespace-nowrap overflow-hidden">
+                                                                <span className="truncate">{t.category}</span>
                                                                 <span>•</span>
                                                                 <span>{t.date}</span>
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex items-center gap-2 relative z-10">
-                                                        <div className={`text-right font-mono font-black text-sm ${t.amount > 0 ? "text-green-500" : (darkMode ? "text-red-400" : "text-red-600")}`}>
+                                                    <div className="flex items-center gap-2 relative z-10 flex-shrink-0 ml-3">
+                                                        <div className={`text-right font-mono font-black text-sm whitespace-nowrap ${t.amount > 0 ? "text-green-500" : (darkMode ? "text-red-400" : "text-red-600")}`}>
                                                             {formatCurrency(t.amount)}
                                                         </div>
                                                         {hasItems && (
-                                                            <div className={`p-1 rounded-full border transition-transform duration-300 ${isExpanded ? "rotate-180 bg-blue-500 text-white border-blue-500" : "opacity-40"}`}>
+                                                            <div className={`p-1 rounded-full border transition-transform duration-300 flex-shrink-0 ${isExpanded ? "rotate-180 bg-blue-500 text-white border-blue-500" : "opacity-40"}`}>
                                                                 <ChevronDown size={14} />
                                                             </div>
                                                         )}
@@ -2035,9 +2035,9 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                                                     <span className="text-[8px] font-black uppercase tracking-widest">Item Breakdown</span>
                                                                 </div>
                                                                 {t.items?.map((item, idx) => (
-                                                                    <div key={item.id || idx} className="flex justify-between items-center border-b border-dotted border-current border-opacity-10 pb-1.5 last:border-0 last:pb-0">
-                                                                        <span className="text-[10px] font-bold uppercase opacity-80 leading-tight pr-4">{item.title}</span>
-                                                                        <span className="text-[10px] font-mono font-black shrink-0">{formatCurrency(item.amount)}</span>
+                                                                    <div key={item.id || idx} className="flex justify-between items-start border-b border-dotted border-current border-opacity-10 pb-1.5 last:border-0 last:pb-0 gap-3">
+                                                                        <span className="text-[10px] font-bold uppercase opacity-80 leading-tight flex-1 min-w-0">{item.title}</span>
+                                                                        <span className="text-[10px] font-mono font-black shrink-0 text-right">{formatCurrency(item.amount)}</span>
                                                                     </div>
                                                                 ))}
                                                                 <button
