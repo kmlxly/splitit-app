@@ -1365,34 +1365,34 @@ export default function TripDetailPage({
                     </div>
 
                     {/* NAVIGATION TABS */}
-                    <div className="flex p-1 rounded-xl border-2 border-dashed border-current gap-1">
+                    <div className="flex p-1 rounded-xl border-2 border-dashed border-current gap-1 overflow-x-auto no-scrollbar">
                         <button
                             onClick={() => setActiveTab("itinerary")}
-                            className={`flex-1 py-2 rounded-lg text-xs font-black uppercase transition-all ${activeTab === "itinerary" ? tabActiveStyle : tabInactiveStyle}`}
+                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "itinerary" ? tabActiveStyle : tabInactiveStyle}`}
                         >
                             Itinerary
                         </button>
                         <button
                             onClick={() => setActiveTab("budget")}
-                            className={`flex-1 py-2 rounded-lg text-xs font-black uppercase transition-all ${activeTab === "budget" ? tabActiveStyle : tabInactiveStyle}`}
+                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "budget" ? tabActiveStyle : tabInactiveStyle}`}
                         >
                             Budget
                         </button>
                         <button
                             onClick={() => setActiveTab("people")}
-                            className={`flex-1 py-2 rounded-lg text-xs font-black uppercase transition-all ${activeTab === "people" ? tabActiveStyle : tabInactiveStyle}`}
+                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "people" ? tabActiveStyle : tabInactiveStyle}`}
                         >
                             People
                         </button>
                         <button
                             onClick={() => setActiveTab("vault")}
-                            className={`flex-1 py-2 rounded-lg text-xs font-black uppercase transition-all ${activeTab === "vault" ? tabActiveStyle : tabInactiveStyle}`}
+                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "vault" ? tabActiveStyle : tabInactiveStyle}`}
                         >
                             Vault
                         </button>
                         <button
                             onClick={() => setActiveTab("checklist")}
-                            className={`flex-1 py-2 rounded-lg text-xs font-black uppercase transition-all ${activeTab === "checklist" ? tabActiveStyle : tabInactiveStyle}`}
+                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "checklist" ? tabActiveStyle : tabInactiveStyle}`}
                         >
                             Pack
                         </button>
@@ -1572,7 +1572,7 @@ export default function TripDetailPage({
                                                                 </div>
                                                                 <div className="flex-1 min-w-0">
                                                                     <h4
-                                                                        className={`text-sm font-black uppercase truncate ${item.is_completed ? "line-through" : ""}`}
+                                                                        className={`text-sm font-black uppercase leading-tight line-clamp-2 ${item.is_completed ? "line-through opacity-70" : ""}`}
                                                                     >
                                                                         {item.title}
                                                                     </h4>
@@ -3013,7 +3013,7 @@ export default function TripDetailPage({
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">
                                         Date
@@ -3199,7 +3199,7 @@ export default function TripDetailPage({
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">
                                         Date
