@@ -4,7 +4,7 @@ import { ArrowLeft, Shield, Lock, Eye, Database, Trash2 } from "lucide-react";
 
 export default function PrivacyPolicy() {
     return (
-        <div className="min-h-screen bg-[#F4F4F0] text-black font-sans p-4 md:p-8 lg:p-12 selection:bg-yellow-300">
+        <div className="min-h-screen bg-[#F4F4F0] text-black font-sans p-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] md:p-8 md:pt-10 lg:p-12 lg:pt-14 selection:bg-yellow-300">
             {/* Container utama dengan max-width untuk Desktop/Tab */}
             <div className="max-w-4xl mx-auto w-full">
 

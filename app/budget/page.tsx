@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 // --- 1. CONFIG & STYLES ---
 const APP_NAME = "Budget.AI";
-const APP_VERSION = "v1.0.1-clean";
+const APP_VERSION = "v1.2.0-polish";
 
 // Helper: Compress Image
 const compressImage = (file: File): Promise<string> => {
@@ -163,6 +163,7 @@ export default function BudgetPage() {
     const [showSafeToSpend, setShowSafeToSpend] = useState(false);
     const [totalCommitments, setTotalCommitments] = useState(0);
     const [unpaidCommitments, setUnpaidCommitments] = useState(0);
+    const [unpaidItemsList, setUnpaidItemsList] = useState<any[]>([]);
 
     // NEW: State untuk Filter (Multi-select)
     const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -425,8 +426,84 @@ export default function BudgetPage() {
         localStorage.setItem("budget_show_safe_to_spend", String(showSafeToSpend));
     }, [showSafeToSpend]);
 
+    // Feature: Settle All Commitments (Bulk Pay)
+    const handleSettleAllCommitments = async () => {
+        if (unpaidItemsList.length === 0) return;
+        if (!confirm(`Selesaikan ${unpaidItemsList.length} komitmen berjumlah ${formatCurrency(unpaidCommitments)}?`)) return;
+
+        try {
+            const today = new Date();
+            const displayDate = today.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
+            const isoDate = today.toISOString().split('T')[0];
+
+            // 1. Create Transaction with Items
+            const newItems = unpaidItemsList.map((sub, idx) => ({
+                id: Date.now() + idx,
+                title: sub.name,
+                amount: -Math.abs(sub.price)
+            }));
+
+            const newTx: Transaction = {
+                id: Date.now(),
+                title: "Settle Komitmen (Pukal)",
+                amount: -Math.abs(unpaidCommitments),
+                category: "Bills",
+                date: displayDate,
+                isoDate: isoDate,
+                items: newItems
+            };
+
+            const updatedTransactions = [newTx, ...transactions];
+            setTransactions(updatedTransactions);
+
+            // 2. Update SubTracker Data (Advance Dates)
+            const savedData = localStorage.getItem("subtracker_data");
+            if (savedData) {
+                const parsed = JSON.parse(savedData);
+                const updatedSubs = parsed.map((s: any) => {
+                    const isUnpaid = unpaidItemsList.some(unpaid => unpaid.id === s.id);
+                    if (isUnpaid) {
+                        const currentDue = new Date(s.nextPaymentDate);
+                        const nextDue = new Date(currentDue);
+                        if (s.cycle === "Monthly") nextDue.setMonth(nextDue.getMonth() + 1);
+                        else nextDue.setFullYear(nextDue.getFullYear() + 1);
+                        return { ...s, nextPaymentDate: nextDue.toISOString().split('T')[0] };
+                    }
+                    return s;
+                });
+                localStorage.setItem("subtracker_data", JSON.stringify(updatedSubs));
+                // Trigger reload in this tab
+                const event = new Event('storage');
+                window.dispatchEvent(event);
+            }
+
+            // 3. Sync to Cloud
+            if (user) {
+                const { error } = await supabase
+                    .from('budget_transactions')
+                    .insert([{
+                        id: newTx.id,
+                        user_id: user.id,
+                        title: newTx.title,
+                        amount: newTx.amount,
+                        category: newTx.category,
+                        date: newTx.date,
+                        iso_date: newTx.isoDate,
+                        items: newTx.items
+                    }]);
+                if (error) console.error("Settle All Cloud Error:", error);
+            }
+
+            alert("Semua komitmen berjaya diselesaikan!");
+        } catch (e) {
+            console.error("Settle All Error:", e);
+            alert("Gagal menyelesaikan komitmen.");
+        }
+    };
+
     // Effect: Baca subtracker_data (Link Sub.Tracker)
     useEffect(() => {
+
         const loadCommitments = () => {
             const savedData = localStorage.getItem("subtracker_data");
             if (savedData) {
@@ -438,6 +515,8 @@ export default function BudgetPage() {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
 
+                    const unpaidList: any[] = [];
+
                     parsed.forEach((s: any) => {
                         const price = s.cycle === "Monthly" ? s.price : (s.price / 12);
                         monthlySum += price;
@@ -448,11 +527,13 @@ export default function BudgetPage() {
 
                         if (dueDate >= today) {
                             unpaidSum += price;
+                            unpaidList.push({ ...s, calculatedPrice: price });
                         }
                     });
 
                     setTotalCommitments(monthlySum);
                     setUnpaidCommitments(unpaidSum);
+                    setUnpaidItemsList(unpaidList);
                 } catch (e) {
                     console.error("Failed to parse subtracker data:", e);
                 }
@@ -1600,16 +1681,42 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                                 })()}
 
                                                 {/* C) Unpaid Commitments Reminder */}
-                                                <div className={`p-3 rounded-xl border-2 border-dashed flex items-center gap-3 ${unpaidCommitments > 0 ? "border-red-500 bg-red-500/10 text-red-600" : "border-green-500 bg-green-500/10 text-green-600"}`}>
-                                                    {unpaidCommitments > 0 ? <AlertTriangle size={20} /> : <ShieldCheck size={20} />}
-                                                    <div>
-                                                        <p className="text-[10px] font-black uppercase tracking-tight">
-                                                            {unpaidCommitments > 0 ? "Komitmen Belum Settle" : "Semua Komitmen Selesai"}
-                                                        </p>
-                                                        <p className="text-sm font-mono font-black">
-                                                            {unpaidCommitments > 0 ? formatCurrency(unpaidCommitments) : "RM 0.00"}
-                                                        </p>
+                                                <div className={`p-4 rounded-xl border-2 border-dashed ${unpaidCommitments > 0 ? "border-red-500 bg-red-500/10 text-red-600" : "border-green-500 bg-green-500/10 text-green-600"}`}>
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <div className="flex items-center gap-3">
+                                                            {unpaidCommitments > 0 ? <AlertTriangle size={20} /> : <ShieldCheck size={20} />}
+                                                            <div>
+                                                                <p className="text-[10px] font-black uppercase tracking-tight">
+                                                                    {unpaidCommitments > 0 ? "Komitmen Belum Settle" : "Semua Komitmen Selesai"}
+                                                                </p>
+                                                                <p className="text-sm font-mono font-black">
+                                                                    {unpaidCommitments > 0 ? formatCurrency(unpaidCommitments) : "RM 0.00"}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        {unpaidCommitments > 0 && (
+                                                            <button
+                                                                onClick={handleSettleAllCommitments}
+                                                                className={`px-3 py-1.5 rounded-lg border-2 text-[9px] font-black uppercase transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
+                                                            >
+                                                                Bayar Semua
+                                                            </button>
+                                                        )}
                                                     </div>
+
+                                                    {unpaidCommitments > 0 && unpaidItemsList.length > 0 && (
+                                                        <div className={`mt-3 space-y-2 pt-3 border-t border-dashed ${darkMode ? "border-white/20" : "border-black/20"}`}>
+                                                            {unpaidItemsList.map((sub, idx) => (
+                                                                <div key={idx} className="flex justify-between items-center text-[10px]">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className={`w-1.5 h-1.5 rounded-full ${darkMode ? "bg-red-400" : "bg-red-500"}`}></div>
+                                                                        <span className="font-bold opacity-80 uppercase">{sub.name}</span>
+                                                                    </div>
+                                                                    <span className="font-mono font-black">{formatCurrency(sub.price)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -1976,7 +2083,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {
                     showManualModal && (
                         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                            <div className={`w-full max-w-sm p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
+                            <div className={`w-full max-w-sm p-4 sm:p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
 
                                 <div className="flex justify-between items-center mb-6">
                                     <h2 className="text-xl font-black uppercase italic">
@@ -2008,13 +2115,13 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                 </div>
 
                                 <div className="space-y-4">
-                                    <div>
+                                    <div className="w-full">
                                         <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block pl-1">Tarikh Transaksi</label>
                                         <input
                                             type="date"
                                             value={newDate}
                                             onChange={(e) => setNewDate(e.target.value)}
-                                            className={`${inputStyle} !text-xs !p-2 h-11 w-full box-border !mb-0`}
+                                            className={`${inputStyle} !text-sm !px-3 h-12 w-full box-border min-w-0 !mb-0`}
                                         />
                                     </div>
                                     <div>

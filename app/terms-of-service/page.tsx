@@ -4,7 +4,7 @@ import { ArrowLeft, Scale, AlertTriangle, CheckCircle, FileText } from "lucide-r
 
 export default function TermsOfService() {
     return (
-        <div className="min-h-screen bg-[#F0F0FF] text-black font-sans p-4 md:p-8 lg:p-12 selection:bg-indigo-300">
+        <div className="min-h-screen bg-[#F0F0FF] text-black font-sans p-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] md:p-8 md:pt-10 lg:p-12 lg:pt-14 selection:bg-indigo-300">
             <div className="max-w-4xl mx-auto w-full">
 
                 <div className="mb-6 md:mb-8">

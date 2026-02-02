@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 // --- 1. CONFIG & TYPES ---
 const APP_NAME = "Sub.Tracker";
-const APP_VERSION = "v1.0.1-clean";
+const APP_VERSION = "v1.2.0-polish";
 
 type Subscription = {
     id: number;
@@ -384,7 +384,8 @@ export default function SubTrackerPage() {
                     amount: -Math.abs(sub.price), // Mesti negatif
                     category: sub.category === "Gym/Health" ? "Lifestyle" : sub.category, // Map category
                     date: displayDate,
-                    isoDate: isoDate
+                    isoDate: isoDate,
+                    items: [{ id: Date.now() + 1, title: sub.name, amount: -Math.abs(sub.price) }]
                 };
 
                 // Save to localStorage
@@ -402,7 +403,8 @@ export default function SubTrackerPage() {
                             amount: newTx.amount,
                             category: newTx.category,
                             date: newTx.date,
-                            iso_date: newTx.isoDate // Map to DB column
+                            iso_date: newTx.isoDate, // Map to DB column
+                            items: newTx.items
                         }]);
 
                     if (cloudError) console.error("Gagal sync transaksi ke cloud:", cloudError);
