@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
     Grid,
     Moon,
     Sun,
     ArrowLeft,
-    Map,
     Calendar,
     Wallet,
     Users,
@@ -250,6 +249,7 @@ export default function TripDetailPage({
 
     // Weather State
     const [weatherData, setWeatherData] = useState<any>({});
+    const fetchingRef = useRef<Set<string>>(new Set());
 
     // Cropper State
     const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -499,18 +499,32 @@ export default function TripDetailPage({
     }, [id]);
 
     // Fetch weather for all itinerary items with locations (with rate limiting)
+    // Fetch weather for all itinerary items with locations (with rate limiting)
     useEffect(() => {
         if (items.length > 0) {
             // Get unique location-date combinations
-            const locationDates = items
-                .filter((item: any) => item.location && item.day_date)
-                .map((item: any) => ({ location: item.location, date: item.day_date }));
+            const uniqueMap = new Map();
+            items.forEach((item: any) => {
+                if (item.location && item.day_date) {
+                    const key = `${item.location}_${item.day_date}`;
+                    if (!uniqueMap.has(key)) {
+                        uniqueMap.set(key, { location: item.location, date: item.day_date });
+                    }
+                }
+            });
 
-            // Fetch with 1.5 second delay between requests (Nominatim rate limit: 1 req/sec)
-            locationDates.forEach((ld: any, index: number) => {
+            const uniqueItems = Array.from(uniqueMap.values());
+
+            // Fetch with delay to respect rate limits
+            uniqueItems.forEach((ld: any, index: number) => {
+                const key = `${ld.location}_${ld.date}`;
+                // Skip if already fetched or currently fetching
+                if (weatherData[key] || fetchingRef.current.has(key)) return;
+
+                fetchingRef.current.add(key);
                 setTimeout(() => {
                     fetchWeather(ld.location, ld.date);
-                }, index * 1500); // 1.5 seconds between each request
+                }, index * 800); // 800ms delay to be safe but faster
             });
         }
     }, [items]);
@@ -731,7 +745,12 @@ export default function TripDetailPage({
     };
 
     const fetchWeather = async (location: string, date: string) => {
-        if (!location || weatherData[`${location}_${date}`]) return;
+        const key = `${location}_${date}`;
+        // Double check inside function in case state updated
+        if (!location || weatherData[key]) {
+            fetchingRef.current.delete(key);
+            return;
+        }
 
         try {
             // 1. Geocode using Open-Meteo Geocoding API
@@ -739,36 +758,24 @@ export default function TripDetailPage({
                 `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`,
             );
 
-            if (!geoRes.ok) {
-                console.error("❌ Geocoding failed:", geoRes.status, geoRes.statusText);
-                return;
-            }
+            if (!geoRes.ok) throw new Error("Geocoding failed");
 
             const geoData = await geoRes.json();
-            console.log(
-                "🌤️ Fetching weather for:",
-                location,
-                "| Geocode result:",
-                geoData,
-            );
 
             if (!geoData.results || geoData.results.length === 0) {
                 console.log("⚠️ Location not found:", location);
+                fetchingRef.current.delete(key);
                 return;
             }
 
             const { latitude, longitude } = geoData.results[0];
-            console.log("📍 Coordinates:", latitude, longitude);
 
-            // 2. Fetch Weather (Open-Meteo)
+            // 2. Fetch Weather (Open-Meteo) including past days
             const weatherRes = await fetch(
-                `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto`,
+                `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&past_days=92&forecast_days=16`,
             );
 
-            if (!weatherRes.ok) {
-                console.error("❌ Weather API failed:", weatherRes.status);
-                return;
-            }
+            if (!weatherRes.ok) throw new Error("Weather API failed");
 
             const dailyData = await weatherRes.json();
 
@@ -785,14 +792,15 @@ export default function TripDetailPage({
                 console.log("✅ Weather saved:", location, date, info);
                 setWeatherData((prev: any) => ({
                     ...prev,
-                    [`${location}_${date}`]: info,
+                    [key]: info,
                 }));
             } else {
                 console.log("⚠️ Date not found in forecast:", dateStr);
             }
         } catch (e: any) {
             console.error("❌ Weather fetch error:", e.message);
-            // Don't show alert to user, just log it
+        } finally {
+            fetchingRef.current.delete(key);
         }
     };
 
@@ -2739,7 +2747,7 @@ export default function TripDetailPage({
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-3">
                                 <div>
                                     <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">
                                         Start Date
