@@ -2115,34 +2115,63 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                 </div>
 
                                 <div className="space-y-4">
-                                    <div className="w-full">
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block pl-1">Tarikh Transaksi</label>
-                                        <input
-                                            type="date"
-                                            value={newDate}
-                                            onChange={(e) => setNewDate(e.target.value)}
-                                            className={`${inputStyle} !text-sm !px-3 h-12 w-full box-border min-w-0 !mb-0`}
-                                        />
-                                    </div>
                                     <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Tajuk / Kedai</label>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Tajuk / Kedai</label>
                                         <input
                                             type="text"
                                             value={newTitle}
                                             onChange={(e) => setNewTitle(e.target.value)}
                                             placeholder="Cth: Nasi Lemak, Gaji"
-                                            className={inputStyle}
+                                            className={`${inputStyle} !mb-0 h-12 !text-sm !font-black`}
                                             autoFocus
                                         />
                                     </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="w-full">
+                                            <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Tarikh</label>
+                                            <div className="relative">
+                                                <div className={`${inputStyle} !mb-0 h-12 flex items-center gap-2 !px-3 !py-0 cursor-pointer overflow-hidden`}>
+                                                    <Calendar size={14} className="opacity-40 flex-shrink-0" />
+                                                    <span className="text-[10px] font-black uppercase whitespace-nowrap">
+                                                        {newDate ? new Date(newDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }) : "Pilih"}
+                                                    </span>
+                                                </div>
+                                                <input
+                                                    type="date"
+                                                    value={newDate}
+                                                    onChange={(e) => setNewDate(e.target.value)}
+                                                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="w-full">
+                                            <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Kategori</label>
+                                            <div className="relative">
+                                                <select
+                                                    value={newCategory}
+                                                    onChange={(e) => setNewCategory(e.target.value)}
+                                                    className={`${inputStyle} !mb-0 h-12 !text-[10px] !font-black !px-3 pr-8 appearance-none w-full !py-0`}
+                                                >
+                                                    {ALL_CATEGORIES.map(cat => (
+                                                        <option key={cat} value={cat}>{cat}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+                                                    <ChevronDown size={14} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Jumlah (RM)</label>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Jumlah (RM)</label>
                                         <input
                                             type="number"
                                             value={newAmount}
                                             onChange={(e) => setNewAmount(e.target.value)}
                                             placeholder="0.00"
-                                            className={`${inputStyle} text-xl font-mono`}
+                                            className={`${inputStyle} !mb-0 h-14 text-2xl font-mono !font-black text-center`}
                                         />
                                     </div>
 
