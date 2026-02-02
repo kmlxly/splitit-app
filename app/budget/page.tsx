@@ -7,7 +7,7 @@ import {
     TrendingUp, TrendingDown, MoreHorizontal,
     ShoppingBag, Coffee, Car, Home, Zap,
     Moon, Sun, ChevronDown, ChevronLeft, ChevronRight, ScanLine, X, Loader2, Utensils, Fuel, Trash2, Pencil, Image as ImageIcon, Calendar, User, Receipt, AlertCircle, ArrowRight, Eye, EyeOff, Target, Search, RotateCcw, Link as LinkIcon, Link2Off, Sparkles,
-    ShieldCheck, AlertTriangle, Activity, BookOpen
+    ShieldCheck, AlertTriangle, Activity, BookOpen, ListTree
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
 import { supabase } from "@/lib/supabaseClient";
@@ -110,6 +110,12 @@ const getCategoryColor = (category: string) => {
 };
 
 // Type Definition untuk Transaksi
+type TransactionItem = {
+    id: number;
+    title: string;
+    amount: number;
+};
+
 type Transaction = {
     id: number;
     title: string;
@@ -117,6 +123,7 @@ type Transaction = {
     amount: number; // Negatif = Belanja, Positif = Income
     date: string;
     isoDate: string; // Format: "YYYY-MM-DD" untuk calendar heatmap
+    items?: TransactionItem[]; // Sub-items (bunching/folder)
 };
 
 export default function BudgetPage() {
@@ -178,10 +185,12 @@ export default function BudgetPage() {
     const [newCategory, setNewCategory] = useState("Makan");
     const [newType, setNewType] = useState("expense"); // 'expense' or 'income'
     const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]); // Default: Today
+    const [newItems, setNewItems] = useState<TransactionItem[]>([]); // Items for grouping
 
     // Data Transaksi (Boleh save ke LocalStorage/Supabase nanti)
     // Start dengan array kosong - akan load dari localStorage
     const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [expandedTxId, setExpandedTxId] = useState<number | null>(null);
 
     // Calculated State
     const [balance, setBalance] = useState(0);
@@ -224,7 +233,8 @@ export default function BudgetPage() {
                         amount: t.amount,
                         category: t.category,
                         date: t.date,
-                        isoDate: t.iso_date // DB uses iso_date
+                        isoDate: t.iso_date, // DB uses iso_date
+                        items: t.items || []
                     }));
 
                     // Merge with local? For now just OVERWRITE/SET to ensure sync.
@@ -272,7 +282,8 @@ export default function BudgetPage() {
                                 amount: t.amount,
                                 category: t.category,
                                 date: t.date,
-                                isoDate: t.iso_date
+                                isoDate: t.iso_date,
+                                items: t.items || []
                             }));
                             setTransactions(validTx);
                         }
@@ -305,6 +316,7 @@ export default function BudgetPage() {
                 category: t.category,
                 date: t.date,
                 iso_date: t.isoDate, // Map to DB column
+                items: t.items || [], // Save items breakdown
                 updated_at: new Date().toISOString()
             }));
 
@@ -542,7 +554,7 @@ export default function BudgetPage() {
             // --- MODE EDIT: Cari item lama & update ---
             const updatedList = transactions.map(t =>
                 t.id === editingId
-                    ? { ...t, title: newTitle.trim(), amount: finalAmount, category: newCategory, date: displayDate, isoDate: isoDate }
+                    ? { ...t, title: newTitle.trim(), amount: finalAmount, category: newCategory, date: displayDate, isoDate: isoDate, items: newItems }
                     : t
             );
             setTransactions(updatedList);
@@ -556,6 +568,7 @@ export default function BudgetPage() {
                 amount: finalAmount,
                 date: displayDate,
                 isoDate: isoDate,
+                items: newItems
             };
             setTransactions([newTx, ...transactions]);
 
@@ -582,6 +595,7 @@ export default function BudgetPage() {
         setNewCategory("Makan");
         setNewType("expense");
         setNewDate(new Date().toISOString().split('T')[0]);
+        setNewItems([]);
     };
 
     // 2. Delete Handler
@@ -685,10 +699,16 @@ Return ONLY valid JSON array, no other text.`
   "title": "Merchant/Store Name",
   "amount": 0.00,
   "category": "One of: Makan, Transport, Shopping, Bills, Utility, Lain-lain",
-  "date": "DD MMM YYYY format (e.g., 12 Jan 2025)"
+  "date": "DD MMM YYYY format (e.g., 12 Jan 2025)",
+  "items": [
+    { "title": "Item Name (e.g. Onion, Chicken)", "amount": 0.00 }
+  ]
 }
 
-IMPORTANT: Try to find the transaction date and year from the receipt.
+IMPORTANT: 
+- Try to find the transaction date and year from the receipt.
+- EXTRACT individual items found in the receipt and list them in 'items' array.
+- The 'amount' in the root should be the TOTAL amount of the receipt.
 
 CATEGORY GUIDELINES (Choose the MOST appropriate):
 - "Makan": Restaurants, cafes, food delivery, groceries, food stalls, mamak, fast food
@@ -864,6 +884,11 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                     amount: finalCategory === "Income" ? Math.abs(amount) : -Math.abs(amount),
                     date: displayDate,
                     isoDate: isoDate,
+                    items: parsedData.items ? parsedData.items.map((it: any, itIdx: number) => ({
+                        id: Date.now() + itIdx + 1,
+                        title: it.title || it.name || "Item",
+                        amount: parseFloat(it.amount) || 0
+                    })) : undefined
                 };
 
                 setScannedTransaction(previewTx);
@@ -887,6 +912,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
         setNewCategory(t.category);
         setNewType(t.amount < 0 ? "expense" : "income");
         setNewDate(t.isoDate || new Date().toISOString().split('T')[0]);
+        setNewItems(t.items || []);
         setShowManualModal(true);
     };
 
@@ -898,6 +924,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
         setNewCategory("Makan");
         setNewType("expense");
         setNewDate(new Date().toISOString().split('T')[0]);
+        setNewItems([]);
         setShowManualModal(true);
     };
 
@@ -1837,10 +1864,296 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                         );
                                     }
 
-                                    return searchFiltered.map((t) => (
+                                    return searchFiltered.map((t) => {
+                                        const isExpanded = expandedTxId === t.id;
+                                        const hasItems = t.items && t.items.length > 0;
+
+                                        return (
+                                            <div key={t.id} className="flex flex-col gap-1">
+                                                <div
+                                                    onClick={(e) => {
+                                                        if (hasItems) {
+                                                            e.stopPropagation();
+                                                            setExpandedTxId(isExpanded ? null : t.id);
+                                                        } else {
+                                                            openEditModal(t);
+                                                        }
+                                                    }}
+                                                    className={`${cardStyle} p-3 flex justify-between items-center transition-transform active:scale-95 group relative overflow-hidden cursor-pointer ${darkMode ? "hover:bg-white/5" : "hover:bg-gray-50"} ${isExpanded ? (darkMode ? "border-blue-500 bg-white/5" : "border-blue-500 bg-blue-50") : ""}`}
+                                                >
+                                                    <div className="flex items-center gap-3 relative z-10">
+                                                        <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center flex-shrink-0 ${darkMode ? "border-white bg-white/10" : "border-black bg-yellow-300"}`}>
+                                                            {getCategoryIcon(t.category)}
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <h3 className="text-xs font-black uppercase leading-tight">{t.title}</h3>
+                                                                {hasItems && (
+                                                                    <div className={`text-[7px] font-black px-1 rounded border ${darkMode ? "bg-blue-500/20 border-blue-400 text-blue-400" : "bg-blue-100 border-blue-500 text-blue-600"}`}>
+                                                                        {t.items?.length} ITEMS
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex gap-2 text-[9px] font-bold opacity-60 mt-0.5">
+                                                                <span>{t.category}</span>
+                                                                <span>•</span>
+                                                                <span>{t.date}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 relative z-10">
+                                                        <div className={`text-right font-mono font-black text-sm ${t.amount > 0 ? "text-green-500" : (darkMode ? "text-red-400" : "text-red-600")}`}>
+                                                            {formatCurrency(t.amount)}
+                                                        </div>
+                                                        {hasItems && (
+                                                            <div className={`p-1 rounded-full border transition-transform duration-300 ${isExpanded ? "rotate-180 bg-blue-500 text-white border-blue-500" : "opacity-40"}`}>
+                                                                <ChevronDown size={14} />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <AnimatePresence>
+                                                    {isExpanded && hasItems && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0, y: -10 }}
+                                                            animate={{ height: "auto", opacity: 1, y: 0 }}
+                                                            exit={{ height: 0, opacity: 0, y: -10 }}
+                                                            className={`overflow-hidden border-2 rounded-xl mx-2 -mt-2 pt-4 pb-2 border-t-0 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-[#2A2A2A] border-white" : "bg-gray-50 border-black"}`}
+                                                        >
+                                                            <div className="px-4 space-y-2.5">
+                                                                <div className="flex items-center gap-2 mb-1 opacity-40">
+                                                                    <ListTree size={10} />
+                                                                    <span className="text-[8px] font-black uppercase tracking-widest">Item Breakdown</span>
+                                                                </div>
+                                                                {t.items?.map((item, idx) => (
+                                                                    <div key={item.id || idx} className="flex justify-between items-center border-b border-dotted border-current border-opacity-10 pb-1.5 last:border-0 last:pb-0">
+                                                                        <span className="text-[10px] font-bold uppercase opacity-80 leading-tight pr-4">{item.title}</span>
+                                                                        <span className="text-[10px] font-mono font-black shrink-0">{formatCurrency(item.amount)}</span>
+                                                                    </div>
+                                                                ))}
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        openEditModal(t);
+                                                                    }}
+                                                                    className={`w-full py-2 mt-2 text-[8px] font-black uppercase text-center border-2 border-dashed transition-all rounded-lg flex items-center justify-center gap-1 ${darkMode ? "border-white/20 hover:border-white hover:bg-white/10" : "border-black/20 hover:border-black hover:bg-black/5"}`}
+                                                                >
+                                                                    Edit Details <Pencil size={8} />
+                                                                </button>
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        )
+                        }
+                    </section >
+
+                    <div className="pt-8 pb-6 text-center space-y-4">
+                        <button
+                            onClick={handleResetData}
+                            className={`mx-auto px-5 py-2 rounded-full border border-red-500 text-red-500 text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 ${darkMode ? "border-red-500 text-red-500 hover:bg-red-500 hover:text-white" : "border-red-500 text-red-500 hover:bg-red-500 hover:text-white"}`}
+                        >
+                            <RotateCcw size={12} /> Reset Data
+                        </button>
+                    </div>
+
+                </main>
+
+                {/* --- FOOTER --- */}
+                <div className="pb-8 pt-4 text-center opacity-40">
+                    <p className="text-[10px] font-black uppercase tracking-widest">Budget.AI by kmlxly</p>
+                    <p className="text-[9px] font-mono mt-1 opacity-70">{APP_VERSION}</p>
+                </div>
+
+                {/* --- MODAL: MANUAL INPUT --- */}
+                {
+                    showManualModal && (
+                        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                            <div className={`w-full max-w-sm p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
+
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-black uppercase italic">
+                                        {editingId ? "Edit Rekod" : "Tambah Rekod"}
+                                    </h2>
+                                    <button onClick={() => setShowManualModal(false)} className="opacity-50 hover:opacity-100"><X size={24} /></button>
+                                </div>
+
+                                {/* Type Toggle */}
+                                <div className="flex gap-2 mb-4">
+                                    <button
+                                        onClick={() => {
+                                            setNewType("expense");
+                                            if (newCategory === "Income") setNewCategory("Makan");
+                                        }}
+                                        className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg ${newType === "expense" ? (darkMode ? "bg-red-500 border-red-500 text-white" : "bg-red-500 border-black text-white") : "opacity-50 border-current"}`}
+                                    >
+                                        Expense
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setNewType("income");
+                                            setNewCategory("Income");
+                                        }}
+                                        className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg ${newType === "income" ? (darkMode ? "bg-green-500 border-green-500 text-black" : "bg-green-500 border-black text-white") : "opacity-50 border-current"}`}
+                                    >
+                                        Income
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block pl-1">Tarikh Transaksi</label>
+                                        <input
+                                            type="date"
+                                            value={newDate}
+                                            onChange={(e) => setNewDate(e.target.value)}
+                                            className={`${inputStyle} !text-xs !p-2 h-11 w-full box-border !mb-0`}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Tajuk / Kedai</label>
+                                        <input
+                                            type="text"
+                                            value={newTitle}
+                                            onChange={(e) => setNewTitle(e.target.value)}
+                                            placeholder="Cth: Nasi Lemak, Gaji"
+                                            className={inputStyle}
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Jumlah (RM)</label>
+                                        <input
+                                            type="number"
+                                            value={newAmount}
+                                            onChange={(e) => setNewAmount(e.target.value)}
+                                            placeholder="0.00"
+                                            className={`${inputStyle} text-xl font-mono`}
+                                        />
+                                    </div>
+
+                                    {/* GROUPING / BUNCHING ITEMS */}
+                                    <div className={`p-4 rounded-xl border-2 border-dashed ${darkMode ? "border-white/30 bg-white/5" : "border-black/20 bg-gray-50"}`}>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <ListTree size={14} className="opacity-60" />
+                                                <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Pecahan Item</label>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setNewItems([...newItems, { id: Date.now(), title: "", amount: 0 }]);
+                                                }}
+                                                className="px-2 py-1 rounded-lg border-2 border-blue-500 text-blue-500 text-[9px] font-black uppercase hover:bg-blue-500 hover:text-white transition-all flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(59,130,246,0.3)]"
+                                            >
+                                                <Plus size={10} /> Tambah
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            {newItems.map((item, idx) => (
+                                                <div key={item.id} className="grid grid-cols-[1fr_80px_32px] gap-2 items-center animate-in fade-in slide-in-from-top-1">
+                                                    <input
+                                                        type="text"
+                                                        value={item.title}
+                                                        onChange={(e) => {
+                                                            const updated = [...newItems];
+                                                            updated[idx].title = e.target.value;
+                                                            setNewItems(updated);
+                                                        }}
+                                                        placeholder="Cth: Bawang"
+                                                        className={`${inputStyle} !p-2 !text-[11px] !mb-0 h-9`}
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        value={item.amount || ""}
+                                                        onChange={(e) => {
+                                                            const updated = [...newItems];
+                                                            updated[idx].amount = parseFloat(e.target.value) || 0;
+                                                            setNewItems(updated);
+
+                                                            // Auto-update total amount if items exist
+                                                            const total = updated.reduce((sum, it) => sum + (it.amount || 0), 0);
+                                                            if (total > 0) setNewAmount(total.toFixed(2));
+                                                        }}
+                                                        placeholder="0.00"
+                                                        className={`${inputStyle} !p-2 !text-[11px] font-mono !mb-0 h-9 text-right`}
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            const updated = newItems.filter((_, i) => i !== idx);
+                                                            setNewItems(updated);
+                                                            const total = updated.reduce((sum, it) => sum + (it.amount || 0), 0);
+                                                            setNewAmount(total > 0 ? total.toFixed(2) : newAmount);
+                                                        }}
+                                                        className="w-8 h-9 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 border-2 border-red-500/20 hover:bg-red-500 hover:text-white hover:border-red-600 transition-all active:scale-90"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {newItems.length === 0 && (
+                                                <div className="text-center py-4 border-2 border-dotted border-current border-opacity-10 rounded-lg">
+                                                    <p className="text-[9px] font-bold opacity-30 uppercase tracking-widest italic">Tiada pecahan item disimpan.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Kategori</label>
+                                        <div className="relative">
+                                            <select
+                                                value={newCategory}
+                                                onChange={(e) => setNewCategory(e.target.value)}
+                                                className={`${inputStyle} appearance-none pr-10`}
+                                            >
+                                                {(newType === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(cat => (
+                                                    <option key={cat} value={cat}>{cat}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-3 top-[38%] -translate-y-1/2 pointer-events-none opacity-50">
+                                                <ChevronDown size={18} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button onClick={handleSaveTransaction} className={`w-full py-4 mt-2 text-sm ${buttonBase} ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
+                                        {editingId ? "UPDATE DATA" : "SIMPAN REKOD"}
+                                    </button>
+                                </div>
+
+                            </div>
+                        </div>
+                    )
+                }
+
+                {/* --- MODAL: SEMUA TRANSAKSI --- */}
+                {
+                    showAllTransactions && (
+                        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                            <div className={`w-full max-w-sm max-h-[80vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
+
+                                <div className="flex justify-between items-center p-6 border-b-2 border-current border-opacity-20">
+                                    <h2 className="text-xl font-black uppercase italic">Semua Transaksi</h2>
+                                    <button onClick={() => setShowAllTransactions(false)} className="opacity-50 hover:opacity-100"><X size={24} /></button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                                    {transactions.length === 0 ? (
+                                        <div className="text-center py-10 opacity-50 font-bold text-xs uppercase">Belum ada data.</div>
+                                    ) : transactions.map((t) => (
                                         <div
                                             key={t.id}
-                                            onClick={() => openEditModal(t)}
+                                            onClick={() => {
+                                                setShowAllTransactions(false);
+                                                openEditModal(t);
+                                            }}
                                             className={`${cardStyle} p-3 flex justify-between items-center transition-transform active:scale-95 group relative overflow-hidden cursor-pointer ${darkMode ? "hover:bg-white/5" : "hover:bg-gray-50"}`}
                                         >
 
@@ -1866,7 +2179,8 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                                 {/* BUTANG EDIT */}
                                                 <button
                                                     onClick={(e) => {
-                                                        e.stopPropagation(); // Elak trigger klik card
+                                                        e.stopPropagation();
+                                                        setShowAllTransactions(false);
                                                         openEditModal(t);
                                                     }}
                                                     className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
@@ -1877,7 +2191,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                                 {/* BUTANG DELETE */}
                                                 <button
                                                     onClick={(e) => {
-                                                        e.stopPropagation(); // Elak trigger klik card
+                                                        e.stopPropagation();
                                                         handleDelete(t.id);
                                                     }}
                                                     className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
@@ -1887,645 +2201,501 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                             </div>
 
                                         </div>
-                                    ));
-                                })()}
-                            </div>
-                        )}
-                    </section>
-
-                    {/* RESET DATA BUTTON (Macam SplitIt) */}
-                    <div className="pt-8 pb-6 text-center space-y-4">
-                        <button
-                            onClick={handleResetData}
-                            className={`mx-auto px-5 py-2 rounded-full border border-red-500 text-red-500 text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 ${darkMode ? "border-red-500 text-red-500 hover:bg-red-500 hover:text-white" : "border-red-500 text-red-500 hover:bg-red-500 hover:text-white"}`}
-                        >
-                            <RotateCcw size={12} /> Reset Data
-                        </button>
-                    </div>
-
-                </main>
-
-                {/* --- FOOTER --- */}
-                <div className="pb-8 pt-4 text-center opacity-40">
-                    <p className="text-[10px] font-black uppercase tracking-widest">Budget.AI by kmlxly</p>
-                    <p className="text-[9px] font-mono mt-1 opacity-70">{APP_VERSION}</p>
-                </div>
-
-                {/* --- MODAL: MANUAL INPUT --- */}
-                {showManualModal && (
-                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                        <div className={`w-full max-w-sm p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
-
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-xl font-black uppercase italic">
-                                    {editingId ? "Edit Rekod" : "Tambah Rekod"}
-                                </h2>
-                                <button onClick={() => setShowManualModal(false)} className="opacity-50 hover:opacity-100"><X size={24} /></button>
-                            </div>
-
-                            {/* Type Toggle */}
-                            <div className="flex gap-2 mb-4">
-                                <button
-                                    onClick={() => {
-                                        setNewType("expense");
-                                        if (newCategory === "Income") setNewCategory("Makan");
-                                    }}
-                                    className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg ${newType === "expense" ? (darkMode ? "bg-red-500 border-red-500 text-white" : "bg-red-500 border-black text-white") : "opacity-50 border-current"}`}
-                                >
-                                    Expense
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setNewType("income");
-                                        setNewCategory("Income");
-                                    }}
-                                    className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg ${newType === "income" ? (darkMode ? "bg-green-500 border-green-500 text-black" : "bg-green-500 border-black text-white") : "opacity-50 border-current"}`}
-                                >
-                                    Income
-                                </button>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Tarikh</label>
-                                    <input
-                                        type="date"
-                                        value={newDate}
-                                        onChange={(e) => setNewDate(e.target.value)}
-                                        className={inputStyle}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Tajuk / Kedai</label>
-                                    <input
-                                        type="text"
-                                        value={newTitle}
-                                        onChange={(e) => setNewTitle(e.target.value)}
-                                        placeholder="Cth: Nasi Lemak, Gaji"
-                                        className={inputStyle}
-                                        autoFocus
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Jumlah (RM)</label>
-                                    <input
-                                        type="number"
-                                        value={newAmount}
-                                        onChange={(e) => setNewAmount(e.target.value)}
-                                        placeholder="0.00"
-                                        className={`${inputStyle} text-xl font-mono`}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Kategori</label>
-                                    <div className="relative">
-                                        <select
-                                            value={newCategory}
-                                            onChange={(e) => setNewCategory(e.target.value)}
-                                            className={`${inputStyle} appearance-none pr-10`}
-                                        >
-                                            {(newType === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
-                                            ))}
-                                        </select>
-                                        <div className="absolute right-3 top-[38%] -translate-y-1/2 pointer-events-none opacity-50">
-                                            <ChevronDown size={18} />
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
 
-                                <button onClick={handleSaveTransaction} className={`w-full py-4 mt-2 text-sm ${buttonBase} ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                                    {editingId ? "UPDATE DATA" : "SIMPAN REKOD"}
-                                </button>
                             </div>
-
                         </div>
-                    </div>
-                )}
-
-                {/* --- MODAL: SEMUA TRANSAKSI --- */}
-                {showAllTransactions && (
-                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                        <div className={`w-full max-w-sm max-h-[80vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
-
-                            <div className="flex justify-between items-center p-6 border-b-2 border-current border-opacity-20">
-                                <h2 className="text-xl font-black uppercase italic">Semua Transaksi</h2>
-                                <button onClick={() => setShowAllTransactions(false)} className="opacity-50 hover:opacity-100"><X size={24} /></button>
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto p-6 space-y-3">
-                                {transactions.length === 0 ? (
-                                    <div className="text-center py-10 opacity-50 font-bold text-xs uppercase">Belum ada data.</div>
-                                ) : transactions.map((t) => (
-                                    <div
-                                        key={t.id}
-                                        onClick={() => {
-                                            setShowAllTransactions(false);
-                                            openEditModal(t);
-                                        }}
-                                        className={`${cardStyle} p-3 flex justify-between items-center transition-transform active:scale-95 group relative overflow-hidden cursor-pointer ${darkMode ? "hover:bg-white/5" : "hover:bg-gray-50"}`}
-                                    >
-
-                                        <div className="flex items-center gap-3 relative z-10">
-                                            <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center flex-shrink-0 ${darkMode ? "border-white bg-white/10" : "border-black bg-yellow-300"}`}>
-                                                {getCategoryIcon(t.category)}
-                                            </div>
-                                            <div>
-                                                <h3 className="text-xs font-black uppercase leading-tight">{t.title}</h3>
-                                                <div className="flex gap-2 text-[9px] font-bold opacity-60 mt-0.5">
-                                                    <span>{t.category}</span>
-                                                    <span>•</span>
-                                                    <span>{t.date}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center gap-3 relative z-10">
-                                            <div className={`text-right font-mono font-black text-sm ${t.amount > 0 ? "text-green-500" : (darkMode ? "text-red-400" : "text-red-600")}`}>
-                                                {isGhostMode ? "RM ****" : `${t.amount > 0 ? "+" : ""}${t.amount.toFixed(2)}`}
-                                            </div>
-
-                                            {/* BUTANG EDIT */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setShowAllTransactions(false);
-                                                    openEditModal(t);
-                                                }}
-                                                className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                                            >
-                                                <Pencil size={14} />
-                                            </button>
-
-                                            {/* BUTANG DELETE */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDelete(t.id);
-                                                }}
-                                                className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-
-                                    </div>
-                                ))}
-                            </div>
-
-                        </div>
-                    </div>
-                )}
+                    )
+                }
 
                 {/* --- MODAL: REVIEW SCAN RESULT --- */}
-                {showScanResultModal && (scannedTransaction || scannedTransactions.length > 0) && (
-                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                        <div className={`w-full max-w-sm max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in slide-in-from-bottom-10`}>
+                {
+                    showScanResultModal && (scannedTransaction || scannedTransactions.length > 0) && (
+                        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                            <div className={`w-full max-w-sm max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in slide-in-from-bottom-10`}>
 
-                            <div className={`flex justify-between items-center p-6 border-b-2 ${darkMode ? "border-white" : "border-black"} bg-opacity-20 flex-shrink-0`}>
-                                <h2 className="text-xl font-black uppercase italic flex items-center gap-2">
-                                    <ScanLine size={20} /> Preview Scan
-                                </h2>
-                                <button onClick={() => {
-                                    setShowScanResultModal(false);
-                                    setScannedTransaction(null);
-                                    setScannedTransactions([]);
-                                }} className="opacity-50 hover:opacity-100 transition-opacity"><X size={24} /></button>
-                            </div>
-
-                            {scannedTransactions.length > 0 ? (
-                                /* Multiple Transactions (PDF) */
-                                <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                                    <div className={`p-4 rounded-xl border-2 border-dashed ${darkMode ? "border-white/50 bg-white/5" : "border-black/50 bg-yellow-50"}`}>
-                                        <p className="text-xs font-bold leading-relaxed opacity-80">
-                                            Found <span className="text-blue-500 font-black">{scannedTransactions.length} items</span> from your file.
-                                            Please verify details before saving.
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        {scannedTransactions.map((tx, idx) => (
-                                            <div key={tx.id} className={`${cardStyle} p-4 relative group`}>
-
-                                                {/* Header Bar */}
-                                                <div className="flex items-center gap-3 mb-3">
-                                                    <div className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${darkMode ? "border-white bg-white/10" : "border-black bg-white"}`}>
-                                                        <span className="text-xs font-black">{idx + 1}</span>
-                                                    </div>
-                                                    <input
-                                                        type="text"
-                                                        value={tx.title}
-                                                        onChange={(e) => {
-                                                            const updated = [...scannedTransactions];
-                                                            updated[idx].title = e.target.value;
-                                                            setScannedTransactions(updated);
-                                                        }}
-                                                        className={`${inputStyle} text-sm font-bold py-1.5 h-auto flex-1`}
-                                                        placeholder="Sila isi tajuk..."
-                                                    />
-                                                </div>
-
-                                                {/* Details Row */}
-                                                <div className="flex gap-2 mb-3">
-                                                    <div className="flex-1">
-                                                        <label className="text-[9px] font-black uppercase opacity-50 mb-1 block">Date</label>
-                                                        <input
-                                                            type="date"
-                                                            value={tx.isoDate || ""}
-                                                            onChange={(e) => {
-                                                                const updated = [...scannedTransactions];
-                                                                const newIso = e.target.value;
-                                                                const dateObj = new Date(newIso);
-                                                                updated[idx].isoDate = newIso;
-                                                                updated[idx].date = dateObj.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
-                                                                setScannedTransactions(updated);
-                                                            }}
-                                                            className={`${inputStyle} text-xs py-1.5 h-auto w-full`}
-                                                        />
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <label className="text-[9px] font-black uppercase opacity-50 mb-1 block">Category</label>
-                                                        <select
-                                                            value={tx.category}
-                                                            onChange={(e) => {
-                                                                const updated = [...scannedTransactions];
-                                                                updated[idx].category = e.target.value;
-                                                                setScannedTransactions(updated);
-                                                            }}
-                                                            className={`${inputStyle} text-xs py-1.5 h-auto w-full appearance-none`}
-                                                        >
-                                                            {ALL_CATEGORIES.map(cat => (
-                                                                <option key={cat} value={cat}>{cat}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                </div>
-
-                                                {/* Amount Row */}
-                                                <div>
-                                                    <label className="text-[9px] font-black uppercase opacity-50 mb-1 block">Amount</label>
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="number"
-                                                            value={Math.abs(tx.amount)}
-                                                            onChange={(e) => {
-                                                                const updated = [...scannedTransactions];
-                                                                const val = parseFloat(e.target.value) || 0;
-                                                                updated[idx].amount = tx.category === "Income" ? Math.abs(val) : -Math.abs(val);
-                                                                setScannedTransactions(updated);
-                                                            }}
-                                                            className={`${inputStyle} text-sm font-mono font-black py-1.5 h-auto flex-1`}
-                                                        />
-                                                        <button
-                                                            onClick={() => {
-                                                                const updated = scannedTransactions.filter((_, i) => i !== idx);
-                                                                setScannedTransactions(updated);
-                                                            }}
-                                                            className="p-2 text-red-500 border-2 border-transparent hover:border-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                                                            title="Buang Item"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ) : scannedTransaction ? (
-                                /* Single Transaction (Image) */
-                                <div className="flex-1 overflow-y-auto p-6 space-y-5">
-
-                                    {/* Edit Form */}
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Title / Merchant</label>
-                                            <input
-                                                type="text"
-                                                value={scannedTransaction.title}
-                                                onChange={(e) => setScannedTransaction({ ...scannedTransaction, title: e.target.value })}
-                                                className={`${inputStyle} text-sm font-bold`}
-                                                autoFocus
-                                            />
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Date</label>
-                                                <input
-                                                    type="date"
-                                                    value={scannedTransaction.isoDate || ""}
-                                                    onChange={(e) => {
-                                                        const newIso = e.target.value;
-                                                        const dateObj = new Date(newIso);
-                                                        const newDateStr = dateObj.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
-                                                        setScannedTransaction({ ...scannedTransaction, isoDate: newIso, date: newDateStr });
-                                                    }}
-                                                    className={inputStyle}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Category</label>
-                                                <select
-                                                    value={scannedTransaction.category}
-                                                    onChange={(e) => {
-                                                        const newCategory = e.target.value;
-                                                        const isIncome = newCategory === "Income";
-                                                        setScannedTransaction({
-                                                            ...scannedTransaction,
-                                                            category: newCategory,
-                                                            amount: isIncome ? Math.abs(scannedTransaction.amount) : -Math.abs(scannedTransaction.amount)
-                                                        });
-                                                    }}
-                                                    className={`${inputStyle} appearance-none`}
-                                                >
-                                                    {ALL_CATEGORIES.map(cat => (
-                                                        <option key={cat} value={cat}>{cat}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <div className={`p-4 rounded-xl border-2 ${darkMode ? "bg-white/5 border-white/20" : "bg-gray-50 border-black/10"}`}>
-                                            <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider text-center">Amount (RM)</label>
-                                            <input
-                                                type="number"
-                                                value={Math.abs(scannedTransaction.amount)}
-                                                onChange={(e) => {
-                                                    const val = parseFloat(e.target.value) || 0;
-                                                    setScannedTransaction({ ...scannedTransaction, amount: scannedTransaction.category === "Income" ? Math.abs(val) : -Math.abs(val) });
-                                                }}
-                                                className={`w-full bg-transparent text-center text-3xl font-black font-mono outline-none ${darkMode ? "text-white" : "text-black"}`}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : null}
-
-                            <div className={`flex gap-3 p-6 border-t-2 ${darkMode ? "border-white" : "border-black"} bg-opacity-20 flex-shrink-0`}>
-                                <button
-                                    onClick={() => {
+                                <div className={`flex justify-between items-center p-6 border-b-2 ${darkMode ? "border-white" : "border-black"} bg-opacity-20 flex-shrink-0`}>
+                                    <h2 className="text-xl font-black uppercase italic flex items-center gap-2">
+                                        <ScanLine size={20} /> Preview Scan
+                                    </h2>
+                                    <button onClick={() => {
                                         setShowScanResultModal(false);
                                         setScannedTransaction(null);
                                         setScannedTransactions([]);
-                                    }}
-                                    className={`flex-1 py-3.5 rounded-xl border-2 text-xs font-black uppercase transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-gray-100"}`}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        // Logic Baru: Auto-jump ke bulan transaksi tersebut
-                                        const targetTx = scannedTransactions.length > 0 ? scannedTransactions[0] : scannedTransaction;
-
-                                        if (targetTx && targetTx.isoDate) {
-                                            const txDate = new Date(targetTx.isoDate);
-                                            // Check valid date
-                                            if (!isNaN(txDate.getTime())) {
-                                                // Set SelectedDate kepada 1hb bulan transaksi tersebut supaya ia visible dalam list
-                                                setSelectedDate(new Date(txDate.getFullYear(), txDate.getMonth(), 1));
-                                            }
-                                        }
-
-                                        if (scannedTransactions.length > 0) {
-                                            // Save all multiple transactions
-                                            setTransactions([...scannedTransactions, ...transactions]);
-                                            setShowScanResultModal(false);
-                                            setScannedTransactions([]);
-                                            alert(`${scannedTransactions.length} transaksi berjaya disimpan!`);
-                                        } else if (scannedTransaction) {
-                                            // Save single transaction
-                                            setTransactions([scannedTransaction, ...transactions]);
-                                            setShowScanResultModal(false);
-                                            setScannedTransaction(null);
-                                            alert("Transaksi berjaya disimpan!");
-                                        }
-                                    }}
-                                    className={`flex-1 py-3.5 rounded-xl border-2 text-xs font-black uppercase transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
-                                >
-                                    {scannedTransactions.length > 0 ? `Confirm All (${scannedTransactions.length})` : "Confirm & Save"}
-                                </button>
-                            </div>
-
-                        </div>
-                    </div>
-                )}
-
-                {/* --- MODAL: PILIH SUMBER RESIT --- */}
-                {showScanMethodModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                        <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-black uppercase flex items-center gap-2"><Camera size={20} /> Pilih Sumber Resit</h3>
-                                <button onClick={() => setShowScanMethodModal(false)}><X size={20} /></button>
-                            </div>
-                            <div className="space-y-4">
-                                <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" : "border-indigo-600 bg-indigo-50 hover:bg-indigo-100"}`}>
-                                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanReceipt} />
-                                    <Camera size={32} className={`mx-auto mb-2 ${darkMode ? "text-indigo-400" : "text-indigo-600"}`} />
-                                    <span className="block font-black uppercase text-sm">Ambil Gambar (Camera)</span>
-                                </label>
-                                <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-white/30 bg-white/5 hover:bg-white/10" : "border-black/20 bg-gray-50 hover:bg-gray-100"}`}>
-                                    <input type="file" accept="image/*" className="hidden" onChange={handleScanReceipt} />
-                                    <ImageIcon size={32} className="mx-auto mb-2 opacity-50" />
-                                    <span className="block font-black uppercase text-sm opacity-70">Pilih Dari Gallery</span>
-                                </label>
-                                <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-blue-400 bg-blue-500/10 hover:bg-blue-500/20" : "border-blue-600 bg-blue-50 hover:bg-blue-100"}`}>
-                                    <input type="file" accept="application/pdf" className="hidden" onChange={handleScanReceipt} />
-                                    <Receipt size={32} className={`mx-auto mb-2 ${darkMode ? "text-blue-400" : "text-blue-600"}`} />
-                                    <span className="block font-black uppercase text-sm">Upload PDF Statement</span>
-                                    <span className="block text-[9px] font-bold opacity-60 mt-1">Bank Statement / Multiple Transactions</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* --- MODAL: CALENDAR --- */}
-                {showCalendarModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                        <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-black uppercase flex items-center gap-2"><Calendar size={20} /> Pilih Bulan/Tahun</h3>
-                                <button onClick={() => setShowCalendarModal(false)}><X size={20} /></button>
-                            </div>
-
-                            <div className="space-y-4">
-                                {/* Month Selector */}
-                                <div>
-                                    <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Bulan</label>
-                                    <div className="relative">
-                                        <select
-                                            value={selectedDate.getMonth()}
-                                            onChange={(e) => {
-                                                const newDate = new Date(selectedDate);
-                                                newDate.setMonth(parseInt(e.target.value));
-                                                setSelectedDate(newDate);
-                                            }}
-                                            className={`w-full p-3 pr-10 rounded-xl border-2 outline-none font-bold appearance-none cursor-pointer ${darkMode ? "bg-black border-white text-white" : "bg-white border-black text-black"}`}
-                                        >
-                                            <option value={0}>Januari</option>
-                                            <option value={1}>Februari</option>
-                                            <option value={2}>Mac</option>
-                                            <option value={3}>April</option>
-                                            <option value={4}>Mei</option>
-                                            <option value={5}>Jun</option>
-                                            <option value={6}>Julai</option>
-                                            <option value={7}>Ogos</option>
-                                            <option value={8}>September</option>
-                                            <option value={9}>Oktober</option>
-                                            <option value={10}>November</option>
-                                            <option value={11}>Disember</option>
-                                        </select>
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                                            <ChevronDown size={18} />
-                                        </div>
-                                    </div>
+                                    }} className="opacity-50 hover:opacity-100 transition-opacity"><X size={24} /></button>
                                 </div>
 
-                                {/* Year Selector */}
-                                <div>
-                                    <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Tahun</label>
-                                    <div className="relative">
-                                        <select
-                                            value={selectedDate.getFullYear()}
-                                            onChange={(e) => {
-                                                const newDate = new Date(selectedDate);
-                                                newDate.setFullYear(parseInt(e.target.value));
-                                                setSelectedDate(newDate);
-                                            }}
-                                            className={`w-full p-3 pr-10 rounded-xl border-2 outline-none font-bold appearance-none cursor-pointer ${darkMode ? "bg-black border-white text-white" : "bg-white border-black text-black"}`}
-                                        >
-                                            {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
-                                                <option key={year} value={year}>{year}</option>
+                                {scannedTransactions.length > 0 ? (
+                                    /* Multiple Transactions (PDF) */
+                                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                                        <div className={`p-4 rounded-xl border-2 border-dashed ${darkMode ? "border-white/50 bg-white/5" : "border-black/50 bg-yellow-50"}`}>
+                                            <p className="text-xs font-bold leading-relaxed opacity-80">
+                                                Found <span className="text-blue-500 font-black">{scannedTransactions.length} items</span> from your file.
+                                                Please verify details before saving.
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            {scannedTransactions.map((tx, idx) => (
+                                                <div key={tx.id} className={`${cardStyle} p-4 relative group`}>
+
+                                                    {/* Header Bar */}
+                                                    <div className="flex items-center gap-3 mb-3">
+                                                        <div className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${darkMode ? "border-white bg-white/10" : "border-black bg-white"}`}>
+                                                            <span className="text-xs font-black">{idx + 1}</span>
+                                                        </div>
+                                                        <input
+                                                            type="text"
+                                                            value={tx.title}
+                                                            onChange={(e) => {
+                                                                const updated = [...scannedTransactions];
+                                                                updated[idx].title = e.target.value;
+                                                                setScannedTransactions(updated);
+                                                            }}
+                                                            className={`${inputStyle} text-sm font-bold py-1.5 h-auto flex-1`}
+                                                            placeholder="Sila isi tajuk..."
+                                                        />
+                                                    </div>
+
+                                                    {/* Details Row */}
+                                                    <div className="grid grid-cols-2 gap-3 mb-4">
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-1.5 opacity-50 pl-1">
+                                                                <Calendar size={10} />
+                                                                <label className="text-[8px] font-black uppercase tracking-wider">Tarikh</label>
+                                                            </div>
+                                                            <input
+                                                                type="date"
+                                                                value={tx.isoDate || ""}
+                                                                onChange={(e) => {
+                                                                    const updated = [...scannedTransactions];
+                                                                    const newIso = e.target.value;
+                                                                    const dateObj = new Date(newIso);
+                                                                    updated[idx].isoDate = newIso;
+                                                                    updated[idx].date = dateObj.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
+                                                                    setScannedTransactions(updated);
+                                                                }}
+                                                                className={`${inputStyle} !p-2 !text-xs !mb-0 h-9 w-full`}
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-1.5 opacity-50 pl-1">
+                                                                <Zap size={10} />
+                                                                <label className="text-[8px] font-black uppercase tracking-wider">Kategori</label>
+                                                            </div>
+                                                            <select
+                                                                value={tx.category}
+                                                                onChange={(e) => {
+                                                                    const updated = [...scannedTransactions];
+                                                                    updated[idx].category = e.target.value;
+                                                                    setScannedTransactions(updated);
+                                                                }}
+                                                                className={`${inputStyle} !p-2 !text-xs !mb-0 h-9 w-full appearance-none`}
+                                                            >
+                                                                {ALL_CATEGORIES.map(cat => (
+                                                                    <option key={cat} value={cat}>{cat}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Amount Row */}
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-1.5 opacity-50 pl-1">
+                                                            <Wallet size={10} />
+                                                            <label className="text-[8px] font-black uppercase tracking-wider">Jumlah (RM)</label>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="number"
+                                                                value={Math.abs(tx.amount)}
+                                                                onChange={(e) => {
+                                                                    const updated = [...scannedTransactions];
+                                                                    const val = parseFloat(e.target.value) || 0;
+                                                                    updated[idx].amount = tx.category === "Income" ? Math.abs(val) : -Math.abs(val);
+                                                                    setScannedTransactions(updated);
+                                                                }}
+                                                                className={`${inputStyle} !p-2 !text-sm font-mono font-black !mb-0 h-10 flex-1`}
+                                                            />
+                                                            <button
+                                                                onClick={() => {
+                                                                    const updated = scannedTransactions.filter((_, i) => i !== idx);
+                                                                    setScannedTransactions(updated);
+                                                                }}
+                                                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 border-2 border-red-500/20 hover:bg-red-500 hover:text-white transition-all active:scale-90"
+                                                                title="Buang Item"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             ))}
-                                        </select>
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                                            <ChevronDown size={18} />
                                         </div>
                                     </div>
-                                </div>
+                                ) : scannedTransaction ? (
+                                    /* Single Transaction (Image) */
+                                    <div className="flex-1 overflow-y-auto p-6 space-y-5">
 
-                                {/* Quick Actions */}
-                                <div className="flex gap-2 pt-2">
+                                        {/* Edit Form */}
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Title / Merchant</label>
+                                                <input
+                                                    type="text"
+                                                    value={scannedTransaction.title}
+                                                    onChange={(e) => setScannedTransaction({ ...scannedTransaction, title: e.target.value })}
+                                                    className={`${inputStyle} text-sm font-bold`}
+                                                    autoFocus
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Date</label>
+                                                    <input
+                                                        type="date"
+                                                        value={scannedTransaction.isoDate || ""}
+                                                        onChange={(e) => {
+                                                            const newIso = e.target.value;
+                                                            const dateObj = new Date(newIso);
+                                                            const newDateStr = dateObj.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
+                                                            setScannedTransaction({ ...scannedTransaction, isoDate: newIso, date: newDateStr });
+                                                        }}
+                                                        className={`${inputStyle} !text-xs !p-2 h-11 w-full box-border !mb-0`}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Category</label>
+                                                    <select
+                                                        value={scannedTransaction.category}
+                                                        onChange={(e) => {
+                                                            const newCategory = e.target.value;
+                                                            const isIncome = newCategory === "Income";
+                                                            setScannedTransaction({
+                                                                ...scannedTransaction,
+                                                                category: newCategory,
+                                                                amount: isIncome ? Math.abs(scannedTransaction.amount) : -Math.abs(scannedTransaction.amount)
+                                                            });
+                                                        }}
+                                                        className={`${inputStyle} !text-xs !p-2 h-11 w-full appearance-none !mb-0`}
+                                                    >
+                                                        {ALL_CATEGORIES.map(cat => (
+                                                            <option key={cat} value={cat}>{cat}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="text-center text-[9px] font-black uppercase opacity-50 mb-1 block tracking-wider">Total Amount (RM)</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        value={Math.abs(scannedTransaction.amount)}
+                                                        onChange={(e) => {
+                                                            const val = parseFloat(e.target.value) || 0;
+                                                            setScannedTransaction({ ...scannedTransaction, amount: scannedTransaction.category === "Income" ? Math.abs(val) : -Math.abs(val) });
+                                                        }}
+                                                        className={`w-full bg-transparent text-center text-3xl font-black font-mono outline-none ${darkMode ? "text-white" : "text-black"}`}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {scannedTransaction.items && scannedTransaction.items.length > 0 && (
+                                                <div className={`p-4 rounded-xl border-2 border-dashed ${darkMode ? "border-white/20 bg-white/5" : "border-black/20 bg-gray-50"}`}>
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <Sparkles size={12} className="text-blue-500" />
+                                                        <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Pecahan Item (AI)</label>
+                                                    </div>
+                                                    <div className={`space-y-2 rounded-lg p-3 ${darkMode ? "bg-black/20" : "bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)] border border-black/5"}`}>
+                                                        {scannedTransaction.items.map((item) => (
+                                                            <div key={item.id} className="flex justify-between items-center text-[10px] border-b border-dashed border-current border-opacity-10 pb-2 last:border-0 last:pb-0">
+                                                                <span className="font-bold opacity-80 uppercase leading-tight pr-4">{item.title}</span>
+                                                                <span className="font-mono font-black shrink-0">{formatCurrency(item.amount)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                <div className={`flex gap-3 p-6 border-t-2 ${darkMode ? "border-white" : "border-black"} bg-opacity-20 flex-shrink-0`}>
                                     <button
                                         onClick={() => {
-                                            setSelectedDate(new Date());
-                                            setShowCalendarModal(false);
+                                            setShowScanResultModal(false);
+                                            setScannedTransaction(null);
+                                            setScannedTransactions([]);
                                         }}
-                                        className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg transition-all ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`}
+                                        className={`flex-1 py-3.5 rounded-xl border-2 text-xs font-black uppercase transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-gray-100"}`}
                                     >
-                                        Bulan Ini
+                                        Cancel
                                     </button>
                                     <button
-                                        onClick={() => setShowCalendarModal(false)}
-                                        className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg transition-all ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
+                                        onClick={() => {
+                                            // Logic Baru: Auto-jump ke bulan transaksi tersebut
+                                            const targetTx = scannedTransactions.length > 0 ? scannedTransactions[0] : scannedTransaction;
+
+                                            if (targetTx && targetTx.isoDate) {
+                                                const txDate = new Date(targetTx.isoDate);
+                                                // Check valid date
+                                                if (!isNaN(txDate.getTime())) {
+                                                    // Set SelectedDate kepada 1hb bulan transaksi tersebut supaya ia visible dalam list
+                                                    setSelectedDate(new Date(txDate.getFullYear(), txDate.getMonth(), 1));
+                                                }
+                                            }
+
+                                            if (scannedTransactions.length > 0) {
+                                                // Save all multiple transactions
+                                                setTransactions([...scannedTransactions, ...transactions]);
+                                                setShowScanResultModal(false);
+                                                setScannedTransactions([]);
+                                                alert(`${scannedTransactions.length} transaksi berjaya disimpan!`);
+                                            } else if (scannedTransaction) {
+                                                // Save single transaction
+                                                setTransactions([scannedTransaction, ...transactions]);
+                                                setShowScanResultModal(false);
+                                                setScannedTransaction(null);
+                                                alert("Transaksi berjaya disimpan!");
+                                            }
+                                        }}
+                                        className={`flex-1 py-3.5 rounded-xl border-2 text-xs font-black uppercase transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
                                     >
-                                        OK
+                                        {scannedTransactions.length > 0 ? `Confirm All (${scannedTransactions.length})` : "Confirm & Save"}
                                     </button>
                                 </div>
+
                             </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
+
+                {/* --- MODAL: PILIH SUMBER RESIT --- */}
+                {
+                    showScanMethodModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                            <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-lg font-black uppercase flex items-center gap-2"><Camera size={20} /> Pilih Sumber Resit</h3>
+                                    <button onClick={() => setShowScanMethodModal(false)}><X size={20} /></button>
+                                </div>
+                                <div className="space-y-4">
+                                    <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" : "border-indigo-600 bg-indigo-50 hover:bg-indigo-100"}`}>
+                                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanReceipt} />
+                                        <Camera size={32} className={`mx-auto mb-2 ${darkMode ? "text-indigo-400" : "text-indigo-600"}`} />
+                                        <span className="block font-black uppercase text-sm">Ambil Gambar (Camera)</span>
+                                    </label>
+                                    <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-white/30 bg-white/5 hover:bg-white/10" : "border-black/20 bg-gray-50 hover:bg-gray-100"}`}>
+                                        <input type="file" accept="image/*" className="hidden" onChange={handleScanReceipt} />
+                                        <ImageIcon size={32} className="mx-auto mb-2 opacity-50" />
+                                        <span className="block font-black uppercase text-sm opacity-70">Pilih Dari Gallery</span>
+                                    </label>
+                                    <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-blue-400 bg-blue-500/10 hover:bg-blue-500/20" : "border-blue-600 bg-blue-50 hover:bg-blue-100"}`}>
+                                        <input type="file" accept="application/pdf" className="hidden" onChange={handleScanReceipt} />
+                                        <Receipt size={32} className={`mx-auto mb-2 ${darkMode ? "text-blue-400" : "text-blue-600"}`} />
+                                        <span className="block font-black uppercase text-sm">Upload PDF Statement</span>
+                                        <span className="block text-[9px] font-bold opacity-60 mt-1">Bank Statement / Multiple Transactions</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                }
+
+                {/* --- MODAL: CALENDAR --- */}
+                {
+                    showCalendarModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                            <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-lg font-black uppercase flex items-center gap-2"><Calendar size={20} /> Pilih Bulan/Tahun</h3>
+                                    <button onClick={() => setShowCalendarModal(false)}><X size={20} /></button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {/* Month Selector */}
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Bulan</label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedDate.getMonth()}
+                                                onChange={(e) => {
+                                                    const newDate = new Date(selectedDate);
+                                                    newDate.setMonth(parseInt(e.target.value));
+                                                    setSelectedDate(newDate);
+                                                }}
+                                                className={`w-full p-3 pr-10 rounded-xl border-2 outline-none font-bold appearance-none cursor-pointer ${darkMode ? "bg-black border-white text-white" : "bg-white border-black text-black"}`}
+                                            >
+                                                <option value={0}>Januari</option>
+                                                <option value={1}>Februari</option>
+                                                <option value={2}>Mac</option>
+                                                <option value={3}>April</option>
+                                                <option value={4}>Mei</option>
+                                                <option value={5}>Jun</option>
+                                                <option value={6}>Julai</option>
+                                                <option value={7}>Ogos</option>
+                                                <option value={8}>September</option>
+                                                <option value={9}>Oktober</option>
+                                                <option value={10}>November</option>
+                                                <option value={11}>Disember</option>
+                                            </select>
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                                                <ChevronDown size={18} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Year Selector */}
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Tahun</label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedDate.getFullYear()}
+                                                onChange={(e) => {
+                                                    const newDate = new Date(selectedDate);
+                                                    newDate.setFullYear(parseInt(e.target.value));
+                                                    setSelectedDate(newDate);
+                                                }}
+                                                className={`w-full p-3 pr-10 rounded-xl border-2 outline-none font-bold appearance-none cursor-pointer ${darkMode ? "bg-black border-white text-white" : "bg-white border-black text-black"}`}
+                                            >
+                                                {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                                                    <option key={year} value={year}>{year}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                                                <ChevronDown size={18} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Quick Actions */}
+                                    <div className="flex gap-2 pt-2">
+                                        <button
+                                            onClick={() => {
+                                                setSelectedDate(new Date());
+                                                setShowCalendarModal(false);
+                                            }}
+                                            className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg transition-all ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`}
+                                        >
+                                            Bulan Ini
+                                        </button>
+                                        <button
+                                            onClick={() => setShowCalendarModal(false)}
+                                            className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg transition-all ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
+                                        >
+                                            OK
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                }
 
                 {/* --- LOGIN GUIDE MODAL (Google Unverified Warning) --- */}
-                {showLoginGuide && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-                        <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-                            <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20} /></button>
+                {
+                    showLoginGuide && (
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
+                            <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                                <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20} /></button>
 
-                            <div className="text-center mb-4">
-                                <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-3 border-2 border-black">
-                                    <AlertCircle size={32} className="text-yellow-600" />
-                                </div>
-                                <h2 className="text-lg font-black uppercase leading-tight text-red-500">Google Warning!</h2>
-                                <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed">
-                                    App ni masih status "Beta" di Google. Anda mungkin nampak amaran keselamatan. Jangan risau, ini normal.
-                                </p>
-                            </div>
-
-                            {/* Visual Guide (Kotak Arahan) */}
-                            <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-gray-50 border-black/10"}`}>
-                                <p className="text-[9px] font-black uppercase opacity-50 mb-1">LANGKAH UNTUK LEPAS:</p>
-                                <div className="flex items-start gap-3">
-                                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
-                                    <p className="text-xs font-bold">Tekan link <span className="underline decoration-red-500 decoration-2">Advanced</span> di bawah kiri.</p>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
-                                    <p className="text-xs font-bold">Tekan <span className="underline decoration-red-500 decoration-2">Go to Budget.AI (unsafe)</span>.</p>
-                                </div>
-                            </div>
-
-                            <button onClick={openAuthOptions} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-blue-600 text-white border-black"}`}>
-                                FAHAM, TERUSKAN LOGIN <ArrowRight size={14} />
-                            </button>
-
-                            <p className="text-[9px] text-center mt-3 opacity-40 font-bold">Kami tak simpan password anda.</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* --- MODAL: BUDGET LIMIT --- */}
-                {showBudgetLimitModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                        <div className={`w-full max-w-[320px] p-8 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative animate-in zoom-in-95`}>
-
-                            <button
-                                onClick={() => setShowBudgetLimitModal(false)}
-                                className="absolute top-6 right-6 opacity-40 hover:opacity-100 transition-opacity"
-                            >
-                                <X size={24} />
-                            </button>
-
-                            <div className="flex flex-col items-center text-center mb-8">
-                                <div className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center mb-4 ${darkMode ? "bg-white text-black" : "bg-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]"}`}>
-                                    <Target size={32} />
-                                </div>
-                                <h3 className="text-xl font-black uppercase leading-tight tracking-tight">
-                                    Set Monthly<br />Budget Limit
-                                </h3>
-                            </div>
-
-                            <div className="space-y-6">
-                                <div>
-                                    <label className={`text-[10px] font-black uppercase tracking-widest opacity-60 block mb-2 ${darkMode ? "text-white" : "text-black"}`}>
-                                        Limit Belanja (RM)
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            value={tempBudgetLimit}
-                                            onChange={(e) => setTempBudgetLimit(e.target.value)}
-                                            placeholder="0.00"
-                                            className={`w-full p-4 rounded-2xl border-2 outline-none font-mono font-black text-2xl text-center ${darkMode ? "bg-black border-white text-white focus:bg-white/10" : "bg-gray-50 border-black focus:bg-yellow-50"}`}
-                                            autoFocus
-                                        />
+                                <div className="text-center mb-4">
+                                    <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-3 border-2 border-black">
+                                        <AlertCircle size={32} className="text-yellow-600" />
                                     </div>
-                                    <p className={`text-[9px] font-bold text-center mt-3 uppercase tracking-widest opacity-40 ${darkMode ? "text-white" : "text-black"}`}>
-                                        Kosongkan untuk reset limit
+                                    <h2 className="text-lg font-black uppercase leading-tight text-red-500">Google Warning!</h2>
+                                    <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed">
+                                        App ni masih status "Beta" di Google. Anda mungkin nampak amaran keselamatan. Jangan risau, ini normal.
                                     </p>
                                 </div>
 
-                                <div className="flex flex-col gap-3">
-                                    <button
-                                        onClick={handleSaveBudgetLimit}
-                                        className={`w-full py-4 text-xs ${buttonBase} ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-black text-white border-black"}`}
-                                    >
-                                        SIMPAN HAD BELANJA
-                                    </button>
-                                    <button
-                                        onClick={() => setShowBudgetLimitModal(false)}
-                                        className={`w-full py-3 text-[10px] font-black uppercase transition-all hover:underline opacity-60 hover:opacity-100 ${darkMode ? "text-white" : "text-black"}`}
-                                    >
-                                        KEMBALI
-                                    </button>
+                                {/* Visual Guide (Kotak Arahan) */}
+                                <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-gray-50 border-black/10"}`}>
+                                    <p className="text-[9px] font-black uppercase opacity-50 mb-1">LANGKAH UNTUK LEPAS:</p>
+                                    <div className="flex items-start gap-3">
+                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
+                                        <p className="text-xs font-bold">Tekan link <span className="underline decoration-red-500 decoration-2">Advanced</span> di bawah kiri.</p>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
+                                        <p className="text-xs font-bold">Tekan <span className="underline decoration-red-500 decoration-2">Go to Budget.AI (unsafe)</span>.</p>
+                                    </div>
+                                </div>
+
+                                <button onClick={openAuthOptions} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-blue-600 text-white border-black"}`}>
+                                    FAHAM, TERUSKAN LOGIN <ArrowRight size={14} />
+                                </button>
+
+                                <p className="text-[9px] text-center mt-3 opacity-40 font-bold">Kami tak simpan password anda.</p>
+                            </div>
+                        </div>
+                    )
+                }
+
+                {/* --- MODAL: BUDGET LIMIT --- */}
+                {
+                    showBudgetLimitModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                            <div className={`w-full max-w-[320px] p-8 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative animate-in zoom-in-95`}>
+
+                                <button
+                                    onClick={() => setShowBudgetLimitModal(false)}
+                                    className="absolute top-6 right-6 opacity-40 hover:opacity-100 transition-opacity"
+                                >
+                                    <X size={24} />
+                                </button>
+
+                                <div className="flex flex-col items-center text-center mb-8">
+                                    <div className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center mb-4 ${darkMode ? "bg-white text-black" : "bg-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]"}`}>
+                                        <Target size={32} />
+                                    </div>
+                                    <h3 className="text-xl font-black uppercase leading-tight tracking-tight">
+                                        Set Monthly<br />Budget Limit
+                                    </h3>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div>
+                                        <label className={`text-[10px] font-black uppercase tracking-widest opacity-60 block mb-2 ${darkMode ? "text-white" : "text-black"}`}>
+                                            Limit Belanja (RM)
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={tempBudgetLimit}
+                                                onChange={(e) => setTempBudgetLimit(e.target.value)}
+                                                placeholder="0.00"
+                                                className={`w-full p-4 rounded-2xl border-2 outline-none font-mono font-black text-2xl text-center ${darkMode ? "bg-black border-white text-white focus:bg-white/10" : "bg-gray-50 border-black focus:bg-yellow-50"}`}
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <p className={`text-[9px] font-bold text-center mt-3 uppercase tracking-widest opacity-40 ${darkMode ? "text-white" : "text-black"}`}>
+                                            Kosongkan untuk reset limit
+                                        </p>
+                                    </div>
+
+                                    <div className="flex flex-col gap-3">
+                                        <button
+                                            onClick={handleSaveBudgetLimit}
+                                            className={`w-full py-4 text-xs ${buttonBase} ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-black text-white border-black"}`}
+                                        >
+                                            SIMPAN HAD BELANJA
+                                        </button>
+                                        <button
+                                            onClick={() => setShowBudgetLimitModal(false)}
+                                            className={`w-full py-3 text-[10px] font-black uppercase transition-all hover:underline opacity-60 hover:opacity-100 ${darkMode ? "text-white" : "text-black"}`}
+                                        >
+                                            KEMBALI
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
 
                 {/* --- MODAL: BUDGET WRAPPED (LIQUID MOTION) --- */}
                 <AnimatePresence>
@@ -2534,130 +2704,149 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={{ duration: 0.3 }}
+                            transition={{ duration: 0.15 }}
                             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                            onClick={() => setShowWrappedModal(false)}
                             key="wrapped-overlay"
                         >
-                            <div className="relative w-full max-w-[320px]">
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ delay: 0.5, duration: 1 }}
-                                    className="absolute -inset-[4px] rounded-3xl z-0 overflow-hidden blur-xl"
-                                >
-                                    <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,#6366f1,#a855f7,#ec4899,#6366f1)] animate-[spin_4s_linear_infinite] opacity-100"></div>
-                                    <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_80deg,#6366f1_100deg,transparent_120deg,transparent_260deg,#ec4899_280deg,transparent_300deg)] animate-[spin_4s_linear_infinite] opacity-100 mix-blend-screen"></div>
-                                </motion.div>
+                            <div className="relative w-full max-w-[320px]" onClick={(e) => e.stopPropagation()}>
+                                {/* Animated Glow Background */}
+                                {showWrappedModal && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        transition={{ delay: 0.3, duration: 0.6 }}
+                                        className="absolute -inset-[4px] rounded-3xl z-0 overflow-hidden blur-xl"
+                                    >
+                                        <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,#6366f1,#a855f7,#ec4899,#6366f1)] animate-[spin_4s_linear_infinite] opacity-100"></div>
+                                        <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_80deg,#6366f1_100deg,transparent_120deg,transparent_260deg,#ec4899_280deg,transparent_300deg)] animate-[spin_4s_linear_infinite] opacity-100 mix-blend-screen"></div>
+                                    </motion.div>
+                                )}
+
+                                {/* Morphing Container */}
                                 <motion.div
                                     layoutId="wrapped-modal-trigger"
-                                    className={`w-full p-5 rounded-3xl border-4 ${darkMode ? "bg-black border-indigo-500 text-white" : "bg-white border-indigo-600 text-black"} shadow-[6px_6px_0px_0px_rgba(99,102,241,1)] relative overflow-y-auto max-h-[90vh] scrollbar-hide`}
+                                    className={`w-full rounded-3xl border-4 ${darkMode ? "bg-black border-indigo-500 text-white" : "bg-white border-indigo-600 text-black"} shadow-[6px_6px_0px_0px_rgba(99,102,241,1)] relative overflow-hidden`}
+                                    transition={{
+                                        type: "spring",
+                                        stiffness: 300,
+                                        damping: 30
+                                    }}
                                 >
+                                    {/* Scrollable Content */}
+                                    <div className="overflow-y-auto max-h-[90vh] scrollbar-hide p-5">
+                                        <button
+                                            onClick={() => setShowWrappedModal(false)}
+                                            className="absolute top-4 right-4 opacity-60 hover:opacity-100 transition-opacity z-10"
+                                        >
+                                            <X size={20} />
+                                        </button>
 
-                                    <button onClick={() => setShowWrappedModal(false)} className="absolute top-4 right-4 opacity-60 hover:opacity-100 transition-opacity"><X size={20} /></button>
+                                        {(() => {
+                                            const currentYear = selectedDate.getFullYear();
+                                            const yearTx = transactions.filter(t => {
+                                                if (!t.isoDate) return false;
+                                                return new Date(t.isoDate).getFullYear() === currentYear && t.amount < 0;
+                                            });
 
-                                    {(() => {
-                                        const currentYear = selectedDate.getFullYear();
-                                        const yearTx = transactions.filter(t => {
-                                            if (!t.isoDate) return false;
-                                            return new Date(t.isoDate).getFullYear() === currentYear && t.amount < 0;
-                                        });
+                                            const totalYearOut = yearTx.reduce((acc, curr) => acc + Math.abs(curr.amount), 0);
 
-                                        const totalYearOut = yearTx.reduce((acc, curr) => acc + Math.abs(curr.amount), 0);
+                                            // Month stats
+                                            const monthTotals: Record<number, number> = {};
+                                            yearTx.forEach(t => {
+                                                const m = new Date(t.isoDate).getMonth();
+                                                monthTotals[m] = (monthTotals[m] || 0) + Math.abs(t.amount);
+                                            });
+                                            const peakMonthIdx = Object.entries(monthTotals).sort((a, b) => b[1] - a[1])[0];
+                                            const peakMonthName = peakMonthIdx ? new Date(2025, parseInt(peakMonthIdx[0]), 1).toLocaleDateString('default', { month: 'long' }) : "Tiada Data";
 
-                                        // Month stats
-                                        const monthTotals: Record<number, number> = {};
-                                        yearTx.forEach(t => {
-                                            const m = new Date(t.isoDate).getMonth();
-                                            monthTotals[m] = (monthTotals[m] || 0) + Math.abs(t.amount);
-                                        });
-                                        const peakMonthIdx = Object.entries(monthTotals).sort((a, b) => b[1] - a[1])[0];
-                                        const peakMonthName = peakMonthIdx ? new Date(2025, parseInt(peakMonthIdx[0]), 1).toLocaleDateString('default', { month: 'long' }) : "Tiada Data";
+                                            // Category stats
+                                            const catTotals: Record<string, number> = {};
+                                            yearTx.forEach(t => {
+                                                catTotals[t.category] = (catTotals[t.category] || 0) + Math.abs(t.amount);
+                                            });
+                                            const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+                                            const topCat = sortedCats[0];
 
-                                        // Category stats
-                                        const catTotals: Record<string, number> = {};
-                                        yearTx.forEach(t => {
-                                            catTotals[t.category] = (catTotals[t.category] || 0) + Math.abs(t.amount);
-                                        });
-                                        const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-                                        const topCat = sortedCats[0];
-
-                                        return (
-                                            <motion.div
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                transition={{ delay: 0.2 }}
-                                                className="space-y-5 py-2"
-                                            >
-                                                <div className="text-center">
-                                                    <div className="inline-block p-3 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white mb-2 animate-bounce">
-                                                        <Sparkles size={24} />
-                                                    </div>
-                                                    <h2 className="text-2xl font-black uppercase italic leading-none tracking-tight">Budget<br />Wrapped {currentYear}</h2>
-                                                    <p className="text-[9px] font-bold uppercase opacity-50 tracking-widest mt-1">{user?.email || "Boss Mode"}</p>
-                                                </div>
-
-                                                <div className="space-y-3">
-                                                    {/* Stat 1: Total Spent */}
-                                                    <div className="text-center p-4 rounded-xl border-2 border-indigo-500 bg-indigo-500/5">
-                                                        <p className="text-[9px] font-black uppercase opacity-60 mb-1">Duit Keluar Setahun</p>
-                                                        <h3 className="text-3xl font-mono font-black tracking-tighter">RM {totalYearOut.toLocaleString("en-MY", { minimumFractionDigits: 0 })}</h3>
-                                                    </div>
-
-                                                    {/* Stat 2: Top Category */}
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-lg border-2 border-black bg-orange-400 flex items-center justify-center flex-shrink-0 animate-pulse">
-                                                            <TrendingUp size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[9px] font-black uppercase opacity-60">Paling Kuat Belanja</p>
-                                                            <h4 className="text-sm font-black uppercase">{topCat ? topCat[0] : "Lain-lain"}</h4>
-                                                            <p className="text-[10px] font-bold">RM {topCat ? Math.abs(topCat[1]).toFixed(0) : "0"}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Stat 3: Peak Month */}
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-lg border-2 border-black bg-indigo-400 flex items-center justify-center flex-shrink-0">
-                                                            <Calendar size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[9px] font-black uppercase opacity-60">Bulan Paling "Parah"</p>
-                                                            <h4 className="text-sm font-black uppercase">{peakMonthName}</h4>
-                                                            <p className="text-[10px] font-bold">Terpaksa lepaskan RM {peakMonthIdx ? Math.abs(peakMonthIdx[1]).toFixed(0) : "0"}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Visual Breakdown */}
-                                                    <div className="space-y-1 pt-2">
-                                                        <div className="flex justify-between items-end">
-                                                            <p className="text-[9px] font-black uppercase opacity-60 tracking-widest">Spending Breakdown</p>
-                                                            <p className="text-[8px] font-bold uppercase italic">Year Summary</p>
-                                                        </div>
-                                                        <div className="h-5 w-full flex rounded-lg border-2 border-black overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                                                            {sortedCats.slice(0, 3).map(([name, val], i) => (
-                                                                <div
-                                                                    key={name}
-                                                                    className={`h-full border-r-[1px] border-black flex items-center justify-center overflow-hidden
-                                                                    ${i === 0 ? "bg-indigo-500" : i === 1 ? "bg-purple-500" : "bg-pink-500 text-white"}`}
-                                                                    style={{ width: `${(val / totalYearOut) * 100}%` }}
-                                                                >
-                                                                    <span className="text-[7px] font-black uppercase text-white px-1 truncate">{name}</span>
-                                                                </div>
-                                                            ))}
-                                                            <div className="h-full bg-gray-200 flex-1"></div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <button
-                                                    onClick={() => setShowWrappedModal(false)}
-                                                    className="w-full py-3 bg-indigo-600 text-white border-2 border-indigo-700 rounded-xl font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all active:shadow-none active:translate-x-1 active:translate-y-1 text-xs"
+                                            return (
+                                                <motion.div
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    transition={{ delay: 0.2 }}
+                                                    className="space-y-5 py-2"
                                                 >
-                                                    MANTAP, TERUSKAN SIMPAN!
-                                                </button>
-                                            </motion.div>
-                                        );
-                                    })()}
+                                                    <div className="text-center">
+                                                        <div className="inline-block p-3 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white mb-2 animate-bounce">
+                                                            <Sparkles size={24} />
+                                                        </div>
+                                                        <h2 className="text-2xl font-black uppercase italic leading-none tracking-tight">Budget<br />Wrapped {currentYear}</h2>
+                                                        <p className="text-[9px] font-bold uppercase opacity-50 tracking-widest mt-1">{user?.email || "Boss Mode"}</p>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        {/* Stat 1: Total Spent */}
+                                                        <div className="text-center p-4 rounded-xl border-2 border-indigo-500 bg-indigo-500/5">
+                                                            <p className="text-[9px] font-black uppercase opacity-60 mb-1">Duit Keluar Setahun</p>
+                                                            <h3 className="text-3xl font-mono font-black tracking-tighter">RM {totalYearOut.toLocaleString("en-MY", { minimumFractionDigits: 0 })}</h3>
+                                                        </div>
+
+                                                        {/* Stat 2: Top Category */}
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg border-2 border-black bg-orange-400 flex items-center justify-center flex-shrink-0 animate-pulse">
+                                                                <TrendingUp size={20} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[9px] font-black uppercase opacity-60">Paling Kuat Belanja</p>
+                                                                <h4 className="text-sm font-black uppercase">{topCat ? topCat[0] : "Lain-lain"}</h4>
+                                                                <p className="text-[10px] font-bold">RM {topCat ? Math.abs(topCat[1]).toFixed(0) : "0"}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Stat 3: Peak Month */}
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg border-2 border-black bg-indigo-400 flex items-center justify-center flex-shrink-0">
+                                                                <Calendar size={20} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[9px] font-black uppercase opacity-60">Bulan Paling "Parah"</p>
+                                                                <h4 className="text-sm font-black uppercase">{peakMonthName}</h4>
+                                                                <p className="text-[10px] font-bold">Terpaksa lepaskan RM {peakMonthIdx ? Math.abs(peakMonthIdx[1]).toFixed(0) : "0"}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Visual Breakdown */}
+                                                        <div className="space-y-1 pt-2">
+                                                            <div className="flex justify-between items-end">
+                                                                <p className="text-[9px] font-black uppercase opacity-60 tracking-widest">Spending Breakdown</p>
+                                                                <p className="text-[8px] font-bold uppercase italic">Year Summary</p>
+                                                            </div>
+                                                            <div className="h-5 w-full flex rounded-lg border-2 border-black overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                                                                {sortedCats.slice(0, 3).map(([name, val], i) => (
+                                                                    <div
+                                                                        key={name}
+                                                                        className={`h-full border-r-[1px] border-black flex items-center justify-center overflow-hidden
+                                                                    ${i === 0 ? "bg-indigo-500" : i === 1 ? "bg-purple-500" : "bg-pink-500 text-white"}`}
+                                                                        style={{ width: `${(val / totalYearOut) * 100}%` }}
+                                                                    >
+                                                                        <span className="text-[7px] font-black uppercase text-white px-1 truncate">{name}</span>
+                                                                    </div>
+                                                                ))}
+                                                                <div className="h-full bg-gray-200 flex-1"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        onClick={() => setShowWrappedModal(false)}
+                                                        className="w-full py-3 bg-indigo-600 text-white border-2 border-indigo-700 rounded-xl font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all active:shadow-none active:translate-x-1 active:translate-y-1 text-xs"
+                                                    >
+                                                        MANTAP, TERUSKAN SIMPAN!
+                                                    </button>
+                                                </motion.div>
+                                            );
+                                        })()}
+                                    </div>
                                 </motion.div>
                             </div>
                         </motion.div>
@@ -2672,6 +2861,6 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 />
 
             </div>
-        </div >
+        </div>
     );
 }
