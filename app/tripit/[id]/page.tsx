@@ -38,6 +38,7 @@ import {
     Landmark,
     MapPin,
     Beer,
+    ChevronLeft,
     Bike,
     Ship,
     Calculator,
@@ -1365,37 +1366,46 @@ export default function TripDetailPage({
                     </div>
 
                     {/* NAVIGATION TABS */}
-                    <div className="flex p-1 rounded-xl border-2 border-dashed border-current gap-1 overflow-x-auto no-scrollbar">
-                        <button
-                            onClick={() => setActiveTab("itinerary")}
-                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "itinerary" ? tabActiveStyle : tabInactiveStyle}`}
-                        >
-                            Itinerary
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("budget")}
-                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "budget" ? tabActiveStyle : tabInactiveStyle}`}
-                        >
-                            Budget
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("people")}
-                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "people" ? tabActiveStyle : tabInactiveStyle}`}
-                        >
-                            People
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("vault")}
-                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "vault" ? tabActiveStyle : tabInactiveStyle}`}
-                        >
-                            Vault
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("checklist")}
-                            className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "checklist" ? tabActiveStyle : tabInactiveStyle}`}
-                        >
-                            Pack
-                        </button>
+                    {/* NAVIGATION TABS */}
+                    <div className="relative group/tabs flex items-center">
+                        <div className={`absolute left-0 z-20 h-full flex items-center pl-1 ${darkMode ? "bg-gradient-to-r from-[#121212] via-[#121212] to-transparent" : "bg-gradient-to-r from-gray-50 via-gray-50 to-transparent"} opacity-0 group-hover/tabs:opacity-100 transition-opacity pointer-events-none`}>
+                            <ChevronLeft size={16} className={`text-current ${darkMode ? 'text-white' : 'text-black'}`} />
+                        </div>
+                        <div className="flex-1 flex p-1 rounded-xl border-2 border-dashed border-current gap-1 overflow-x-auto no-scrollbar scroll-smooth">
+                            <button
+                                onClick={() => setActiveTab("itinerary")}
+                                className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "itinerary" ? tabActiveStyle : tabInactiveStyle}`}
+                            >
+                                Itinerary
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("budget")}
+                                className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "budget" ? tabActiveStyle : tabInactiveStyle}`}
+                            >
+                                Budget
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("people")}
+                                className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "people" ? tabActiveStyle : tabInactiveStyle}`}
+                            >
+                                People
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("vault")}
+                                className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "vault" ? tabActiveStyle : tabInactiveStyle}`}
+                            >
+                                Vault
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("checklist")}
+                                className={`flex-1 min-w-[80px] py-2 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all ${activeTab === "checklist" ? tabActiveStyle : tabInactiveStyle}`}
+                            >
+                                Pack
+                            </button>
+                        </div>
+                        <div className={`absolute right-0 z-20 h-full flex items-center pr-1 ${darkMode ? "bg-gradient-to-l from-[#121212] via-[#121212] to-transparent" : "bg-gradient-to-l from-gray-50 via-gray-50 to-transparent"} opacity-100 pointer-events-none`}>
+                            <ChevronRight size={16} className={`text-current ${darkMode ? 'text-white' : 'text-black'}`} />
+                        </div>
                     </div>
 
                     {/* CONTENT AREA */}
@@ -1546,31 +1556,28 @@ export default function TripDetailPage({
                                                                             item.is_completed,
                                                                         )
                                                                     }
-                                                                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${item.is_completed ? (darkMode ? "bg-green-500 border-green-500" : "bg-green-600 border-green-600") : darkMode ? "border-white/20" : "border-black/20"}`}
+                                                                    className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all flex-shrink-0 ${item.is_completed ? (darkMode ? "bg-green-500 border-green-500" : "bg-green-600 border-green-600") : darkMode ? "border-white/20" : "border-black/20"}`}
                                                                 >
                                                                     {item.is_completed && (
-                                                                        <Check size={14} className="text-white" />
+                                                                        <Check size={12} className="text-white" />
                                                                     )}
                                                                 </button>
 
-                                                                <div className="flex flex-col items-center gap-1 min-w-[50px]">
-                                                                    <span className="text-xs font-black">
-                                                                        {item.start_time?.slice(0, 5) || "--:--"}
-                                                                    </span>
-                                                                    <span className="text-[9px] font-bold opacity-50 uppercase">
-                                                                        {parseInt(
-                                                                            item.start_time?.slice(0, 2) || "0",
-                                                                        ) >= 12
-                                                                            ? "PM"
-                                                                            : "AM"}
-                                                                    </span>
-                                                                </div>
                                                                 <div
                                                                     className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center flex-shrink-0 ${item.color || (darkMode ? "bg-blue-600" : "bg-blue-100")} border-white text-white shadow-sm`}
                                                                 >
                                                                     <Icon size={18} />
                                                                 </div>
                                                                 <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                                        <span className="text-[10px] font-black opacity-50 uppercase tracking-widest bg-current/5 px-1.5 py-0.5 rounded-md">
+                                                                            {item.start_time ? (
+                                                                                <>
+                                                                                    {item.start_time?.slice(0, 5)} {parseInt(item.start_time?.slice(0, 2) || "0") >= 12 ? "PM" : "AM"}
+                                                                                </>
+                                                                            ) : "ALL DAY"}
+                                                                        </span>
+                                                                    </div>
                                                                     <h4
                                                                         className={`text-sm font-black uppercase leading-tight line-clamp-2 ${item.is_completed ? "line-through opacity-70" : ""}`}
                                                                     >
@@ -1595,7 +1602,7 @@ export default function TripDetailPage({
                                                                         )}
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                                <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-all">
                                                                     {item.cost > 0 && (
                                                                         <Link
                                                                             href={`/splitit?title=${encodeURIComponent(item.title)}&amount=${item.cost}`}
@@ -2732,7 +2739,7 @@ export default function TripDetailPage({
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">
                                         Start Date
@@ -2757,7 +2764,7 @@ export default function TripDetailPage({
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-1">
                                     <label className="text-[10px] font-bold uppercase opacity-60 block mb-1">
                                         Home Currency
