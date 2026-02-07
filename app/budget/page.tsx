@@ -2845,25 +2845,22 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={{ duration: 0.15 }}
+                            transition={{ duration: 0.3 }}
                             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
                             onClick={() => setShowWrappedModal(false)}
                             key="wrapped-overlay"
                         >
                             <div className="relative w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
                                 {/* Animated Glow Background */}
-                                {showWrappedModal && (
-                                    <motion.div
-                                        initial={{ opacity: 0, scale: 0.8 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.8 }}
-                                        transition={{ delay: 0.3, duration: 0.6 }}
-                                        className="absolute -inset-[4px] rounded-3xl z-0 overflow-hidden blur-xl"
-                                    >
-                                        <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,#6366f1,#a855f7,#ec4899,#6366f1)] animate-[spin_4s_linear_infinite] opacity-100"></div>
-                                        <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_80deg,#6366f1_100deg,transparent_120deg,transparent_260deg,#ec4899_280deg,transparent_300deg)] animate-[spin_4s_linear_infinite] opacity-100 mix-blend-screen"></div>
-                                    </motion.div>
-                                )}
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1, transition: { delay: 0.3, duration: 0.6 } }}
+                                    exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
+                                    className="absolute -inset-[4px] rounded-3xl z-0 overflow-hidden blur-xl"
+                                >
+                                    <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,#6366f1,#a855f7,#ec4899,#6366f1)] animate-[spin_4s_linear_infinite] opacity-100"></div>
+                                    <div className="absolute -inset-[150%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_80deg,#6366f1_100deg,transparent_120deg,transparent_260deg,#ec4899_280deg,transparent_300deg)] animate-[spin_4s_linear_infinite] opacity-100 mix-blend-screen"></div>
+                                </motion.div>
 
                                 {/* Morphing Container */}
                                 <motion.div
@@ -2913,8 +2910,8 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                                             return (
                                                 <motion.div
                                                     initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    transition={{ delay: 0.2 }}
+                                                    animate={{ opacity: 1, transition: { delay: 0.2 } }}
+                                                    exit={{ opacity: 0, transition: { duration: 0.1 } }}
                                                     className="space-y-5 py-2"
                                                 >
                                                     <div className="text-center">
