@@ -2083,7 +2083,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {
                     showManualModal && (
                         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                            <div className={`w-full max-w-sm p-4 sm:p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
+                            <div className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95`}>
 
                                 <div className="flex justify-between items-center mb-6">
                                     <h2 className="text-xl font-black uppercase italic">
@@ -2273,7 +2273,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {
                     showAllTransactions && (
                         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                            <div className={`w-full max-w-sm max-h-[80vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
+                            <div className={`w-full max-w-sm max-h-[80vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95`}>
 
                                 <div className="flex justify-between items-center p-6 border-b-2 border-current border-opacity-20">
                                     <h2 className="text-xl font-black uppercase italic">Semua Transaksi</h2>
@@ -2349,7 +2349,7 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {
                     showScanResultModal && (scannedTransaction || scannedTransactions.length > 0) && (
                         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                            <div className={`w-full max-w-sm max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in slide-in-from-bottom-10`}>
+                            <div className={`w-full max-w-sm max-h-[85vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95`}>
 
                                 <div className={`flex justify-between items-center p-6 border-b-2 ${darkMode ? "border-white" : "border-black"} bg-opacity-20 flex-shrink-0`}>
                                     <h2 className="text-xl font-black uppercase italic flex items-center gap-2">
@@ -2617,8 +2617,8 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {/* --- MODAL: PILIH SUMBER RESIT --- */}
                 {
                     showScanMethodModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                            <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                            <div className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="text-lg font-black uppercase flex items-center gap-2"><Camera size={20} /> Pilih Sumber Resit</h3>
                                     <button onClick={() => setShowScanMethodModal(false)}><X size={20} /></button>
@@ -2649,8 +2649,8 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {/* --- MODAL: CALENDAR --- */}
                 {
                     showCalendarModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                            <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                            <div className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="text-lg font-black uppercase flex items-center gap-2"><Calendar size={20} /> Pilih Bulan/Tahun</h3>
                                     <button onClick={() => setShowCalendarModal(false)}><X size={20} /></button>
@@ -2739,8 +2739,8 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {/* --- LOGIN GUIDE MODAL (Google Unverified Warning) --- */}
                 {
                     showLoginGuide && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-                            <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
+                            <div className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
                                 <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20} /></button>
 
                                 <div className="text-center mb-4">
@@ -2779,8 +2779,8 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                 {/* --- MODAL: BUDGET LIMIT --- */}
                 {
                     showBudgetLimitModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                            <div className={`w-full max-w-[320px] p-8 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative animate-in zoom-in-95`}>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                            <div className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
 
                                 <button
                                     onClick={() => setShowBudgetLimitModal(false)}
@@ -2846,11 +2846,11 @@ Return ONLY valid JSON, no other text. Amount should be positive number.`;
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.15 }}
-                            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
                             onClick={() => setShowWrappedModal(false)}
                             key="wrapped-overlay"
                         >
-                            <div className="relative w-full max-w-[320px]" onClick={(e) => e.stopPropagation()}>
+                            <div className="relative w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
                                 {/* Animated Glow Background */}
                                 {showWrappedModal && (
                                     <motion.div

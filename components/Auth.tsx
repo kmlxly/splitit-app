@@ -70,9 +70,9 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
   const btnStyle = `w-full py-2.5 rounded-lg border-2 text-sm font-black uppercase tracking-wider flex justify-center items-center gap-2 transition-all active:translate-y-1 active:shadow-none ${isDarkMode ? "bg-indigo-600 border-white text-white hover:bg-indigo-500 shadow-[3px_3px_0px_0px_#fff]" : "bg-indigo-500 border-black text-white hover:bg-indigo-400 shadow-[3px_3px_0px_0px_#000]"}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      
-      <div className={`w-full max-w-[320px] sm:max-w-xs rounded-xl border-2 relative transition-all ${modalBg} ${shadowStyle}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+
+      <div className={`w-full max-w-sm rounded-2xl border-2 relative transition-all ${modalBg} shadow-2xl animate-in zoom-in-95`}>
         
         <button onClick={onClose} className={`absolute -top-3 -right-3 p-1.5 rounded-full border-2 hover:scale-110 transition-transform z-10 ${isDarkMode ? "bg-red-500 border-white text-white" : "bg-red-500 border-black text-white"}`}>
             <X size={14} strokeWidth={4}/>

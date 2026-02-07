@@ -2328,7 +2328,7 @@ export default function TripDetailPage({
             {showManageTravelersModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-[360px] p-6 rounded-[32px] border-2 shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}
+                        className={`w-full max-w-sm p-5 rounded-2xl border-2 shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}
                     >
                         <div className="flex justify-between items-center mb-6">
                             <div>
@@ -2436,7 +2436,7 @@ export default function TripDetailPage({
             {showShareModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-sm p-6 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95`}
+                        className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95`}
                     >
                         <h2 className="text-xl font-black uppercase mb-4">Share Trip</h2>
 
@@ -2511,7 +2511,7 @@ export default function TripDetailPage({
             {showAddDocModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-[340px] p-6 rounded-[32px] border-2 shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}
+                        className={`w-full max-w-sm p-5 rounded-2xl border-2 shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}
                     >
                         <div className="flex justify-between items-center mb-6">
                             <div>
@@ -2665,7 +2665,7 @@ export default function TripDetailPage({
             {showAddChecklistModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-[340px] p-6 rounded-[32px] border-2 shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}
+                        className={`w-full max-w-sm p-5 rounded-2xl border-2 shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}
                     >
                         <div className="flex justify-between items-center mb-6">
                             <div>
@@ -2722,7 +2722,7 @@ export default function TripDetailPage({
             {showEditModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-[340px] p-5 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}
+                        className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}
                     >
                         <div className="flex justify-between items-center mb-3">
                             <h2 className="text-lg font-black uppercase">Edit Trip</h2>
@@ -2887,7 +2887,7 @@ export default function TripDetailPage({
             {showAddPlanModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-[340px] p-5 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}
+                        className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}
                     >
                         <div className="flex justify-between items-center mb-3">
                             <h2 className="text-lg font-black uppercase">Add New Plan</h2>
@@ -3076,7 +3076,7 @@ export default function TripDetailPage({
             {showEditPlanModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-[340px] p-5 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}
+                        className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}
                     >
                         <div className="flex justify-between items-center mb-3">
                             <h2 className="text-lg font-black uppercase">Edit Plan</h2>
@@ -3262,7 +3262,7 @@ export default function TripDetailPage({
             {imageToCrop && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-[340px] rounded-3xl border-2 overflow-hidden shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}
+                        className={`w-full max-w-sm rounded-2xl border-2 overflow-hidden shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}
                     >
                         <div className="p-4 border-b-2 border-dashed border-current flex justify-between items-center">
                             <h3 className="font-black uppercase text-sm flex items-center gap-2">
@@ -3328,7 +3328,7 @@ export default function TripDetailPage({
             {showPushToSplitItModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-[340px] p-6 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95`}
+                        className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95`}
                     >
                         <div className="text-center mb-6">
                             <div className="w-16 h-16 bg-indigo-500 rounded-2xl mx-auto flex items-center justify-center text-white mb-4 rotate-3 shadow-lg">
@@ -3396,7 +3396,7 @@ export default function TripDetailPage({
             {showAddPersonalModal && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div
-                        className={`w-full max-w-[400px] p-8 rounded-t-3xl sm:rounded-3xl border-x-2 border-t-2 sm:border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-[0_-10px_40px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-20`}
+                        className={`w-full max-w-sm p-5 rounded-t-2xl sm:rounded-2xl border-x-2 border-t-2 sm:border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95`}
                     >
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-black uppercase">

@@ -461,7 +461,7 @@ export default function TripListPage() {
             {/* --- MODAL: CREATE TRIP --- */}
             {showCreateModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                    <div className={`w-full max-w-[340px] p-5 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}>
+                    <div className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}>
                         <div className="flex justify-between items-center mb-3">
                             <h2 className="text-lg font-black uppercase">New Trip</h2>
                             <button onClick={() => setShowCreateModal(false)} className="opacity-50 hover:opacity-100"><X size={18} /></button>
@@ -615,7 +615,7 @@ export default function TripListPage() {
             {/* --- MODAL: EDIT TRIP --- */}
             {showEditModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                    <div className={`w-full max-w-[340px] p-5 rounded-3xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}>
+                    <div className={`w-full max-w-sm p-5 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}>
                         <div className="flex justify-between items-center mb-3">
                             <h2 className="text-lg font-black uppercase">Edit Trip</h2>
                             <button onClick={() => setShowEditModal(false)} className="opacity-50 hover:opacity-100"><X size={18} /></button>
@@ -767,7 +767,7 @@ export default function TripListPage() {
             {/* --- MODAL: IMAGE CROPPER --- */}
             {imageToCrop && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                    <div className={`w-full max-w-[340px] rounded-3xl border-2 overflow-hidden shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}>
+                    <div className={`w-full max-w-sm rounded-2xl border-2 overflow-hidden shadow-2xl animate-in zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}>
                         <div className="p-4 border-b-2 border-dashed border-current flex justify-between items-center">
                             <h3 className="font-black uppercase text-sm flex items-center gap-2"><Maximize size={16} /> Adjust Photo</h3>
                             <button onClick={() => setImageToCrop(null)} className="opacity-50 hover:opacity-100"><X size={18} /></button>
