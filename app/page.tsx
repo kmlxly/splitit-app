@@ -69,35 +69,8 @@ export default function Home() {
       const token = session?.access_token || "";
       let aiReply = await askTheBoss(text, token);
 
-      if (aiReply === "QUOTA_EXCEEDED") {
-        aiReply = "Adoi, quota API dah habis bro. Admin kena top up dulu.";
-      } else if (aiReply.startsWith("FALLBACK_TO_CLIENT::")) {
-        const promptFromAction = aiReply.replace("FALLBACK_TO_CLIENT::", "");
-        console.warn("Switching to Client-Side Fetch due to Server Block...");
-
-        const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY!;
-        const clientModels = ["gemini-2.5-flash-preview-04-17", "gemini-2.0-flash", "gemini-1.5-flash"];
-        let finalResponse: Response | null = null;
-
-        for (const model of clientModels) {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents: [{ parts: [{ text: promptFromAction }] }] })
-          });
-          if (res.ok) { finalResponse = res; break; }
-          if (res.status === 429) {
-            aiReply = "Adoi, quota API dah habis bro. Admin kena top up dulu.";
-            finalResponse = null;
-            break;
-          }
-          if (res.status !== 404) break;
-        }
-
-        if (finalResponse) {
-          const data = await finalResponse.json();
-          aiReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Aduh, jem otak aku.";
-        }
+      if (aiReply === "QUOTA_EXCEEDED" || aiReply.startsWith("FALLBACK_TO_CLIENT::")) {
+        aiReply = "Adoi, aku tak boleh fikir sekarang. Cuba lagi kejap lagi bro.";
       }
 
       const newAIMsg = { id: Date.now() + 1, text: aiReply, sender: 'ai' as const };

@@ -2,7 +2,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY!;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
@@ -38,8 +38,6 @@ export async function askTheBoss(userMessage: string, accessToken: string) {
                 .select('bills(total_amount, paid_by)')
                 .eq('owner_id', user.id);
 
-            // Simple Logic: Just sum up total bills created by me for now as a proxy for "activity"
-            // (Refining this requires deeper parsing of the JSON 'details' column which is hard in SQL query without helpers)
             let totalBillsManaged = 0;
             sessions?.forEach((s: any) => {
                 s.bills?.forEach((b: any) => totalBillsManaged += b.total_amount);
@@ -63,15 +61,15 @@ export async function askTheBoss(userMessage: string, accessToken: string) {
         console.error("RAG Error:", err);
     }
 
-    // 3. Prepare Gemini Prompt
+    // 3. Prepare Prompt
     const prompt = `
-      You are 'The Boss', a neo-brutalism financial advisor app persona. 
-      
+      You are 'The Boss', a neo-brutalism financial advisor app persona.
+
       CORE PERSONALITY:
       - Name: The Boss
       - Tone: Sarcastic, Strict, Direct, "Savage" but helpful.
       - Language: Informal Malay (Bahasa Pasar) mixed with Manglish. Use words like "Kau", "Aku", "Bro", "Dey", "Adoi".
-      
+
       CONTEXT:
       ${financialContext}
 
@@ -81,54 +79,36 @@ export async function askTheBoss(userMessage: string, accessToken: string) {
       - Use the provided Stats to roast them if they spend too much!
       - If asked about debts ("Minta Hutang"), provide a sarcastic but usable WhatsApp/text template.
       - If asked "Can I Buy This?", compare it against their spending/subs.
-      
+
       User said: "${userMessage}"
     `;
 
-    // 4. Call Gemini API
-    const fetchGemini = async (modelName: string) => {
-        // HACK: Fake Headers to bypass API Key restriction
-        // Trying 'http://localhost:3000' without trailing slash
-        const headers = {
-            "Content-Type": "application/json",
-            "Referer": "http://localhost:3000",
-            "Origin": "http://localhost:3000"
-        };
-
-        return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`, {
-            method: "POST",
-            headers: headers,
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: prompt }]
-                }]
-            })
-        });
-    };
-
-    const models = ["gemini-2.5-flash-preview-04-17", "gemini-2.0-flash", "gemini-1.5-flash"];
-
+    // 4. Call OpenRouter API
     try {
-        let response: Response | null = null;
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                model: "google/gemini-2.5-flash-preview",
+                messages: [{ role: "user", content: prompt }],
+            }),
+        });
 
-        for (const model of models) {
-            response = await fetchGemini(model);
-            if (response.ok) break;
-            if (response.status === 429) {
-                console.error(`Gemini quota exceeded for ${model}`);
-                return "QUOTA_EXCEEDED";
-            }
-            if (response.status !== 404) break;
-            console.warn(`Model ${model} not found, trying next...`);
+        if (response.status === 429) {
+            console.error("OpenRouter quota exceeded");
+            return "QUOTA_EXCEEDED";
         }
 
-        if (!response || !response.ok) {
-            console.error(`Gemini Server Error: ${response?.status}`);
+        if (!response.ok) {
+            console.error(`OpenRouter Error: ${response.status}`);
             return `FALLBACK_TO_CLIENT::${prompt}`;
         }
 
         const result = await response.json();
-        const aiText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        const aiText = result.choices?.[0]?.message?.content;
 
         if (!aiText) throw new Error("Empty AI Response");
 
