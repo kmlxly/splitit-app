@@ -107,10 +107,10 @@ export async function askTheBoss(userMessage: string, accessToken: string) {
     };
 
     try {
-        let response = await fetchGemini("gemini-2.0-flash");
+        let response = await fetchGemini("gemini-2.5-flash");
 
         if (!response.ok && response.status === 404) {
-            response = await fetchGemini("gemini-1.5-flash");
+            response = await fetchGemini("gemini-2.0-flash");
         }
 
         // If server-side fetch fails (e.g. 403 Blocked), return a special flag string

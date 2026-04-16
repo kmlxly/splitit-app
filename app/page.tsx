@@ -75,22 +75,26 @@ export default function Home() {
         console.warn("Switching to Client-Side Fetch due to Server Block...");
 
         const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY!;
-        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ contents: [{ parts: [{ text: promptFromAction }] }] })
         });
 
         if (!response.ok && response.status === 404) {
-          response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+          response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ contents: [{ parts: [{ text: promptFromAction }] }] })
           });
         }
 
-        const data = await response.json();
-        aiReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Aduh, jem otak aku.";
+        if (response.status === 429) {
+          aiReply = "Adoi, quota API dah habis bro. Cuba lagi kejap lagi.";
+        } else {
+          const data = await response.json();
+          aiReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Aduh, jem otak aku.";
+        }
       }
 
       const newAIMsg = { id: Date.now() + 1, text: aiReply, sender: 'ai' as const };
