@@ -106,17 +106,24 @@ export async function askTheBoss(userMessage: string, accessToken: string) {
         });
     };
 
-    try {
-        let response = await fetchGemini("gemini-2.5-flash");
+    const models = ["gemini-2.5-flash-preview-04-17", "gemini-2.0-flash", "gemini-1.5-flash"];
 
-        if (!response.ok && response.status === 404) {
-            response = await fetchGemini("gemini-2.0-flash");
+    try {
+        let response: Response | null = null;
+
+        for (const model of models) {
+            response = await fetchGemini(model);
+            if (response.ok) break;
+            if (response.status === 429) {
+                console.error(`Gemini quota exceeded for ${model}`);
+                return "QUOTA_EXCEEDED";
+            }
+            if (response.status !== 404) break;
+            console.warn(`Model ${model} not found, trying next...`);
         }
 
-        // If server-side fetch fails (e.g. 403 Blocked), return a special flag string
-        // so the client can takeover and fetch directly.
-        if (!response.ok) {
-            console.error(`Gemini Server 403/Error: ${response.status}`);
+        if (!response || !response.ok) {
+            console.error(`Gemini Server Error: ${response?.status}`);
             return `FALLBACK_TO_CLIENT::${prompt}`;
         }
 
