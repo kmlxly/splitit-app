@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
 import { supabase } from "@/lib/supabaseClient";
-import { scanBudgetReceipt } from "@/app/actions/scan-receipt";
 import { motion, AnimatePresence } from "framer-motion";
 
 // --- 1. CONFIG & STYLES ---
@@ -737,7 +736,16 @@ export default function BudgetPage() {
 
             setScanStatus(isPDF ? "AI Analisis Bank..." : "AI Analisis Resit...");
 
-            const parsedData = await scanBudgetReceipt(base64Data, mimeType, isPDF);
+            const res = await fetch("/api/scan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ base64Data, mimeType, type: "budget", isPDF }),
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Gagal hubungi AI.");
+            }
+            const parsedData = await res.json();
 
             // Handle multiple transactions (PDF) or single transaction (Image)
             if (isPDF && parsedData.transactions && Array.isArray(parsedData.transactions)) {

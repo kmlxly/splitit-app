@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
 // Pastikan dah install: npm install react-easy-crop
 import Cropper from "react-easy-crop";
-import { scanReceipt } from "@/app/actions/scan-receipt";
 import { 
   Moon, Sun, CheckCircle, Trash2, 
   Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X, 
@@ -552,7 +551,16 @@ export default function OfflineBackup() {
         const base64Data = await compressImage(file);
         setScanStatus("AI sedang menganalisis resit...");
 
-        const parsedData = await scanReceipt(base64Data);
+        const res = await fetch("/api/scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ base64Data, mimeType: "image/jpeg", type: "offline" }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Gagal hubungi AI.");
+        }
+        const parsedData = await res.json();
         
         const itemsArray = parsedData.items || (Array.isArray(parsedData) ? parsedData : []);
         if (Array.isArray(itemsArray)) {
