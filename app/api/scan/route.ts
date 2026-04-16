@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const MODEL = "google/gemini-2.0-flash-exp:free";
+const MODEL = "google/gemini-2.0-flash-001";
 
 async function callOpenRouter(prompt: string, base64Data: string, mimeType: string) {
     if (!OPENROUTER_API_KEY) {
