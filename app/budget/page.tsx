@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
 import { supabase } from "@/lib/supabaseClient";
+import { scanBudgetReceipt } from "@/app/actions/scan-receipt";
 import { motion, AnimatePresence } from "framer-motion";
 
 // --- 1. CONFIG & STYLES ---
@@ -721,14 +722,6 @@ export default function BudgetPage() {
         setScanStatus(isPDF ? "Proses PDF..." : "Compress...");
 
         try {
-            const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-
-            if (!API_KEY) {
-                alert("API Key tidak ditemui. Sila tambah NEXT_PUBLIC_GEMINI_API_KEY dalam .env.local");
-                setIsScanning(false);
-                return;
-            }
-
             // Convert file to base64
             let base64Data: string;
             let mimeType: string;
@@ -744,125 +737,7 @@ export default function BudgetPage() {
 
             setScanStatus(isPDF ? "AI Analisis Bank..." : "AI Analisis Resit...");
 
-            const fetchGemini = async (modelName: string) => {
-                const prompt = isPDF
-                    ? `Extract ALL transactions from this bank statement PDF. Analyze the document carefully and return valid JSON array with ALL transactions found:
-
-{
-  "transactions": [
-    {
-      "title": "Merchant/Description",
-      "amount": 0.00,
-      "category": "One of: Makan, Transport, Shopping, Bills, Utility, Lain-lain",
-      "date": "DD MMM YYYY format (e.g., 15 Jan 2025)"
-    }
-  ]
-}
-
-IMPORTANT FOR BANK STATEMENTS:
-- Extract EVERY transaction you can find (debits and credits)
-- For ALL spending/debits: amount should be positive (we'll make it negative)
-- For ALL income/credits/salary: category should be "Income"
-- Include FULL date from statement (day, month, year).
-- Group similar transactions if they appear multiple times
-
-CATEGORY GUIDELINES:
-- "Makan": Food, restaurants, cafes, groceries, food delivery
-- "Transport": Petrol, parking, toll, Grab, transport fees
-- "Shopping": Retail, online shopping, purchases
-- "Bills": TNB, water, internet, phone, subscriptions
-- "Utility": Services, maintenance, repairs
-- "Lain-lain": Other expenses
-
-Return ONLY valid JSON array, no other text.`
-                    : `Extract receipt information from this image. Analyze the receipt carefully and return valid JSON with these fields:
-{
-  "title": "Merchant/Store Name",
-  "amount": 0.00,
-  "category": "One of: Makan, Transport, Shopping, Bills, Utility, Lain-lain",
-  "date": "DD MMM YYYY format (e.g., 12 Jan 2025)",
-  "items": [
-    { "title": "Item Name (e.g. Onion, Chicken)", "amount": 0.00 }
-  ]
-}
-
-IMPORTANT: 
-- Try to find the transaction date and year from the receipt.
-- EXTRACT individual items found in the receipt and list them in 'items' array.
-- The 'amount' in the root should be the TOTAL amount of the receipt.
-
-CATEGORY GUIDELINES (Choose the MOST appropriate):
-- "Makan": Restaurants, cafes, food delivery, groceries, food stalls, mamak, fast food
-- "Transport": Petrol, parking, toll, Grab/ride-hailing, public transport, car maintenance
-- "Shopping": Retail stores, online shopping, clothing, electronics, general merchandise
-- "Bills": Utilities (TNB, water), internet, phone bills, subscriptions, recurring payments
-- "Utility": Similar to Bills but for services like maintenance, repairs, professional services
-- "Lain-lain": Anything that doesn't fit above categories
-
-EXAMPLES:
-- 7-Eleven, KK Mart, Tesco → "Shopping"
-- McDonald's, KFC, Nasi Lemak stall → "Makan"
-- Petronas, Shell, Grab → "Transport"
-- TNB, Maxis, Unifi → "Bills"
-- Salary, payment received → "Income" (Note: AI should return "Income" as category if detected as salary)
-
-Return ONLY valid JSON, no other text. Amount should be positive number.`;
-
-                return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: prompt
-                            }, {
-                                inline_data: {
-                                    mime_type: mimeType,
-                                    data: base64Data
-                                }
-                            }]
-                        }]
-                    })
-                });
-            };
-
-            let response = await fetchGemini("gemini-2.0-flash");
-            if (!response.ok && response.status === 404) {
-                console.log("Gemini 2.0 404, trying Fallback...");
-                setScanStatus("Mencuba Backup...");
-                response = await fetchGemini("gemini-1.5-flash-8b");
-            }
-
-            if (!response.ok) {
-                const errJson = await response.json();
-                const errMessage = errJson.error?.message || response.statusText;
-                alert(`Gemini Error (${response.status}): ${errMessage}`);
-                throw new Error(`Gemini API Failed: ${errMessage}`);
-            }
-
-            const result = await response.json();
-            if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
-                throw new Error("AI tak dapat baca data dari dokumen ni.");
-            }
-
-            const rawText = result.candidates[0].content.parts[0].text;
-
-            // Logic baru: Extract JSON menggunakan Regex untuk lebih selamat (handle jika ada teks luar JSON)
-            let cleanJson = "";
-            const jsonMatch = rawText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-            if (jsonMatch) {
-                cleanJson = jsonMatch[0];
-            } else {
-                cleanJson = rawText.replace(/```json|```/g, '').trim();
-            }
-
-            let parsedData;
-            try {
-                parsedData = JSON.parse(cleanJson);
-            } catch (e) {
-                console.error("Failed to parse JSON", rawText);
-                throw new Error("Format data AI tak valid.");
-            }
+            const parsedData = await scanBudgetReceipt(base64Data, mimeType, isPDF);
 
             // Handle multiple transactions (PDF) or single transaction (Image)
             if (isPDF && parsedData.transactions && Array.isArray(parsedData.transactions)) {
