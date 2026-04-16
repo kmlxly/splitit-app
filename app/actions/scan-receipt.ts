@@ -3,6 +3,10 @@
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
 
 async function callOpenRouter(prompt: string, base64Data: string, mimeType: string) {
+    if (!OPENROUTER_API_KEY) {
+        throw new Error("OPENROUTER_API_KEY tidak ditemui. Sila tambah dalam environment variables.");
+    }
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
