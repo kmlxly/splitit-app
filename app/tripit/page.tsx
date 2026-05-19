@@ -9,7 +9,14 @@ import {
 import { useRouter } from "next/navigation";
 import Cropper from 'react-easy-crop';
 
-import { supabase } from "@/lib/supabaseClient";
+import { useUser } from "@/lib/auth/client";
+import { uploadFileToBlob } from "@/lib/uploadClient";
+import {
+    getMyTrips,
+    createTrip,
+    updateTrip as updateTripAction,
+    deleteTrip as deleteTripAction,
+} from "@/app/actions/tripit";
 import AuthModal from "@/components/Auth";
 
 const CURRENCY_MAP: Record<string, string> = {
@@ -74,7 +81,10 @@ export default function TripListPage() {
     // --- STATE ---
     const [trips, setTrips] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [user, setUser] = useState<any>(null);
+    const stackUser = useUser();
+    const user = stackUser
+        ? { ...stackUser, email: stackUser.primaryEmail || "" }
+        : null;
     const [showAuthModal, setShowAuthModal] = useState(false);
 
     // Create Modal State
@@ -130,8 +140,12 @@ export default function TripListPage() {
 
     // --- EFFECT: LOAD DATA ---
     React.useEffect(() => {
-        checkUser();
-    }, []);
+        if (user) {
+            fetchTrips();
+        } else if (stackUser !== undefined) {
+            setLoading(false);
+        }
+    }, [user?.id, stackUser]);
 
     const uploadImage = async (fileOrBlob: File | Blob, mode: 'create' | 'edit') => {
         if (!user) return alert("Sila log masuk semula.");
@@ -139,32 +153,13 @@ export default function TripListPage() {
         try {
             setUploading(true);
             const fileName = `trip-${Date.now()}.jpg`;
-            const filePath = `${user.id}/${fileName}`;
-
-            console.log("Mencuba muat naik ke:", filePath);
-
-            const { data, error: uploadError } = await supabase.storage
-                .from('trips')
-                .upload(filePath, fileOrBlob, {
-                    contentType: 'image/jpeg',
-                    upsert: true
-                });
-
-            if (uploadError) {
-                console.error("Ralat Supabase:", uploadError);
-                throw uploadError;
-            }
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('trips')
-                .getPublicUrl(filePath);
-
+            const publicUrl = await uploadFileToBlob(fileOrBlob, fileName, "trips");
             if (mode === 'create') setNewCoverImage(publicUrl);
             else setEditCoverImage(publicUrl);
 
         } catch (error: any) {
             console.error("Ralat penuh muat naik:", error);
-            alert('Gagal muat naik: ' + (error.message || "Sila pastikan bucket 'trips' wujud."));
+            alert('Gagal muat naik: ' + (error.message || "Sila cuba lagi."));
         } finally {
             setUploading(false);
             setImageToCrop(null);
@@ -198,43 +193,27 @@ export default function TripListPage() {
         }
     };
 
-    const checkUser = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-            setUser(session.user);
-            fetchTrips(session.user.id);
-        } else {
+    const fetchTrips = async () => {
+        if (!user) {
             setLoading(false);
+            return;
         }
-    };
-
-    const fetchTrips = async (userId: string) => {
+        const userId = user.id;
         try {
-            // Check offline
-            if (!navigator.onLine) {
-                throw new Error("Offline");
-            }
+            if (!navigator.onLine) throw new Error("Offline");
 
-            const { data, error } = await supabase
-                .from('trips')
-                .select('*')
-                .eq('owner_id', userId)
-                .order('start_date', { ascending: true });
+            const data = await getMyTrips();
 
-            if (error) throw error;
-
-            // Save to Cache
             if (typeof window !== 'undefined') {
                 localStorage.setItem(`offline_trips_list_${userId}`, JSON.stringify(data || []));
             }
 
-            setTrips(data || []);
+            setTrips((data || []) as any[]);
             setIsOffline(false);
         } catch (e: any) {
             console.error("Error/Offline fetching trips:", e);
             setIsOffline(true);
 
-            // Load from Cache
             if (typeof window !== 'undefined') {
                 const cachedTrips = localStorage.getItem(`offline_trips_list_${userId}`);
                 if (cachedTrips) {
@@ -257,26 +236,15 @@ export default function TripListPage() {
             "https://images.unsplash.com/photo-1502791451862-7bd8c1df43a7?q=80&w=2000&auto=format&fit=crop"
         ];
 
-        const { data, error } = await supabase.from('trips').insert({
-            owner_id: user.id,
-            name: newTripName,
-            start_date: newStartDate,
-            end_date: newEndDate || null,
-            budget_limit: newBudget ? parseFloat(newBudget) : 0,
-            cover_image: newCoverImage || defaultImages[Math.floor(Math.random() * defaultImages.length)],
-            currency: newCurrency,
-            destination_currency: newDestCurrency
-        }).select().single();
-
-        if (error) {
-            alert("Gagal create trip: " + error.message);
-        } else {
-            // Also add owner to trip_members
-            await supabase.from('trip_members').insert({
-                trip_id: data.id,
-                auth_id: user.id,
-                name: user.user_metadata?.full_name || user.email?.split('@')[0],
-                role: 'owner'
+        try {
+            const data = await createTrip({
+                name: newTripName,
+                start_date: newStartDate,
+                end_date: newEndDate || null,
+                budget_limit: newBudget ? parseFloat(newBudget) : 0,
+                cover_image: newCoverImage || defaultImages[Math.floor(Math.random() * defaultImages.length)],
+                currency: newCurrency,
+                destination_currency: newDestCurrency,
             });
 
             setTrips([...trips, data]);
@@ -286,6 +254,8 @@ export default function TripListPage() {
             setNewEndDate("");
             setNewBudget("");
             setNewCoverImage("");
+        } catch (e: any) {
+            alert("Gagal create trip: " + (e.message || ""));
         }
     };
 
@@ -305,22 +275,16 @@ export default function TripListPage() {
 
     const handleUpdateTrip = async () => {
         if (!editingTripId) return;
-        const { error } = await supabase
-            .from('trips')
-            .update({
+        try {
+            await updateTripAction(editingTripId, {
                 name: editName,
                 start_date: editStartDate,
                 end_date: editEndDate || null,
                 budget_limit: parseFloat(editBudget) || 0,
                 cover_image: editCoverImage,
                 currency: editCurrency,
-                destination_currency: editDestCurrency
-            })
-            .eq('id', editingTripId);
-
-        if (error) {
-            alert("Gagal update trip: " + error.message);
-        } else {
+                destination_currency: editDestCurrency,
+            });
             setTrips(trips.map(t => t.id === editingTripId ? {
                 ...t,
                 name: editName,
@@ -332,6 +296,8 @@ export default function TripListPage() {
                 destination_currency: editDestCurrency
             } : t));
             setShowEditModal(false);
+        } catch (e: any) {
+            alert("Gagal update trip: " + (e.message || ""));
         }
     };
 
@@ -340,15 +306,11 @@ export default function TripListPage() {
         e.stopPropagation();
         if (!confirm("Adakah anda pasti mahu memadam trip ini? Semua data itinerary juga akan dipadam.")) return;
 
-        const { error } = await supabase
-            .from('trips')
-            .delete()
-            .eq('id', id);
-
-        if (error) {
-            alert("Gagal delete trip: " + error.message);
-        } else {
+        try {
+            await deleteTripAction(id);
             setTrips(trips.filter(t => t.id !== id));
+        } catch (err: any) {
+            alert("Gagal delete trip: " + (err.message || ""));
         }
     };
 

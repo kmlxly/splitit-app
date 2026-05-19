@@ -9,7 +9,13 @@ import {
     Cloud, BookOpen, ChevronDown, User, Eye, EyeOff, RotateCcw, AlertCircle, ArrowRight, Link as LinkIcon, Link2Off, Check
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
-import { supabase } from "@/lib/supabaseClient";
+import { useUser } from "@/lib/auth/client";
+import {
+    getSubscriptions,
+    upsertSubscriptions,
+    deleteSubscription,
+} from "@/app/actions/subscriptions";
+import { insertBudgetTransaction } from "@/app/actions/budget";
 
 // --- 1. CONFIG & TYPES ---
 const APP_NAME = "Sub.Tracker";
@@ -51,7 +57,10 @@ export default function SubTrackerPage() {
     // Sync Status & Ghost Mode (Match Budget.AI)
     const [syncStatus, setSyncStatus] = useState<"SAVED" | "SAVING" | "ERROR" | "OFFLINE">("OFFLINE");
     const [isGhostMode, setIsGhostMode] = useState(false);
-    const [user, setUser] = useState<any>(null); // Auth user state
+    const stackUser = useUser();
+    const user = stackUser
+        ? { ...stackUser, email: stackUser.primaryEmail || "" }
+        : null;
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [showLoginGuide, setShowLoginGuide] = useState(false); // Google Warning Modal
 
@@ -60,75 +69,45 @@ export default function SubTrackerPage() {
     const [showSyncModal, setShowSyncModal] = useState(false);
 
     // --- LOAD & SAVE DATA ---
-    // --- LOAD & SAVE DATA ---
-    // 0. Check Supabase Session & Load Cloud Data
+    // 0. Load Cloud Data when authenticated
     useEffect(() => {
-        const initSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setUser(session?.user || null);
-
-            // LOAD DATA FROM CLOUD
-            if (session?.user) {
-                const { data: cloudSubs, error } = await supabase
-                    .from('subscriptions')
-                    .select('*')
-                    .eq('user_id', session.user.id);
-
-                if (cloudSubs && cloudSubs.length > 0) {
-                    // Map DB snake_case -> TS camelCase
-                    // DB: title, price, cycle, first_bill_date, category, share_with, link
-                    const validSubs = cloudSubs.map((s: any) => ({
-                        id: s.id,
-                        name: s.title, // DB uses title
-                        price: s.price,
-                        cycle: s.cycle,
-                        nextPaymentDate: s.first_bill_date, // DB uses first_bill_date
-                        category: s.category,
-                        shareWith: s.share_with,
-                        link: s.link
-                    }));
-                    // Set cloud as truth
-                    setSubs(validSubs);
+        const loadCloud = async () => {
+            if (!user) return;
+            try {
+                const cloudSubs = await getSubscriptions();
+                if (cloudSubs.length > 0) {
+                    setSubs(cloudSubs as any);
                 }
+            } catch (e) {
+                console.error("Failed to load subscriptions:", e);
             }
         };
-        initSession();
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user || null);
-            if (_event === 'SIGNED_IN') initSession();
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
+        loadCloud();
+    }, [user?.id]);
 
     // 0.1 SYNC TO CLOUD (Auto-Save)
     useEffect(() => {
         const syncToCloud = async () => {
             if (!user || subs.length === 0) return;
 
-            // Map TS camelCase -> DB snake_case
             const payload = subs.map(s => ({
                 id: s.id,
-                user_id: user.id,
-                title: s.name, // Map to DB column
+                title: s.name,
                 price: s.price,
                 cycle: s.cycle,
-                first_bill_date: s.nextPaymentDate, // Map to DB column
+                first_bill_date: s.nextPaymentDate,
                 category: s.category,
-                share_with: s.shareWith,
-                link: s.link,
-                updated_at: new Date().toISOString()
+                share_with: s.shareWith ?? null,
+                link: s.link ?? null,
             }));
 
-            const { error } = await supabase
-                .from('subscriptions')
-                .upsert(payload);
-
-            if (error) console.error("Sync Subs Error:", error);
+            try {
+                await upsertSubscriptions(payload);
+            } catch (e) {
+                console.error("Sync Subs Error:", e);
+            }
         };
 
-        // Debounce sync (2s)
         const timeout = setTimeout(syncToCloud, 2000);
         return () => clearTimeout(timeout);
     }, [subs, user]);
@@ -317,19 +296,12 @@ export default function SubTrackerPage() {
     // Handler: Delete Subscription
     const handleDelete = async (id: number) => {
         if (confirm("Betul nak buang komitmen ni?")) {
-            // 1. Remove from Local State
             setSubs(subs.filter(s => s.id !== id));
-
-            // 2. Remove from Cloud (If Logged In)
             if (user) {
-                const { error } = await supabase
-                    .from('subscriptions')
-                    .delete()
-                    .eq('id', id)
-                    .eq('user_id', user.id);
-
-                if (error) {
-                    console.error("Gagal padam cloud:", error);
+                try {
+                    await deleteSubscription(id);
+                } catch (e) {
+                    console.error("Gagal padam cloud:", e);
                 }
             }
         }
@@ -394,20 +366,19 @@ export default function SubTrackerPage() {
 
                 // SYNC TO CLOUD IMMEDIATELY (If logged in)
                 if (user) {
-                    const { error: cloudError } = await supabase
-                        .from('budget_transactions')
-                        .insert([{
+                    try {
+                        await insertBudgetTransaction({
                             id: newTx.id,
-                            user_id: user.id,
                             title: newTx.title,
                             amount: newTx.amount,
                             category: newTx.category,
                             date: newTx.date,
-                            iso_date: newTx.isoDate, // Map to DB column
-                            items: newTx.items
-                        }]);
-
-                    if (cloudError) console.error("Gagal sync transaksi ke cloud:", cloudError);
+                            iso_date: newTx.isoDate,
+                            items: newTx.items,
+                        });
+                    } catch (e) {
+                        console.error("Gagal sync transaksi ke cloud:", e);
+                    }
                 }
 
                 alert(`Berjaya! Tarikh updated ke ${nextDateStr} & Transaksi direkod dalam Budget.AI (${newTx.category})`);
@@ -501,9 +472,8 @@ export default function SubTrackerPage() {
                             {user ? (
                                 <button
                                     onClick={async () => {
-                                        if (confirm("Nak logout ke?")) {
-                                            await supabase.auth.signOut();
-                                            setUser(null);
+                                        if (confirm("Nak logout ke?") && stackUser) {
+                                            await stackUser.signOut();
                                         }
                                     }}
                                     className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white"}`}

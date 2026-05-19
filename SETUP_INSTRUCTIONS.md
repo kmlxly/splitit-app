@@ -1,25 +1,65 @@
-# DATABASE SETUP REQUIRED
+# SETUP INSTRUCTIONS — Neon Migration
 
-It seems your dashboard is showing "RM 0.00" or "Tiada Data" because the necessary tables for **Budget.AI** and **Sub.Tracker** have not been created in your Supabase project yet.
+This app has been migrated from Supabase to **Neon Postgres + Neon Auth (Better Auth) + Vercel Blob**.
 
-Please follow these steps to fix it:
+## 1. Setup Neon Database
 
-1.  **Login to Supabase:** Go to your [Supabase Dashboard](https://supabase.com/dashboard).
-2.  **Select Your Project:** Choose the project linked to `split-bill-app`.
-3.  **Go to SQL Editor:** Click on the SQL icon in the left sidebar.
-4.  **Run the Script:**
-    *   Open the file `supabase_setup.sql` in your project folder.
-    *   Copy the *entire* content of `supabase_setup.sql`.
-    *   Paste it into the Supabase SQL Editor.
-    *   Click **"Run"**.
+1. Go to [console.neon.tech](https://console.neon.tech) and create a project.
+2. From the **Dashboard**, copy the connection string under **Connection Details** (use the **Pooled** connection).
+3. Open **SQL Editor** in the Neon dashboard.
+4. Copy the entire content of `neon_setup.sql` (root of this repo) and paste into the editor.
+5. Click **Run**. This creates all tables (budget, subscriptions, sessions, bills, session_members, trips, trip_members, trip_items, trip_personal_expenses, trip_documents, trip_checklists, trip_checklist_items) plus the `join_trip_by_token` function.
 
-## What this script does:
-*   Creates the table `budget_transactions` (for Budget.AI).
-*   Creates the table `subscriptions` (for Sub.Tracker).
-*   Enables security policies (RLS) so users can only see their own data.
+## 2. Enable Neon Auth
 
-## After Running the Script:
-1.  Go back to your app (localhost:3000).
-2.  Open **Budget.AI** and add any transaction (or edit one) to trigger a sync.
-3.  Open **Sub.Tracker** and add/edit a subscription.
-4.  Go to the **Dashboard** (Home) — the data should now appear!
+1. In your Neon project sidebar, click **Auth** → **Enable Neon Auth**.
+2. Open the **Configuration** tab and copy the **Auth URL** from the **Project Info** card. It looks like:
+   ```
+   https://ep-xxxxx.neonauth.us-east-1.aws.neon.tech/neondb/auth
+   ```
+3. Under **Authentication**, toggle on **Sign-up with Email** and **Sign-in with Email**.
+4. Under **OAuth providers**, click **Add OAuth provider** → **Google** (Neon provides shared keys out of the box).
+5. Under **Domains**, keep **Allow Localhost** on for development. When you deploy, add your production domain (e.g. `https://your-app.vercel.app`).
+6. Generate a cookie secret locally:
+   ```bash
+   openssl rand -base64 32
+   ```
+
+## 3. Setup Vercel Blob (File Uploads)
+
+1. In your Vercel project dashboard, go to **Storage** → **Create Blob Store**.
+2. Copy the `BLOB_READ_WRITE_TOKEN` it generates.
+
+## 4. Create `.env.local`
+
+Copy `.env.example` to `.env.local` and fill in the values:
+
+```bash
+cp .env.example .env.local
+```
+
+Required keys:
+- `DATABASE_URL` — pooled connection string from Neon
+- `NEON_AUTH_BASE_URL` — Auth URL from Neon Console → Auth → Configuration
+- `NEON_AUTH_COOKIE_SECRET` — random string from `openssl rand -base64 32` (≥ 32 chars)
+- `BLOB_READ_WRITE_TOKEN` — from Vercel Blob
+- `OPENROUTER_API_KEY` — for AI features
+- `NEXT_PUBLIC_GEMINI_API_KEY` — for receipt scanning
+
+## 5. Run
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Architecture Notes
+
+- **Auth** — `@neondatabase/auth` (Better Auth under the hood). Server actions read the session via `getServerUser()` / `requireServerUser()` from `lib/auth/server.ts`. Client components use `useUser()` from `lib/auth/client.ts`.
+- **Auth API route** — `app/api/auth/[...path]/route.ts` proxies all auth traffic to your Neon Auth instance.
+- **User table** — Neon Auth creates and manages a `neon_auth.user` table automatically (you can introspect it from the SQL Editor or via Drizzle). Our application tables store the user id in a plain `TEXT` column (`user_id`, `owner_id`, `auth_id`) — we do **not** enforce a foreign key so Neon Auth can manage its own schema independently.
+- **Authorization** — RLS has been removed. Every server action calls `requireServerUser()` and filters by `user.id`.
+- **Realtime** — Supabase Realtime has been replaced with simple polling (`setInterval`) every 5–15 seconds in dashboards/lists.
+- **Storage** — Supabase Storage has been replaced with Vercel Blob, uploaded through `/api/upload` (which authenticates first via Neon Auth).

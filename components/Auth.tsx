@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
-import { Loader2, X, Cloud, ArrowRight, Lock, Mail } from 'lucide-react'
+"use client";
+
+import { useState } from "react";
+import { authClient } from "@/lib/auth/client";
+import { Loader2, X, Cloud, ArrowRight, Lock, Mail, User as UserIcon } from "lucide-react";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -9,71 +11,91 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProps) {
-  const [loading, setLoading] = useState(false)
-  const [googleLoading, setGoogleLoading] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isSignUp, setIsSignUp] = useState(false)
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
 
   if (!isOpen) return null;
 
   // --- GOOGLE LOGIN ---
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        // Lepas login, dia akan balik ke page asal
-        redirectTo: window.location.origin 
-      }
-    });
-    
-    if (error) {
-        alert(error.message);
+    try {
+      const callbackURL =
+        typeof window !== "undefined" ? window.location.pathname : "/";
+      const { error } = await authClient.signIn.social({
+        provider: "google",
+        callbackURL,
+      });
+      if (error) {
+        alert(error.message || "Gagal login dengan Google.");
         setGoogleLoading(false);
+      }
+      // On success, the browser will be redirected to Google's OAuth screen.
+    } catch (e: any) {
+      alert(e?.message || "Gagal login dengan Google.");
+      setGoogleLoading(false);
     }
-    // Nota: Kalau berjaya, dia akan redirect, so tak payah setLoading(false)
   };
 
   // --- EMAIL LOGIN ---
   const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    
-    let error;
-    if (isSignUp) {
-      const { error: signUpError } = await supabase.auth.signUp({ email, password })
-      error = signUpError;
-      if (!error) alert('Check email anda untuk sahkan pendaftaran!');
-    } else {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-      error = signInError;
-    }
+    e.preventDefault();
+    setLoading(true);
 
-    setLoading(false)
+    try {
+      if (isSignUp) {
+        const { error } = await authClient.signUp.email({
+          email,
+          password,
+          name: name || email.split("@")[0],
+        });
+        if (error) {
+          alert(error.message || "Daftar gagal.");
+          setLoading(false);
+          return;
+        }
+        alert(
+          "Daftar berjaya! Check email anda untuk sahkan pendaftaran (jika diperlukan)."
+        );
+      } else {
+        const { error } = await authClient.signIn.email({
+          email,
+          password,
+        });
+        if (error) {
+          alert(error.message || "Login gagal.");
+          setLoading(false);
+          return;
+        }
+      }
 
-    if (!error) {
-        onClose();
-        window.location.reload(); 
-    } else {
-        alert(error.message);
+      setLoading(false);
+      onClose();
+      window.location.reload();
+    } catch (err: any) {
+      setLoading(false);
+      alert(err?.message || "Auth error");
     }
-  }
+  };
 
   // --- STYLING ---
   const modalBg = isDarkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black";
   const shadowStyle = isDarkMode ? "shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]" : "shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]";
-  
+
   const inputWrapperStyle = `flex items-center border-2 rounded-lg overflow-hidden transition-all focus-within:translate-x-1 focus-within:-translate-y-1 ${isDarkMode ? "bg-black border-white focus-within:shadow-[3px_3px_0px_0px_#fff]" : "bg-gray-50 border-black focus-within:shadow-[3px_3px_0px_0px_#000]"}`;
   const inputFieldStyle = `w-full p-3 bg-transparent outline-none text-sm font-bold placeholder:font-medium placeholder:opacity-50 ${isDarkMode ? "text-white" : "text-black"}`;
-  
+
   const btnStyle = `w-full py-2.5 rounded-lg border-2 text-sm font-black uppercase tracking-wider flex justify-center items-center gap-2 transition-all active:translate-y-1 active:shadow-none ${isDarkMode ? "bg-indigo-600 border-white text-white hover:bg-indigo-500 shadow-[3px_3px_0px_0px_#fff]" : "bg-indigo-500 border-black text-white hover:bg-indigo-400 shadow-[3px_3px_0px_0px_#000]"}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      
+
       <div className={`w-full max-w-[320px] sm:max-w-xs rounded-xl border-2 relative transition-all ${modalBg} ${shadowStyle}`}>
-        
+
         <button onClick={onClose} className={`absolute -top-3 -right-3 p-1.5 rounded-full border-2 hover:scale-110 transition-transform z-10 ${isDarkMode ? "bg-red-500 border-white text-white" : "bg-red-500 border-black text-white"}`}>
             <X size={14} strokeWidth={4}/>
         </button>
@@ -93,14 +115,13 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
 
             <div className="space-y-3">
                 {/* GOOGLE BUTTON */}
-                <button 
+                <button
                     onClick={handleGoogleLogin}
                     disabled={googleLoading}
                     className={`w-full py-2.5 rounded-lg border-2 flex items-center justify-center gap-2 transition-all hover:bg-opacity-10 active:scale-95 ${isDarkMode ? "border-white bg-white/5 hover:bg-white/10" : "border-black bg-gray-50 hover:bg-gray-100"}`}
                 >
                     {googleLoading ? <Loader2 className="animate-spin w-4 h-4"/> : (
                         <div className="flex items-center gap-2">
-                            {/* Google Logo SVG */}
                             <svg className="w-4 h-4" viewBox="0 0 24 24">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
@@ -120,6 +141,12 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
 
                 {/* EMAIL FORM */}
                 <form onSubmit={handleAuth} className="space-y-3">
+                    {isSignUp && (
+                        <div className={inputWrapperStyle}>
+                            <div className="pl-3 opacity-50"><UserIcon size={16}/></div>
+                            <input className={inputFieldStyle} type="text" placeholder="Nama" value={name} onChange={(e) => setName(e.target.value)} required />
+                        </div>
+                    )}
                     <div className={inputWrapperStyle}>
                         <div className="pl-3 opacity-50"><Mail size={16}/></div>
                         <input className={inputFieldStyle} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -128,7 +155,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                         <div className="pl-3 opacity-50"><Lock size={16}/></div>
                         <input className={inputFieldStyle} type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                     </div>
-                    
+
                     <button className={`mt-2 ${btnStyle}`} disabled={loading}>
                         {loading ? <Loader2 className="animate-spin w-4 h-4"/> : (
                             <>
@@ -147,5 +174,5 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
         </div>
       </div>
     </div>
-  )
+  );
 }

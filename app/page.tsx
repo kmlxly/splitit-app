@@ -10,15 +10,19 @@ import {
   ArrowDownLeft, CalendarClock, Lock, RefreshCw, Plane, // Tambah icons untuk Quick Stats
   Bot, MessageSquare, Send // Tambah icons untuk AI Chat
 } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { useUser } from "@/lib/auth/client";
 import AuthModal from "@/components/Auth";
 import { askTheBoss } from "@/app/actions/ai-chat";
+import { getDashboardStats } from "@/app/actions/dashboard";
 
 export default function Home() {
   // --- STATE ---
   const [darkMode, setDarkMode] = useState(false);
-  const [session, setSession] = useState<any>(null);
-  const [loadingSession, setLoadingSession] = useState(true);
+  const user = useUser();
+  const loadingSession = user === undefined;
+  const session = user
+    ? { user: { ...user, email: user.primaryEmail || "" } }
+    : null;
 
   // State untuk Modal Login biasa & Warning Google
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -62,12 +66,8 @@ export default function Home() {
     setIsAIThinking(true);
 
     try {
-      // 2. Hybrid Approach: Call Server Action first (for RAG Context)
-      // If server fails (due to API Key 403), it returns a specific string with the PREPARED PROMPT.
-      // Then client executes the prompt.
-
-      const token = session?.access_token || "";
-      let aiReply = await askTheBoss(text, token);
+      // 2. Call Server Action (auth handled via Stack Auth cookies)
+      let aiReply = await askTheBoss(text);
 
       if (aiReply === "QUOTA_EXCEEDED" || aiReply.startsWith("FALLBACK_TO_CLIENT::")) {
         aiReply = "Adoi, aku tak boleh fikir sekarang. Cuba lagi kejap lagi bro.";
@@ -84,198 +84,35 @@ export default function Home() {
     }
   };
 
-  // --- FUNCTION: Load Stats from Supabase ---
+  // --- FUNCTION: Load Stats via Server Action ---
   const loadStats = React.useCallback(async () => {
-    if (!session?.user) return;
+    if (!user) return;
     setLoadingStats(true);
 
     try {
-      const userId = session.user.id;
-      const myEmailPrefix = session.user.email?.split('@')[0].toLowerCase() || "";
-
-      let finalToCollect = 0;
-      let finalPocketBalance = 0;
-      let finalNextBill = "Tiada Data";
-
-      // 1. SPLITIT DATA
-      const { data: membershipData } = await supabase.from('session_members').select('session_id').eq('user_id', userId);
-      const sharedSessionIds = membershipData?.map(m => m.session_id) || [];
-
-      const { data: allSessions } = await supabase
-        .from('sessions')
-        .select('id, people, owner_id, paid_status')
-        .or(`owner_id.eq.${userId}${sharedSessionIds.length > 0 ? `,id.in.(${sharedSessionIds.join(',')})` : ''}`);
-
-      if (allSessions && allSessions.length > 0) {
-        const sessionIds = allSessions.map(s => s.id);
-        const { data: myBills } = await supabase.from('bills').select('*').in('session_id', sessionIds);
-
-        if (myBills) {
-          let totalReceivable = 0;
-          let totalPayable = 0;
-
-          allSessions.forEach(sess => {
-            const isOwner = sess.owner_id === userId;
-            const people = sess.people || [];
-            const paidStatus = sess.paid_status || {};
-            const peopleIds = people.map((p: any) => p.id);
-
-            // Robust Identity Check
-            let myPersonId = isOwner ? 'p1' : '';
-            const nameMatch = people.find((p: any) => {
-              const n = p.name.toLowerCase();
-              return n === 'aku' || n === 'me' || n === myEmailPrefix;
-            });
-
-            if (nameMatch) {
-              if (!isOwner || (isOwner && nameMatch.id === 'p1')) myPersonId = nameMatch.id;
-            }
-
-            if (!myPersonId) {
-              const guest = people.find((p: any) => p.id !== 'p1');
-              myPersonId = guest ? guest.id : (people[0]?.id || 'p1');
-            }
-
-            const sessBills = myBills.filter((b: any) => b.session_id === sess.id);
-            let debtMap: Record<string, Record<string, number>> = {};
-            peopleIds.forEach((id: string) => debtMap[id] = {});
-
-            sessBills.forEach((b: any) => {
-              const payerId = b.paid_by;
-              if (!debtMap[payerId]) return;
-              b.details?.forEach((d: any) => {
-                const consumerId = d.personId;
-                if (consumerId !== payerId && d.total > 0 && debtMap[consumerId]) {
-                  debtMap[consumerId][payerId] = (debtMap[consumerId][payerId] || 0) + Number(d.total);
-                }
-              });
-            });
-
-            let processed = new Set<string>();
-            peopleIds.forEach((idA: string) => {
-              peopleIds.forEach((idB: string) => {
-                if (idA === idB) return;
-                const key = [idA, idB].sort().join("-");
-                if (processed.has(key)) return;
-
-                const aOwesB = debtMap[idA]?.[idB] || 0;
-                const bOwesA = debtMap[idB]?.[idA] || 0;
-
-                let transfer = null;
-                if (aOwesB > bOwesA) transfer = { from: idA, to: idB, amount: aOwesB - bOwesA };
-                else if (bOwesA > aOwesB) transfer = { from: idB, to: idA, amount: bOwesA - aOwesB };
-
-                if (transfer && transfer.amount > 0.05) {
-                  const isPaid = paidStatus[`${transfer.from}-${transfer.to}`];
-                  if (!isPaid) {
-                    if (transfer.to === myPersonId) totalReceivable += transfer.amount;
-                    if (transfer.from === myPersonId) totalPayable += transfer.amount;
-                  }
-                }
-                processed.add(key);
-              });
-            });
-          });
-          finalToCollect = totalReceivable - totalPayable;
-        }
-      }
-
-      // 2. BUDGET DATA (Current Month Only)
-      const currentMonthStr = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-      const { data: budgetData } = await supabase
-        .from('budget_transactions')
-        .select('amount')
-        .eq('user_id', userId)
-        .gte('iso_date', `${currentMonthStr}-01`)
-        .lte('iso_date', `${currentMonthStr}-31`);
-
-      if (budgetData) {
-        finalPocketBalance = budgetData.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      }
-
-      // 3. SUB DATA
-      const { data: subData } = await supabase.from('subscriptions').select('*').eq('user_id', userId);
-      if (subData && subData.length > 0) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        let nearestDays = Infinity;
-        let nearestSub: any = null;
-
-        subData.forEach((sub: any) => {
-          if (!sub.first_bill_date) return;
-          const due = new Date(sub.first_bill_date);
-          due.setHours(0, 0, 0, 0);
-          let diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-          if (sub.cycle === "Monthly" && diffDays < 0) {
-            const nextMonth = new Date(due);
-            nextMonth.setMonth(nextMonth.getMonth() + 1);
-            if (nextMonth.getDate() !== due.getDate()) nextMonth.setDate(0);
-            diffDays = Math.ceil((nextMonth.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-          }
-
-          if (diffDays >= 0 && diffDays < nearestDays) {
-            nearestDays = diffDays;
-            nearestSub = sub;
-          }
-        });
-
-        if (nearestSub) {
-          const label = nearestDays === 0 ? "HARI NI!" : `${nearestDays} hari`;
-          finalNextBill = `${nearestSub.title} (${label})`;
-        }
-      }
-
-      if (Math.abs(finalToCollect) < 0.05) finalToCollect = 0;
-
-      setStats({
-        toCollect: finalToCollect,
-        pocketBalance: finalPocketBalance,
-        nextBill: finalNextBill
-      });
-
+      const data = await getDashboardStats();
+      setStats(data);
     } catch (err) {
       console.error("Dashboard Stats Error:", err);
     } finally {
       setLoadingStats(false);
     }
-  }, [session]);
+  }, [user]);
 
-  // --- EFFECT: Auth & Initial Load ---
+  // --- EFFECT: Dark Mode init ---
   useEffect(() => {
-    // 1. Dark Mode
     const savedMode = localStorage.getItem("splitit_darkmode");
     if (savedMode !== null) setDarkMode(savedMode === "true");
-
-    // 2. Initial Session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setLoadingSession(false);
-    });
-
-    // 3. Auth Listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
-  // --- EFFECT: Real-time Stats ---
+  // --- EFFECT: Stats Loading + Polling (replaces Supabase Realtime) ---
   useEffect(() => {
-    if (session) {
+    if (user) {
       loadStats();
-
-      const channel = supabase.channel('dashboard-realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'bills' }, () => loadStats())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => loadStats())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_transactions' }, () => loadStats())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => loadStats())
-        .subscribe();
-
-      return () => { supabase.removeChannel(channel); };
+      const interval = setInterval(loadStats, 10000); // poll every 10s
+      return () => clearInterval(interval);
     }
-  }, [session, loadStats]);
+  }, [user, loadStats]);
 
   // --- HANDLERS ---
   const toggleDarkMode = () => {
@@ -286,8 +123,8 @@ export default function Home() {
 
   const handleLogout = async () => {
     const confirm = window.confirm("Nak logout ke?");
-    if (confirm) {
-      await supabase.auth.signOut();
+    if (confirm && user) {
+      await user.signOut();
     }
   };
 

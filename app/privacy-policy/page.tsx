@@ -69,7 +69,7 @@ export default function PrivacyPolicy() {
                                 We use trusted services to power our apps. We do not sell your data to them.
                             </p>
                             <div className="flex flex-wrap gap-2">
-                                {["Google Auth", "Supabase", "Open-Meteo", "Gemini AI"].map((service) => (
+                                {["Neon Auth", "Neon Postgres", "Vercel Blob", "Open-Meteo", "Gemini AI"].map((service) => (
                                     <span key={service} className="px-3 py-1 bg-white border-2 border-black rounded-full text-[10px] font-black uppercase">
                                         {service}
                                     </span>

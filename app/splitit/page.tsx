@@ -5,7 +5,16 @@ import { useSearchParams, useRouter } from "next/navigation";
 import html2canvas from "html2canvas";
 import AuthModal from "@/components/Auth";
 import Cropper from "react-easy-crop";
-import { supabase } from "../../lib/supabaseClient"; // Path updated
+import { useUser } from "@/lib/auth/client";
+import {
+    getMySessionsAndBills,
+    joinSessionAsMember,
+    upsertSession,
+    upsertBills,
+    deleteSession as deleteSessionAction,
+    deleteBill as deleteBillAction,
+    getBillsForSession,
+} from "@/app/actions/splitit";
 import {
     Moon, Sun, CheckCircle, Trash2,
     Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X,
@@ -263,7 +272,10 @@ function SplitItContent() {
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Auth & Sync State
-    const [user, setUser] = useState<any>(null);
+    const stackUser = useUser();
+    const user = stackUser
+        ? { ...stackUser, email: stackUser.primaryEmail || "" }
+        : null;
     const [syncStatus, setSyncStatus] = useState<"SAVED" | "SAVING" | "ERROR" | "OFFLINE" | "SYNCING">("OFFLINE");
     const [pendingChanges, setPendingChanges] = useState(false);
 
@@ -380,9 +392,7 @@ function SplitItContent() {
     // 1. Load Data (Cloud First -> Local Fallback)
     useEffect(() => {
         const initApp = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            const currentUser = session?.user;
-            setUser(currentUser);
+            const currentUser = user;
 
             // Check kalau ada link invite (?join=SESSION_ID)
             const joinSessionId = searchParams.get("join");
@@ -392,40 +402,20 @@ function SplitItContent() {
                 try {
                     // A. Kalau ada link invite, cuba join dulu
                     if (joinSessionId) {
-                        const { data: alreadyMember } = await supabase.from('session_members').select('*').eq('session_id', joinSessionId).eq('user_id', currentUser.id).single();
-                        if (!alreadyMember) {
-                            await supabase.from('session_members').insert({ session_id: joinSessionId, user_id: currentUser.id });
+                        try {
+                            await joinSessionAsMember(joinSessionId);
                             alert("Berjaya join session member!");
+                        } catch (e) {
+                            console.error("Join failed:", e);
                         }
                     }
 
-                    // B. Tarik session sendiri (Owner)
-                    const { data: mySessions } = await supabase.from('sessions').select('*').eq('owner_id', currentUser.id);
-
-                    // C. Tarik session member (Shared)
-                    const { data: sharedRaw } = await supabase.from('session_members').select('session_id, sessions(*)').eq('user_id', currentUser.id);
-
-                    // Gabungkan dua-dua list
-                    let allSessions = [...(mySessions || [])];
-                    if (sharedRaw) {
-                        sharedRaw.forEach((row: any) => {
-                            // Pastikan tak duplicate dan session wujud
-                            if (row.sessions && !allSessions.find(s => s.id === row.sessions.id)) {
-                                allSessions.push(row.sessions);
-                            }
-                        });
-                    }
-
-                    // D. Tarik Bills untuk SEMUA session tadi
-                    const sessionIds = allSessions.map(s => s.id);
-                    let allBills: any[] = [];
-                    if (sessionIds.length > 0) {
-                        const { data: billData } = await supabase.from('bills').select('*').in('session_id', sessionIds);
-                        allBills = billData || [];
-                    }
+                    // B+C+D. Tarik semua session (own + shared) + bills
+                    const { sessions: allSessions, bills: allBills } =
+                        await getMySessionsAndBills();
 
                     // E. Convert Cloud Data to App Format
-                    const cloudSessions: Session[] = allSessions.map(s => ({
+                    const cloudSessions: Session[] = allSessions.map((s: any) => ({
                         id: s.id,
                         name: s.name,
                         ownerId: s.owner_id,
@@ -433,7 +423,7 @@ function SplitItContent() {
                         currency: s.currency || "RM",
                         people: s.people || [],
                         paidStatus: s.paid_status || {},
-                        bills: allBills.filter(b => b.session_id === s.id).map(mapSqlBillToLocal),
+                        bills: allBills.filter((b: any) => b.session_id === s.id).map(mapSqlBillToLocal),
                         isShared: s.owner_id !== currentUser.id
                     }));
 
@@ -596,25 +586,31 @@ function SplitItContent() {
         }
     }, [isLoaded, searchParams, router, user, sessions.length]);
 
-    // 1.5 REALTIME LISTENER (Live Update)
+    // 1.5 POLLING LISTENER (replaces Supabase Realtime)
     useEffect(() => {
         if (!user || !activeSessionId) return;
 
-        // Langgan channel Supabase
-        const channel = supabase.channel('realtime-room')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: `session_id=eq.${activeSessionId}` },
-                async () => {
-                    setSyncStatus("SYNCING");
-                    const { data } = await supabase.from('bills').select('*').eq('session_id', activeSessionId);
-                    if (data) {
-                        const freshBills = data.map(mapSqlBillToLocal);
-                        setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, bills: freshBills } : s));
-                    }
-                    setTimeout(() => setSyncStatus("SAVED"), 500);
-                })
-            .subscribe();
+        const sync = async () => {
+            setSyncStatus("SYNCING");
+            try {
+                const data = await getBillsForSession(activeSessionId);
+                if (data) {
+                    const freshBills = (data as any[]).map(mapSqlBillToLocal);
+                    setSessions(prev =>
+                        prev.map(s =>
+                            s.id === activeSessionId ? { ...s, bills: freshBills } : s,
+                        ),
+                    );
+                }
+            } catch (e) {
+                console.error("Poll sync bills error:", e);
+            } finally {
+                setTimeout(() => setSyncStatus("SAVED"), 500);
+            }
+        };
 
-        return () => { supabase.removeChannel(channel); };
+        const interval = setInterval(sync, 5000);
+        return () => clearInterval(interval);
     }, [activeSessionId, user]);
 
     // 2. Save Logic (Auto Sync with Debounce)
@@ -635,34 +631,21 @@ function SplitItContent() {
                 try {
                     const currentSession = sessions.find(s => s.id === activeSessionId);
                     if (currentSession) {
-                        // 1. Upsert Session (Only update if needed)
-                        // Use original owner_id if exists, else fallback to current user
-                        const ownerId = currentSession.ownerId || user.id;
-
-                        const { error: sessError } = await supabase.from('sessions').upsert({
-                            id: currentSession.id,
-                            owner_id: ownerId,
-                            name: currentSession.name,
-                            currency: currentSession.currency || "RM", // Ensure currency has default
-                            people: currentSession.people,
-                            paid_status: currentSession.paidStatus,
-                            updated_at: new Date().toISOString()
-                        });
-
-                        if (sessError) {
-                            console.error("Session Sync Error (Likely RLS):", sessError);
-                            // Don't throw here, usually members can't update session details but CAN update bills
+                        try {
+                            await upsertSession({
+                                id: currentSession.id,
+                                name: currentSession.name,
+                                currency: currentSession.currency || "RM",
+                                people: currentSession.people,
+                                paid_status: currentSession.paidStatus,
+                            });
+                        } catch (sessError) {
+                            console.error("Session Sync Error:", sessError);
                         }
 
-                        // 2. Upsert Bills
                         if (currentSession.bills && currentSession.bills.length > 0) {
                             const billsPayload = currentSession.bills.map(b => mapLocalBillToSql(b, currentSession.id));
-                            const { error: billError } = await supabase.from('bills').upsert(billsPayload);
-                            if (billError) throw billError;
-                        } else if (currentSession.bills && currentSession.bills.length === 0) {
-                            // Handle case where all bills deleted? 
-                            // Current logic doesn't delete bills here, only upserts. 
-                            // Deletion is handled by deleteBill function.
+                            await upsertBills(billsPayload);
                         }
                     }
                     setSyncStatus("SAVED");
@@ -719,7 +702,11 @@ function SplitItContent() {
 
             // Delete from Cloud if logged in
             if (user) {
-                await supabase.from('sessions').delete().eq('id', sid);
+                try {
+                    await deleteSessionAction(sid);
+                } catch (e) {
+                    console.error("Delete session failed:", e);
+                }
             }
         }
     };
@@ -889,8 +876,13 @@ function SplitItContent() {
     const deleteBill = async (id: string) => {
         if (confirm("Padam resit ni?")) {
             updateActiveSession({ bills: bills.filter(b => b.id !== id) });
-            // Kalau cloud, delete dari DB
-            if (user) await supabase.from('bills').delete().eq('id', id);
+            if (user) {
+                try {
+                    await deleteBillAction(id);
+                } catch (e) {
+                    console.error("Delete bill failed:", e);
+                }
+            }
         }
     };
 
@@ -1189,24 +1181,17 @@ function SplitItContent() {
 
         setSyncStatus("SYNCING");
         try {
-            // 1. Session Upsert
-            const { error: sessError } = await supabase.from('sessions').upsert({
+            await upsertSession({
                 id: activeSession.id,
-                owner_id: user.id || activeSession.ownerId,
                 name: activeSession.name,
                 currency: activeSession.currency || "RM",
                 people: activeSession.people,
                 paid_status: activeSession.paidStatus,
-                updated_at: new Date().toISOString()
             });
 
-            if (sessError) throw new Error("Session Error: " + sessError.message + "\nHint: Run fix_splitit_db.sql");
-
-            // 2. Bills Upsert
             if (activeSession.bills.length > 0) {
                 const billsPayload = activeSession.bills.map(b => mapLocalBillToSql(b, activeSession.id));
-                const { error: billError } = await supabase.from('bills').upsert(billsPayload);
-                if (billError) throw new Error("Bill Error: " + billError.message);
+                await upsertBills(billsPayload);
             }
 
             setSyncStatus("SAVED");

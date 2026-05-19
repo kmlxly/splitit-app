@@ -1,54 +1,48 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
+import { getServerUser } from "@/lib/auth/server";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export async function askTheBoss(userMessage: string, accessToken: string) {
+export async function askTheBoss(userMessage: string) {
 
-    // 1. Setup Supabase Client with User's Token (To pass RLS)
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-        global: {
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-            },
-        },
-    });
-
-    // 2. Fetch Financial Context (RAG)
+    // 1. Fetch Financial Context (RAG) for authenticated user
     let financialContext = "User Stats: Data unavailable (Guest or Error).";
 
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getServerUser();
 
         if (user) {
             // A. Pocket Money (Budget Expenses)
-            const { data: expenses } = await supabase
-                .from('budget_transactions')
-                .select('amount')
-                .eq('user_id', user.id);
+            const expenses = await sql`
+                SELECT amount FROM public.budget_transactions
+                WHERE user_id = ${user.id}
+            `;
+            const totalSpent = expenses.reduce(
+                (acc: number, curr: any) => acc + Number(curr.amount || 0),
+                0,
+            );
 
-            const totalSpent = expenses?.reduce((acc, curr) => acc + (curr.amount || 0), 0) || 0;
+            // B. Bills total from sessions owned by user
+            const billRows = await sql`
+                SELECT b.total_amount FROM public.bills b
+                INNER JOIN public.sessions s ON s.id = b.session_id
+                WHERE s.owner_id = ${user.id}
+            `;
+            const totalBillsManaged = billRows.reduce(
+                (acc: number, curr: any) => acc + Number(curr.total_amount || 0),
+                0,
+            );
 
-            // B. Debts (SplitIt)
-            const { data: sessions } = await supabase
-                .from('sessions')
-                .select('bills(total_amount, paid_by)')
-                .eq('owner_id', user.id);
-
-            let totalBillsManaged = 0;
-            sessions?.forEach((s: any) => {
-                s.bills?.forEach((b: any) => totalBillsManaged += b.total_amount);
-            });
-
-            // C. Subscription
-            const { data: subs } = await supabase
-                .from('subscriptions')
-                .select('price')
-                .eq('user_id', user.id);
-            const totalSubs = subs?.reduce((acc, curr) => acc + (curr.price || 0), 0) || 0;
+            // C. Subscriptions
+            const subs = await sql`
+                SELECT price FROM public.subscriptions WHERE user_id = ${user.id}
+            `;
+            const totalSubs = subs.reduce(
+                (acc: number, curr: any) => acc + Number(curr.price || 0),
+                0,
+            );
 
             financialContext = `
                 User Real-Time Stats:
@@ -61,7 +55,7 @@ export async function askTheBoss(userMessage: string, accessToken: string) {
         console.error("RAG Error:", err);
     }
 
-    // 3. Prepare Prompt
+    // 2. Prepare Prompt
     const prompt = `
       You are 'The Boss', a neo-brutalism financial advisor app persona.
 
@@ -83,7 +77,7 @@ export async function askTheBoss(userMessage: string, accessToken: string) {
       User said: "${userMessage}"
     `;
 
-    // 4. Call OpenRouter API
+    // 3. Call OpenRouter API
     try {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",

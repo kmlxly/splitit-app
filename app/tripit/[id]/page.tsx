@@ -57,7 +57,33 @@ import {
     Thermometer,
     Droplets,
 } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { useUser } from "@/lib/auth/client";
+import { uploadFileToBlob } from "@/lib/uploadClient";
+import {
+    getTripById,
+    updateTrip as updateTripAction,
+    updateTripCover,
+    getTripItems,
+    addTripItem,
+    updateTripItem,
+    toggleTripItemComplete,
+    deleteTripItem,
+    getTripMembers,
+    addTripMember,
+    removeTripMember,
+    getTripDocuments,
+    addTripDocument,
+    deleteTripDocument,
+    getTripChecklists,
+    addChecklist,
+    addChecklistItem,
+    toggleChecklistItem,
+    deleteChecklist,
+    deleteChecklistItem,
+    getPersonalExpenses,
+    addPersonalExpense,
+    deletePersonalExpense,
+} from "@/app/actions/tripit";
 import Cropper from "react-easy-crop";
 
 // Helper to create an image from a URL
@@ -203,7 +229,10 @@ export default function TripDetailPage({
     const [showShareModal, setShowShareModal] = useState(false);
     const [copied, setCopied] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
-    const [user, setUser] = useState<any>(null);
+    const stackUser = useUser();
+    const user = stackUser
+        ? { ...stackUser, email: stackUser.primaryEmail || "" }
+        : null;
 
     // Document State
     const [showAddDocModal, setShowAddDocModal] = useState(false);
@@ -465,13 +494,7 @@ export default function TripDetailPage({
         currentStatus: boolean,
     ) => {
         try {
-            const { error } = await supabase
-                .from("trip_items")
-                .update({ is_completed: !currentStatus })
-                .eq("id", itemId);
-
-            if (error) throw error;
-
+            await toggleTripItemComplete(itemId, !currentStatus);
             setItems(
                 items.map((item) =>
                     item.id === itemId ? { ...item, is_completed: !currentStatus } : item,
@@ -484,19 +507,9 @@ export default function TripDetailPage({
 
     // --- EFFECT: LOAD DATA ---
     useEffect(() => {
-        const checkSessionAndFetch = async () => {
-            const {
-                data: { session },
-            } = await supabase.auth.getSession();
-            if (session) {
-                setUser(session.user);
-                fetchTripData();
-            } else {
-                fetchTripData();
-            }
-        };
-        checkSessionAndFetch();
-    }, [id]);
+        if (stackUser === undefined) return;
+        fetchTripData();
+    }, [id, stackUser]);
 
     // Fetch weather for all itinerary items with locations (with rate limiting)
     // Fetch weather for all itinerary items with locations (with rate limiting)
@@ -533,59 +546,36 @@ export default function TripDetailPage({
         console.log("Fetching trip with ID:", id);
         setLoading(true);
         try {
-            // Check if online before making requests
             if (!navigator.onLine) {
                 console.log("Offline mode detected. Attempting to load from cache.");
                 throw new Error("Offline");
             }
 
-            // 1. Fetch Trip Info
-            const { data: tripData, error: tripError } = await supabase
-                .from("trips")
-                .select("*")
-                .eq("id", id)
-                .single();
+            const [tripData, itemsData, membersData, docsData, checklistData] =
+                await Promise.all([
+                    getTripById(id),
+                    getTripItems(id),
+                    getTripMembers(id),
+                    getTripDocuments(id),
+                    getTripChecklists(id),
+                ]);
 
-            if (tripError) throw tripError;
-
-            // 2. Fetch Itinerary, Members, Documents, & Checklists
-            const [itemsRes, membersRes, docsRes, checklistRes] = await Promise.all([
-                supabase
-                    .from("trip_items")
-                    .select("*")
-                    .eq("trip_id", id)
-                    .order("day_date", { ascending: true }),
-                supabase.from("trip_members").select("*").eq("trip_id", id),
-                supabase
-                    .from("trip_documents")
-                    .select("*")
-                    .eq("trip_id", id)
-                    .order("created_at", { ascending: false }),
-                supabase
-                    .from("trip_checklists")
-                    .select("*, trip_checklist_items(*)")
-                    .eq("trip_id", id)
-                    .order("created_at", { ascending: true }),
-            ]);
-
-            // Save to Cache
             if (typeof window !== 'undefined') {
                 localStorage.setItem(`offline_trip_${id}`, JSON.stringify(tripData));
-                localStorage.setItem(`offline_items_${id}`, JSON.stringify(itemsRes.data || []));
-                localStorage.setItem(`offline_members_${id}`, JSON.stringify(membersRes.data || []));
-                localStorage.setItem(`offline_docs_${id}`, JSON.stringify(docsRes.data || []));
-                localStorage.setItem(`offline_checklists_${id}`, JSON.stringify(checklistRes.data || []));
+                localStorage.setItem(`offline_items_${id}`, JSON.stringify(itemsData || []));
+                localStorage.setItem(`offline_members_${id}`, JSON.stringify(membersData || []));
+                localStorage.setItem(`offline_docs_${id}`, JSON.stringify(docsData || []));
+                localStorage.setItem(`offline_checklists_${id}`, JSON.stringify(checklistData || []));
                 localStorage.setItem(`offline_timestamp_${id}`, new Date().toISOString());
             }
 
             setTrip(tripData);
-            setItems(itemsRes.data || []);
-            setMembers(membersRes.data || []);
-            setDocuments(docsRes.data || []);
-            setChecklists(checklistRes.data || []);
+            setItems((itemsData || []) as any[]);
+            setMembers((membersData || []) as any[]);
+            setDocuments((docsData || []) as any[]);
+            setChecklists((checklistData || []) as any[]);
             setIsOffline(false);
 
-            // 3. Fetch Personal Expenses
             fetchPersonalExpenses();
 
         } catch (e: any) {
@@ -626,45 +616,18 @@ export default function TripDetailPage({
     const uploadImage = async (fileOrBlob: File | Blob) => {
         try {
             setUploading(true);
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
             if (!user) return alert("Sila log masuk semula.");
 
             const fileName = `trip-${Date.now()}.jpg`;
-            const filePath = `${user.id}/${fileName}`;
+            const publicUrl = await uploadFileToBlob(fileOrBlob, fileName, "trips");
 
-            console.log("Mencuba muat naik ke:", filePath);
-
-            const { error: uploadError } = await supabase.storage
-                .from("trips")
-                .upload(filePath, fileOrBlob, {
-                    contentType: "image/jpeg",
-                    upsert: true,
-                });
-
-            if (uploadError) throw uploadError;
-
-            const {
-                data: { publicUrl },
-            } = supabase.storage.from("trips").getPublicUrl(filePath);
-
-            // Update Trip Cover URL in DB
-            const { error: updateError } = await supabase
-                .from("trips")
-                .update({ cover_image: publicUrl })
-                .eq("id", id);
-
-            if (updateError) throw updateError;
+            await updateTripCover(id, publicUrl);
 
             setTrip({ ...trip, cover_image: publicUrl });
             setEditCoverImage(publicUrl); // Sync if edit modal is open
         } catch (error: any) {
             console.error("Ralat muat naik:", error);
-            alert(
-                "Gagal muat naik: " +
-                (error.message || "Sila pastikan bucket 'trips' wujud."),
-            );
+            alert("Gagal muat naik: " + (error.message || "Sila cuba lagi."));
         } finally {
             setUploading(false);
             setImageToCrop(null);
@@ -713,20 +676,15 @@ export default function TripDetailPage({
 
     const handleUpdateTrip = async () => {
         try {
-            const { error } = await supabase
-                .from("trips")
-                .update({
-                    name: editName,
-                    start_date: editStartDate,
-                    end_date: editEndDate || null,
-                    budget_limit: parseFloat(editBudget) || 0,
-                    cover_image: editCoverImage,
-                    currency: editCurrency,
-                    destination_currency: editDestCurrency,
-                })
-                .eq("id", id);
-
-            if (error) throw error;
+            await updateTripAction(id, {
+                name: editName,
+                start_date: editStartDate,
+                end_date: editEndDate || null,
+                budget_limit: parseFloat(editBudget) || 0,
+                cover_image: editCoverImage,
+                currency: editCurrency,
+                destination_currency: editDestCurrency,
+            });
 
             setTrip({
                 ...trip,
@@ -818,25 +776,19 @@ export default function TripDetailPage({
         if (!planTitle || !planDate) return alert("Sila isi Tajuk & Tarikh!");
 
         try {
-            const { data, error } = await supabase
-                .from("trip_items")
-                .insert({
-                    trip_id: id,
-                    title: planTitle,
-                    type: planType,
-                    location: planLocation,
-                    start_time: planTime || null,
-                    day_date: planDate,
-                    color: planColor,
-                    cost: parseFloat(planCost) || 0,
-                    original_currency: planCurrency,
-                    original_amount: parseFloat(planForeignAmount) || 0,
-                    exchange_rate: parseFloat(planExchangeRate) || 1,
-                })
-                .select()
-                .single();
-
-            if (error) throw error;
+            const data = await addTripItem({
+                trip_id: id,
+                title: planTitle,
+                type: planType,
+                location: planLocation,
+                start_time: planTime || null,
+                day_date: planDate,
+                color: planColor,
+                cost: parseFloat(planCost) || 0,
+                original_currency: planCurrency,
+                original_amount: parseFloat(planForeignAmount) || 0,
+                exchange_rate: parseFloat(planExchangeRate) || 1,
+            });
 
             setItems(
                 [...items, data].sort((a, b) => {
@@ -878,23 +830,18 @@ export default function TripDetailPage({
             return alert("Sila isi Tajuk & Tarikh!");
 
         try {
-            const { error } = await supabase
-                .from("trip_items")
-                .update({
-                    title: editPlanTitle,
-                    type: editPlanType,
-                    location: editPlanLocation,
-                    start_time: editPlanTime || null,
-                    day_date: editPlanDate,
-                    color: editPlanColor,
-                    cost: parseFloat(editPlanCost) || 0,
-                    original_currency: editPlanCurrency,
-                    original_amount: parseFloat(editPlanForeignAmount) || 0,
-                    exchange_rate: parseFloat(editPlanExchangeRate) || 1,
-                })
-                .eq("id", editPlanId);
-
-            if (error) throw error;
+            await updateTripItem(editPlanId!, {
+                title: editPlanTitle,
+                type: editPlanType,
+                location: editPlanLocation,
+                start_time: editPlanTime || null,
+                day_date: editPlanDate,
+                color: editPlanColor,
+                cost: parseFloat(editPlanCost) || 0,
+                original_currency: editPlanCurrency,
+                original_amount: parseFloat(editPlanForeignAmount) || 0,
+                exchange_rate: parseFloat(editPlanExchangeRate) || 1,
+            });
 
             const updatedItems = items
                 .map((item) =>
@@ -928,11 +875,7 @@ export default function TripDetailPage({
     const handleDeleteItem = async (itemId: string) => {
         if (!confirm("Padam plan ini?")) return;
         try {
-            const { error } = await supabase
-                .from("trip_items")
-                .delete()
-                .eq("id", itemId);
-            if (error) throw error;
+            await deleteTripItem(itemId);
             setItems(items.filter((i) => i.id !== itemId));
         } catch (e: any) {
             alert("Gagal padam: " + e.message);
@@ -970,19 +913,9 @@ export default function TripDetailPage({
 
     const fetchPersonalExpenses = async () => {
         try {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
             if (!user) return;
-            const { data, error } = await supabase
-                .from("trip_personal_expenses")
-                .select("*")
-                .eq("trip_id", id)
-                .eq("user_id", user.id)
-                .order("created_at", { ascending: false });
-
-            if (error) throw error;
-            setPersonalExpenses(data || []);
+            const data = await getPersonalExpenses(id);
+            setPersonalExpenses((data || []) as any[]);
         } catch (e: any) {
             console.error("Gagal load belanja peribadi:", e.message);
         }
@@ -994,36 +927,16 @@ export default function TripDetailPage({
 
         setUploading(true);
         try {
-            // 1. Upload to Storage
-            const fileExt = docFile.name.split(".").pop();
-            const fileName = `doc_${Date.now()}.${fileExt}`;
-            const filePath = `${user.id}/${fileName}`;
+            const fileName = docFile.name;
+            const publicUrl = await uploadFileToBlob(docFile, fileName, "trip_docs");
 
-            const { error: uploadError } = await supabase.storage
-                .from("trip_docs")
-                .upload(filePath, docFile);
-
-            if (uploadError) throw uploadError;
-
-            const {
-                data: { publicUrl },
-            } = supabase.storage.from("trip_docs").getPublicUrl(filePath);
-
-            // 2. Save to Database
-            const { data, error: dbError } = await supabase
-                .from("trip_documents")
-                .insert({
-                    trip_id: id,
-                    user_id: user.id,
-                    title: docTitle,
-                    file_url: publicUrl,
-                    type: docType,
-                    is_private: docIsPrivate,
-                })
-                .select()
-                .single();
-
-            if (dbError) throw dbError;
+            const data = await addTripDocument({
+                trip_id: id,
+                title: docTitle,
+                file_url: publicUrl,
+                type: docType,
+                is_private: docIsPrivate,
+            });
 
             setDocuments([data, ...documents]);
             setShowAddDocModal(false);
@@ -1041,14 +954,7 @@ export default function TripDetailPage({
     const handleDeleteDocument = async (doc: any) => {
         if (!confirm("Padam dokumen ini?")) return;
         try {
-            // 1. Delete from Storage (Extract path from URL if possible, or just delete DB record)
-            // For simplicity, we'll just delete the DB record here as storage paths are tricky to extract reliably from publicUrl
-            // In production, you'd want to delete the storage object too.
-            const { error } = await supabase
-                .from("trip_documents")
-                .delete()
-                .eq("id", doc.id);
-            if (error) throw error;
+            await deleteTripDocument(doc.id);
             setDocuments(documents.filter((d) => d.id !== doc.id));
         } catch (e: any) {
             alert("Gagal padam: " + e.message);
@@ -1058,12 +964,7 @@ export default function TripDetailPage({
     const handleAddChecklist = async () => {
         if (!newChecklistTitle.trim()) return;
         try {
-            const { data, error } = await supabase
-                .from("trip_checklists")
-                .insert({ trip_id: id, title: newChecklistTitle })
-                .select("*, trip_checklist_items(*)")
-                .single();
-            if (error) throw error;
+            const data = await addChecklist(id, newChecklistTitle);
             setChecklists([...checklists, data]);
             setNewChecklistTitle("");
             setShowAddChecklistModal(false);
@@ -1078,12 +979,7 @@ export default function TripDetailPage({
     ) => {
         if (!itemName.trim()) return;
         try {
-            const { data, error } = await supabase
-                .from("trip_checklist_items")
-                .insert({ checklist_id: checklistId, item_name: itemName })
-                .select()
-                .single();
-            if (error) throw error;
+            const data = await addChecklistItem(checklistId, itemName);
             setChecklists(
                 checklists.map((cl) =>
                     cl.id === checklistId
@@ -1108,11 +1004,7 @@ export default function TripDetailPage({
         checklistId: string,
     ) => {
         try {
-            const { error } = await supabase
-                .from("trip_checklist_items")
-                .update({ is_checked: !currentStatus, checked_by: user?.id })
-                .eq("id", itemId);
-            if (error) throw error;
+            await toggleChecklistItem(itemId, !currentStatus);
 
             setChecklists(
                 checklists.map((cl) => {
@@ -1135,11 +1027,7 @@ export default function TripDetailPage({
     const handleDeleteChecklist = async (checklistId: string) => {
         if (!confirm("Padam senarai ini? Semua item akan hilang.")) return;
         try {
-            const { error } = await supabase
-                .from("trip_checklists")
-                .delete()
-                .eq("id", checklistId);
-            if (error) throw error;
+            await deleteChecklist(checklistId);
             setChecklists(checklists.filter((cl) => cl.id !== checklistId));
         } catch (e: any) {
             alert("Gagal padam: " + e.message);
@@ -1150,27 +1038,18 @@ export default function TripDetailPage({
         if (!personalTitle || !personalAmount)
             return alert("Sila isi semua maklumat!");
         try {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
             if (!user) return alert("Sila log masuk.");
 
-            const { data, error } = await supabase
-                .from("trip_personal_expenses")
-                .insert({
-                    trip_id: id,
-                    user_id: user.id,
-                    title: personalTitle,
-                    amount: parseFloat(personalAmount),
-                    category: personalCategory,
-                    original_currency: personalCurrency,
-                    original_amount: parseFloat(personalForeignAmount) || 0,
-                    exchange_rate: parseFloat(personalExchangeRate) || 1,
-                })
-                .select()
-                .single();
+            const data = await addPersonalExpense({
+                trip_id: id,
+                title: personalTitle,
+                amount: parseFloat(personalAmount),
+                category: personalCategory,
+                original_currency: personalCurrency,
+                original_amount: parseFloat(personalForeignAmount) || 0,
+                exchange_rate: parseFloat(personalExchangeRate) || 1,
+            });
 
-            if (error) throw error;
             setPersonalExpenses([data, ...personalExpenses]);
             setShowAddPersonalModal(false);
             setPersonalTitle("");
@@ -1183,11 +1062,7 @@ export default function TripDetailPage({
     const handleDeletePersonal = async (expenseId: string) => {
         if (!confirm("Padam belanja peribadi ini?")) return;
         try {
-            const { error } = await supabase
-                .from("trip_personal_expenses")
-                .delete()
-                .eq("id", expenseId);
-            if (error) throw error;
+            await deletePersonalExpense(expenseId);
             setPersonalExpenses(personalExpenses.filter((e) => e.id !== expenseId));
         } catch (e: any) {
             alert("Gagal padam: " + e.message);
@@ -1197,17 +1072,7 @@ export default function TripDetailPage({
     const handleAddMember = async () => {
         if (!addMemberName.trim()) return;
         try {
-            const { data, error } = await supabase
-                .from("trip_members")
-                .insert({
-                    trip_id: id,
-                    name: addMemberName,
-                    role: "editor",
-                })
-                .select()
-                .single();
-
-            if (error) throw error;
+            const data = await addTripMember(id, addMemberName);
             setMembers([...members, data]);
             setAddMemberName("");
         } catch (e: any) {
@@ -1221,12 +1086,7 @@ export default function TripDetailPage({
         if (!confirm(`Padam ${member?.name} dari trip ini?`)) return;
 
         try {
-            const { error } = await supabase
-                .from("trip_members")
-                .delete()
-                .eq("id", memberId);
-
-            if (error) throw error;
+            await removeTripMember(memberId);
             setMembers(members.filter((m) => m.id !== memberId));
         } catch (e: any) {
             alert("Gagal padam ahli: " + e.message);
@@ -2262,11 +2122,7 @@ export default function TripDetailPage({
                                                             onClick={async () => {
                                                                 if (!confirm("Padam item ini?")) return;
                                                                 try {
-                                                                    const { error } = await supabase
-                                                                        .from("trip_checklist_items")
-                                                                        .delete()
-                                                                        .eq("id", item.id);
-                                                                    if (error) throw error;
+                                                                    await deleteChecklistItem(item.id);
                                                                     setChecklists(
                                                                         checklists.map((prevCl) =>
                                                                             prevCl.id === cl.id

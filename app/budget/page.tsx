@@ -10,7 +10,13 @@ import {
     ShieldCheck, AlertTriangle, Activity, BookOpen, ListTree
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
-import { supabase } from "@/lib/supabaseClient";
+import { useUser } from "@/lib/auth/client";
+import {
+    getBudgetTransactions,
+    upsertBudgetTransactions,
+    insertBudgetTransaction,
+    deleteBudgetTransaction,
+} from "@/app/actions/budget";
 import { motion, AnimatePresence } from "framer-motion";
 
 // --- 1. CONFIG & STYLES ---
@@ -144,7 +150,10 @@ export default function BudgetPage() {
     // Calendar & Date Filter State
     const [selectedDate, setSelectedDate] = useState<Date>(new Date()); // Default: current month
     const [showCalendarModal, setShowCalendarModal] = useState(false);
-    const [user, setUser] = useState<any>(null); // Auth user state
+    const stackUser = useUser();
+    const user = stackUser
+        ? { ...stackUser, email: stackUser.primaryEmail || "" }
+        : null;
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [showLoginGuide, setShowLoginGuide] = useState(false); // Google Warning Modal
 
@@ -213,46 +222,19 @@ export default function BudgetPage() {
 
     // --- EFFECT: LOAD & SAVE DATA ---
 
-    // 0. Check Supabase Session & Load Cloud Data
+    // 0. Load Cloud Data when authenticated
     useEffect(() => {
-        const initSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setUser(session?.user || null);
-
-            // LOAD DATA FROM CLOUD
-            if (session?.user) {
-                const { data: cloudTx, error } = await supabase
-                    .from('budget_transactions')
-                    .select('*')
-                    .eq('user_id', session.user.id);
-
-                if (cloudTx && cloudTx.length > 0) {
-                    // Map DB snake_case -> TS camelCase
-                    const validTx = cloudTx.map((t: any) => ({
-                        id: t.id,
-                        title: t.title,
-                        amount: t.amount,
-                        category: t.category,
-                        date: t.date,
-                        isoDate: t.iso_date, // DB uses iso_date
-                        items: t.items || []
-                    }));
-
-                    // Merge with local? For now just OVERWRITE/SET to ensure sync.
-                    // Or keep local if offline? Complex. Let's set cloud as truth for now.
-                    setTransactions(validTx);
-                }
+        const loadCloud = async () => {
+            if (!user) return;
+            try {
+                const cloudTx = await getBudgetTransactions();
+                if (cloudTx.length > 0) setTransactions(cloudTx as any);
+            } catch (e) {
+                console.error("Failed to load budget:", e);
             }
         };
-        initSession();
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user || null);
-            if (_event === 'SIGNED_IN') initSession();
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
+        loadCloud();
+    }, [user?.id]);
 
     // Initial Scroll to current month
     useEffect(() => {
@@ -264,72 +246,42 @@ export default function BudgetPage() {
         }
     }, [transactions.length > 0]);
 
-    // 0.2 Real-time Sync (Listen to Cloud Changes)
+    // 0.2 Polling Sync (replaces Supabase Realtime)
     useEffect(() => {
-        if (user) {
-            const channel = supabase.channel('budget-realtime')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_transactions' }, () => {
-                    // Re-run initSession to get latest data
-                    const syncCloud = async () => {
-                        const { data: cloudTx } = await supabase
-                            .from('budget_transactions')
-                            .select('*')
-                            .eq('user_id', user.id);
-
-                        if (cloudTx) {
-                            const validTx = cloudTx.map((t: any) => ({
-                                id: t.id,
-                                title: t.title,
-                                amount: t.amount,
-                                category: t.category,
-                                date: t.date,
-                                isoDate: t.iso_date,
-                                items: t.items || []
-                            }));
-                            setTransactions(validTx);
-                        }
-                    };
-                    syncCloud();
-                })
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => {
-                    // Update commitments if subs change in cloud
-                    // Note: Budget.AI currently loads from local for commitments breakdown, 
-                    // but we should sync it too.
-                    window.dispatchEvent(new Event('storage')); // Trigger internal listener
-                })
-                .subscribe();
-
-            return () => { supabase.removeChannel(channel); };
-        }
-    }, [user]);
+        if (!user) return;
+        const interval = setInterval(async () => {
+            try {
+                const cloudTx = await getBudgetTransactions();
+                if (cloudTx) setTransactions(cloudTx as any);
+            } catch (e) {
+                console.error("Poll sync error:", e);
+            }
+        }, 15000);
+        return () => clearInterval(interval);
+    }, [user?.id]);
 
     // 0.1 SYNC TO CLOUD (Auto-Save)
     useEffect(() => {
         const syncToCloud = async () => {
             if (!user || transactions.length === 0) return;
 
-            // Map TS camelCase -> DB snake_case
             const payload = transactions.map(t => ({
                 id: t.id,
-                user_id: user.id,
                 title: t.title,
                 amount: t.amount,
                 category: t.category,
                 date: t.date,
-                iso_date: t.isoDate, // Map to DB column
-                items: t.items || [], // Save items breakdown
-                updated_at: new Date().toISOString()
+                iso_date: t.isoDate,
+                items: t.items || [],
             }));
 
-            // Upsert all (Efficient? For <100 rows ok. For large data needs diffing)
-            const { error } = await supabase
-                .from('budget_transactions')
-                .upsert(payload);
-
-            if (error) console.error("Sync Error:", error);
+            try {
+                await upsertBudgetTransactions(payload);
+            } catch (e) {
+                console.error("Sync Error:", e);
+            }
         };
 
-        // Debounce sync (2s)
         const timeout = setTimeout(syncToCloud, 2000);
         return () => clearTimeout(timeout);
     }, [transactions, user]);
@@ -479,19 +431,19 @@ export default function BudgetPage() {
 
             // 3. Sync to Cloud
             if (user) {
-                const { error } = await supabase
-                    .from('budget_transactions')
-                    .insert([{
+                try {
+                    await insertBudgetTransaction({
                         id: newTx.id,
-                        user_id: user.id,
                         title: newTx.title,
                         amount: newTx.amount,
                         category: newTx.category,
                         date: newTx.date,
                         iso_date: newTx.isoDate,
-                        items: newTx.items
-                    }]);
-                if (error) console.error("Settle All Cloud Error:", error);
+                        items: newTx.items,
+                    });
+                } catch (e) {
+                    console.error("Settle All Cloud Error:", e);
+                }
             }
 
             alert("Semua komitmen berjaya diselesaikan!");
@@ -689,14 +641,10 @@ export default function BudgetPage() {
 
             // 2. Padam dari cloud (Jika user login)
             if (user) {
-                const { error } = await supabase
-                    .from('budget_transactions')
-                    .delete()
-                    .eq('id', id)
-                    .eq('user_id', user.id);
-
-                if (error) {
-                    console.error("Gagal padam rekod di cloud:", error);
+                try {
+                    await deleteBudgetTransaction(id);
+                } catch (e) {
+                    console.error("Gagal padam rekod di cloud:", e);
                 }
             }
         }
@@ -1069,9 +1017,8 @@ export default function BudgetPage() {
                             {user ? (
                                 <button
                                     onClick={async () => {
-                                        if (confirm("Nak logout ke?")) {
-                                            await supabase.auth.signOut();
-                                            setUser(null);
+                                        if (confirm("Nak logout ke?") && stackUser) {
+                                            await stackUser.signOut();
                                         }
                                     }}
                                     className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white"}`}

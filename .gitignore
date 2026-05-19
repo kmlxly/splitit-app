@@ -22,6 +22,10 @@
 
 # misc
 .DS_Store
+**/.DS_Store
+# macOS AppleDouble metadata files (created on non-HFS filesystems)
+._*
+**/._*
 *.pem
 
 # debug
