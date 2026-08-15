@@ -180,11 +180,36 @@ export async function upsertBills(bills: BillPayload[]) {
 
 export async function deleteSession(sessionId: string) {
   const user = await requireUser();
-  await sql`
+  if (!sessionId || sessionId.length < 8 || sessionId.length > 128) {
+    throw new Error("Event tidak sah.");
+  }
+
+  const rows = await sql`
     DELETE FROM public.sessions
     WHERE id = ${sessionId} AND owner_id = ${user.id}
+    RETURNING id
   `;
-  return { success: true };
+  return { success: true, deleted: rows.length > 0 };
+}
+
+export async function leaveSession(sessionId: string) {
+  const user = await requireUser();
+  if (!sessionId || sessionId.length < 8 || sessionId.length > 128) {
+    throw new Error("Event tidak sah.");
+  }
+
+  const rows = await sql`
+    DELETE FROM public.session_members sm
+    WHERE sm.session_id = ${sessionId}
+      AND sm.user_id = ${user.id}
+      AND EXISTS (
+        SELECT 1
+        FROM public.sessions s
+        WHERE s.id = sm.session_id AND s.owner_id != ${user.id}
+      )
+    RETURNING sm.session_id
+  `;
+  return { success: true, left: rows.length > 0 };
 }
 
 export async function deleteBill(billId: string) {

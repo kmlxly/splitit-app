@@ -14,6 +14,7 @@ import {
     upsertSession,
     upsertBills,
     deleteSession as deleteSessionAction,
+    leaveSession as leaveSessionAction,
     deleteBill as deleteBillAction,
     getBillsForSession,
 } from "@/app/actions/splitit";
@@ -292,6 +293,7 @@ function SplitItContent() {
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
     // Crop Modal State
     const [tempQrImage, setTempQrImage] = useState<string | null>(null);
@@ -580,7 +582,7 @@ function SplitItContent() {
 
     // 1.5 POLLING LISTENER (replaces Supabase Realtime)
     useEffect(() => {
-        if (!user || !activeSessionId) return;
+        if (!user || !activeSessionId || deletingSessionId) return;
 
         const sync = async () => {
             setSyncStatus("SYNCING");
@@ -603,11 +605,11 @@ function SplitItContent() {
 
         const interval = setInterval(sync, 5000);
         return () => clearInterval(interval);
-    }, [activeSessionId, user]);
+    }, [activeSessionId, deletingSessionId, user]);
 
     // 2. Save Logic (Auto Sync with Debounce)
     useEffect(() => {
-        if (!isLoaded) return;
+        if (!isLoaded || deletingSessionId) return;
 
         // A. Backup Local
         localStorage.setItem("splitit_sessions", JSON.stringify(sessions));
@@ -651,7 +653,7 @@ function SplitItContent() {
 
             return () => clearTimeout(timer);
         }
-    }, [sessions, darkMode, activeSessionId, isLoaded, user]);
+    }, [sessions, darkMode, activeSessionId, deletingSessionId, isLoaded, user]);
 
 
     // --- LOGIC FUNCTIONS (ORIGINAL APP LOGIC) ---
@@ -686,20 +688,58 @@ function SplitItContent() {
     };
 
     const deleteSession = async (sid: string) => {
-        if (sessions.length <= 1) { alert("Tinggal satu je sesi, tak boleh delete bos."); return; }
-        if (confirm("Padam sesi ni?")) {
-            const newSessions = sessions.filter(s => s.id !== sid);
-            setSessions(newSessions);
-            if (activeSessionId === sid) setActiveSessionId(newSessions[0].id);
+        const targetSession = sessions.find(session => session.id === sid);
+        if (!targetSession || deletingSessionId) return;
 
-            // Delete from Cloud if logged in
-            if (user) {
-                try {
-                    await deleteSessionAction(sid);
-                } catch (e) {
-                    console.error("Delete session failed:", e);
-                }
+        const isLastSession = sessions.length === 1;
+        const confirmationMessage = targetSession.isShared
+            ? `Keluar daripada event “${targetSession.name}”?\n\nData event kekal untuk pemilik.${isLastSession ? " Event kosong baharu akan disediakan untuk anda." : ""}`
+            : `Padam event “${targetSession.name}”?\n\nSemua ahli, bill dan rekod event ini akan dipadam. Tindakan ini tak boleh diundur.${isLastSession ? " Event kosong baharu akan disediakan selepas ini." : ""}`;
+
+        if (!confirm(confirmationMessage)) return;
+
+        const previousSessions = sessions;
+        const previousActiveSessionId = activeSessionId;
+        let nextSessions = sessions.filter(session => session.id !== sid);
+
+        if (nextSessions.length === 0) {
+            nextSessions = [{
+                id: createStringId("session"),
+                name: "Event Baru",
+                ownerId: user?.id,
+                createdAt: Date.now(),
+                people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
+                bills: [],
+                paidStatus: {},
+                currency: "RM",
+            }];
+        }
+
+        setDeletingSessionId(sid);
+        setSessions(nextSessions);
+        if (activeSessionId === sid) setActiveSessionId(nextSessions[0].id);
+        setEditingSessionId(null);
+
+        if (!user) {
+            setDeletingSessionId(null);
+            return;
+        }
+
+        try {
+            if (targetSession.isShared) {
+                await leaveSessionAction(sid);
+            } else {
+                await deleteSessionAction(sid);
             }
+        } catch (error) {
+            console.error("Remove event failed:", error);
+            setSessions(previousSessions);
+            setActiveSessionId(previousActiveSessionId);
+            alert(targetSession.isShared
+                ? "Event belum dapat dikeluarkan. Cuba lagi."
+                : "Event belum dapat dipadam. Cuba lagi.");
+        } finally {
+            setDeletingSessionId(null);
         }
     };
 
@@ -1861,24 +1901,24 @@ function SplitItContent() {
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                             <div className={`w-full max-w-[340px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} ${shadowStyle} relative`}>
                                 <button onClick={() => setShowSessionModal(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20} /></button>
-                                <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2"><Folder size={24} /> Pilih Sesi</h2>
+                                <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2"><Folder size={24} /> Pilih Event</h2>
                                 <div className="space-y-3 max-h-[300px] overflow-y-auto mb-6 pr-1">
                                     {sessions.map(s => (
                                         <div key={s.id} className={`p-4 rounded-xl border-2 flex items-center justify-between transition-all ${activeSessionId === s.id ? (darkMode ? "border-green-400 bg-green-900/20" : "border-black bg-green-100") : (darkMode ? "border-white/10 bg-white/5" : "border-black/5 bg-gray-50")}`}>
                                             {editingSessionId === s.id ? (
                                                 <div className="flex-1 flex gap-2"><input autoFocus value={tempSessionName} onChange={e => setTempSessionName(e.target.value)} onKeyDown={e => e.key === "Enter" && saveRenameSession()} className={`flex-1 bg-transparent border-b-2 outline-none font-bold text-sm ${darkMode ? "border-white" : "border-black"}`} /><button onClick={saveRenameSession} className="p-1 text-green-500 hover:scale-110 transition"><Save size={16} /></button></div>
                                             ) : (
-                                                <div onClick={() => { setActiveSessionId(s.id); setShowSessionModal(false); }} className="flex-1 cursor-pointer"><h3 className={`font-bold text-sm ${darkMode ? "text-white" : "text-black"}`}>{s.name}</h3><p className="text-[10px] opacity-50">{new Date(s.createdAt).toLocaleDateString()}</p></div>
+                                                <div onClick={() => { setActiveSessionId(s.id); setShowSessionModal(false); }} className="flex-1 cursor-pointer"><h3 className={`font-bold text-sm ${darkMode ? "text-white" : "text-black"}`}>{s.name}</h3><p className="text-[10px] opacity-50">{new Date(s.createdAt).toLocaleDateString()}{s.isShared ? " · Event dikongsi" : ""}</p></div>
                                             )}
                                             <div className="flex items-center gap-1 pl-2">
                                                 {activeSessionId === s.id && !editingSessionId && <CheckCircle size={16} className="text-green-500 mr-1" />}
-                                                {!editingSessionId && (<><button onClick={() => startRenameSession(s)} className={`p-2 transition-all ${darkMode ? "text-white/50 hover:text-blue-400" : "text-black/50 hover:text-blue-600"}`}><Edit3 size={14} /></button>{sessions.length > 1 && (<button onClick={() => deleteSession(s.id)} className="p-2 opacity-50 hover:opacity-100 hover:text-red-500 transition"><Trash2 size={14} /></button>)}</>)}
+                                                {!editingSessionId && (<><button onClick={() => startRenameSession(s)} aria-label={`Tukar nama event ${s.name}`} title="Tukar nama event" className={`p-2 rounded-lg transition-all ${darkMode ? "text-white/50 hover:bg-white/10 hover:text-blue-400" : "text-black/50 hover:bg-blue-100 hover:text-blue-700"}`}><Edit3 size={14} /></button><button onClick={() => deleteSession(s.id)} disabled={deletingSessionId !== null} aria-label={s.isShared ? `Keluar event ${s.name}` : `Padam event ${s.name}`} title={s.isShared ? "Keluar event" : "Padam event"} className={`p-2 rounded-lg border transition-all disabled:cursor-wait disabled:opacity-40 ${darkMode ? "border-red-400/30 bg-red-400/10 text-red-300 hover:border-red-300 hover:bg-red-400/20" : "border-red-200 bg-red-50 text-red-700 hover:border-red-500 hover:bg-red-100"}`}>{deletingSessionId === s.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}</button></>)}
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                                 <div className="pt-6 border-t border-dashed border-current border-opacity-30">
-                                    <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Buka Sesi Baru</label>
+                                    <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Buka Event Baru</label>
                                     <div className="flex gap-2"><input value={newSessionName} onChange={e => setNewSessionName(e.target.value)} placeholder="Contoh: Trip Hatyai" className={`flex-1 px-3 py-2 rounded-lg bg-transparent border-2 outline-none text-sm font-bold ${darkMode ? "border-white/30 focus:border-white" : "border-black/30 focus:border-black"}`} /><button onClick={createNewSession} disabled={!newSessionName} className={`px-4 py-2 rounded-lg border-2 font-bold text-sm ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} disabled:opacity-50`}>OK</button></div>
                                 </div>
                             </div>
