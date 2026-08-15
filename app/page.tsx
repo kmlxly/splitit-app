@@ -1,18 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Grid, Layout, Moon, Sun, ArrowUpRight,
   LogIn, LogOut, User, Loader2,
-  AlertCircle, ArrowRight, X,
-  Wallet, Calculator, Sparkles, HelpCircle, ChevronDown, ChevronUp, // Tambah icon Wallet untuk Budget App
+  X,
+  Wallet, HelpCircle, ChevronDown, ChevronUp,
   ArrowDownLeft, CalendarClock, Lock, RefreshCw, Plane, // Tambah icons untuk Quick Stats
-  Bot, MessageSquare, Send // Tambah icons untuk AI Chat
 } from "lucide-react";
 import { useUser } from "@/lib/auth/client";
 import AuthModal from "@/components/Auth";
-import { askTheBoss } from "@/app/actions/ai-chat";
 import { getDashboardStats } from "@/app/actions/dashboard";
 
 export default function Home() {
@@ -24,9 +22,8 @@ export default function Home() {
     ? { user: { ...user, email: user.primaryEmail || "" } }
     : null;
 
-  // State untuk Modal Login biasa & Warning Google
+  // State untuk Modal Login
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showLoginGuide, setShowLoginGuide] = useState(false);
 
   // State untuk User Guide
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -38,51 +35,7 @@ export default function Home() {
     pocketBalance: 0,
     nextBill: "Tiada Data"
   });
-  const [loadingStats, setLoadingStats] = useState(true);
-
-  // AI Chat State
-  const [showAIChat, setShowAIChat] = useState(false);
-  const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState<Array<{ id: number, text: string, sender: 'user' | 'ai' }>>([
-    { id: 1, text: "Apa lagi kau nak? Duit dah habis ke? Pilih menu bawah ni cepat.", sender: 'ai' }
-  ]);
-  const [isAIThinking, setIsAIThinking] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll chat to bottom
-  useEffect(() => {
-    if (showAIChat) {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, showAIChat]);
-
-  const handleSendMessage = async (text: string) => {
-    if (!text.trim()) return;
-
-    // 1. Add User Message
-    const newUserMsg = { id: Date.now(), text: text, sender: 'user' as const };
-    setMessages(prev => [...prev, newUserMsg]);
-    setChatInput("");
-    setIsAIThinking(true);
-
-    try {
-      // 2. Call Server Action (auth handled via Stack Auth cookies)
-      let aiReply = await askTheBoss(text);
-
-      if (aiReply === "QUOTA_EXCEEDED" || aiReply.startsWith("FALLBACK_TO_CLIENT::")) {
-        aiReply = "Adoi, aku tak boleh fikir sekarang. Cuba lagi kejap lagi bro.";
-      }
-
-      const newAIMsg = { id: Date.now() + 1, text: aiReply, sender: 'ai' as const };
-      setMessages(prev => [...prev, newAIMsg]);
-    } catch (error) {
-      console.error("AI Chat Error:", error);
-      const errorMsg = { id: Date.now() + 1, text: "Internet problem la pulak. Check connection kau.", sender: 'ai' as const };
-      setMessages(prev => [...prev, errorMsg]);
-    } finally {
-      setIsAIThinking(false);
-    }
-  };
+  const [, setLoadingStats] = useState(true);
 
   // --- FUNCTION: Load Stats via Server Action ---
   const loadStats = React.useCallback(async () => {
@@ -130,11 +83,6 @@ export default function Home() {
 
   // --- LOGIN FLOW ---
   const handleLoginClick = () => {
-    setShowLoginGuide(true);
-  };
-
-  const openAuthOptions = () => {
-    setShowLoginGuide(false);
     setShowLoginModal(true);
   };
 
@@ -143,9 +91,6 @@ export default function Home() {
 
   // Style Kad Link (Boleh Klik)
   const cardStyle = `group relative border-2 rounded-2xl p-6 transition-all hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-[#1E1E1E] border-white hover:bg-[#252525]" : "bg-white border-black hover:bg-gray-50"}`;
-
-  // Style Kad Disabled (Tak Boleh Klik - Untuk Coming Soon)
-  const disabledCardStyle = `relative border-2 rounded-2xl p-6 opacity-80 ${darkMode ? "bg-[#1E1E1E] border-white/50" : "bg-white border-black"}`;
 
   const btnStyle = `p-2 rounded-lg border-2 flex items-center justify-center gap-2 text-xs font-bold transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`;
 
@@ -193,18 +138,18 @@ export default function Home() {
             </button>
           )}
 
-          <button onClick={() => setShowHelpModal(true)} className={btnStyle} title="Bantuan">
+          <button onClick={() => setShowHelpModal(true)} className={btnStyle} title="Bantuan" aria-label="Buka bantuan">
             <HelpCircle size={18} />
           </button>
 
-          <button onClick={toggleDarkMode} className={btnStyle}>
+          <button onClick={toggleDarkMode} className={btnStyle} aria-label={darkMode ? "Guna tema cerah" : "Guna tema gelap"}>
             {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         </div>
       </header>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-4">
+      <main className="flex-1 p-6 pb-28 max-w-2xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-4">
 
         <div className="space-y-2">
           <h2 className="text-4xl font-black uppercase leading-none">
@@ -221,7 +166,7 @@ export default function Home() {
           {/* STAT 1: SPLITIT (KUTIP/BAYAR) */}
           <div className="flex flex-col gap-1.5">
             <div className="flex justify-between items-center px-1">
-              <span className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>
                 {stats.toCollect >= 0 ? "KUTIP" : "BAYAR"}
               </span>
               <div className={stats.toCollect >= 0
@@ -235,8 +180,8 @@ export default function Home() {
               ? (darkMode ? "bg-indigo-600 border-white text-white" : "bg-indigo-100 border-black text-indigo-900")
               : (darkMode ? "bg-red-600 border-white text-white" : "bg-red-100 border-black text-red-900")
               }`}>
-              <p className={`text-[11px] font-black font-mono tracking-tighter truncate ${!session ? "blur-[2px] opacity-50" : ""}`}>
-                RM {Math.abs(stats.toCollect).toFixed(0)}
+              <p className="text-[11px] font-black font-mono tracking-tighter truncate">
+                {session ? `RM ${Math.abs(stats.toCollect).toFixed(0)}` : "LOG MASUK"}
               </p>
               {!session && <div className="absolute inset-0 flex items-center justify-center"><Lock size={10} /></div>}
             </div>
@@ -245,13 +190,13 @@ export default function Home() {
           {/* STAT 2: BUDGET (BAKI) */}
           <div className="flex flex-col gap-1.5">
             <div className="flex justify-between items-center px-1">
-              <span className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>BAKI</span>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>BAKI</span>
               <Wallet size={12} className={darkMode ? "text-orange-400" : "text-orange-600"} />
             </div>
             <div className={`relative h-8 rounded-full border-2 flex items-center justify-center px-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-orange-600 border-white text-white" : "bg-orange-100 border-black text-orange-900"
               }`}>
-              <p className={`text-[11px] font-black font-mono tracking-tighter truncate ${!session ? "blur-[2px] opacity-50" : ""}`}>
-                RM {stats.pocketBalance.toFixed(0)}
+              <p className="text-[11px] font-black font-mono tracking-tighter truncate">
+                {session ? `RM ${stats.pocketBalance.toFixed(0)}` : "LOG MASUK"}
               </p>
               {!session && <div className="absolute inset-0 flex items-center justify-center"><Lock size={10} /></div>}
             </div>
@@ -260,13 +205,13 @@ export default function Home() {
           {/* STAT 3: SUB.TRACKER (BIL) */}
           <div className="flex flex-col gap-1.5">
             <div className="flex justify-between items-center px-1">
-              <span className={`text-[8px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>BIL</span>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>BIL</span>
               <CalendarClock size={12} className={darkMode ? "text-pink-400" : "text-pink-600"} />
             </div>
             <div className={`relative h-8 rounded-full border-2 flex items-center justify-center px-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-pink-600 border-white text-white" : "bg-pink-100 border-black text-pink-900"
               }`}>
-              <p className={`text-[9px] font-black uppercase truncate leading-none text-center ${!session ? "blur-[2px] opacity-50" : ""}`}>
-                {stats.nextBill.split(' (')[0]}
+              <p className="text-[10px] font-black uppercase truncate leading-none text-center">
+                {session ? stats.nextBill.split(' (')[0] : "LOG MASUK"}
               </p>
               {!session && <div className="absolute inset-0 flex items-center justify-center"><Lock size={10} /></div>}
             </div>
@@ -302,13 +247,7 @@ export default function Home() {
               <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
             </div>
 
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-xl font-black uppercase">Budget.AI</h3>
-              <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded border border-black font-black animate-pulse flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-white"></span>
-                NEW
-              </span>
-            </div>
+            <h3 className="text-xl font-black uppercase mb-1">Budget.AI</h3>
 
             <p className="text-xs font-bold opacity-60 leading-relaxed">
               Track duit poket. Auto-Scan Resit, Analitik Belanja & Monitor Baki.
@@ -328,13 +267,7 @@ export default function Home() {
               <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
             </div>
 
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-xl font-black uppercase">Sub.Tracker</h3>
-              <span className="bg-pink-500 text-white text-[9px] px-1.5 py-0.5 rounded border border-black font-black animate-pulse flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-white animate-pulse"></span>
-                NEW
-              </span>
-            </div>
+            <h3 className="text-xl font-black uppercase mb-1">Sub.Tracker</h3>
 
             <p className="text-xs font-bold opacity-60 leading-relaxed">
               Urus komitmen wajib & subscription lifestyle. Realiti check kos setahun.
@@ -345,17 +278,22 @@ export default function Home() {
             </div>
           </Link>
 
-          {/* APP 4: TRIPIT (COMING SOON) */}
-          {/* APP 4: TRIPIT (COMING SOON) */}
-          <div className={disabledCardStyle}>
+          {/* APP 4: TRIPIT */}
+          <Link href="/tripit" className={cardStyle}>
             <div className="flex justify-between items-start mb-4">
-              <div className={`p-3 rounded-xl border-2 grayscale ${darkMode ? "bg-indigo-600 border-white text-white" : "bg-indigo-100 border-indigo-900 text-indigo-900"}`}>
+              <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-indigo-600 border-white text-white" : "bg-indigo-100 border-indigo-900 text-indigo-900"}`}>
                 <Plane size={24} />
               </div>
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">COMING SOON</span>
+              <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
             </div>
 
-            <h3 className="text-xl font-black uppercase mb-1">TripIt</h3>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-xl font-black uppercase">TripIt</h3>
+              <span className="flex items-center gap-1 rounded border border-black bg-indigo-500 px-1.5 py-0.5 text-[9px] font-black text-white animate-[pulse_3s_ease-in-out_infinite] motion-reduce:animate-none">
+                <span className="h-1 w-1 rounded-full bg-white" aria-hidden="true" />
+                NEW
+              </span>
+            </div>
             <p className="text-xs font-bold opacity-60 leading-relaxed">
               Travel Planner + Budget. Itinerary, Target Belanja & Split Bill dalam satu app.
             </p>
@@ -364,7 +302,7 @@ export default function Home() {
               <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Budget</span>
               <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Split</span>
             </div>
-          </div>
+          </Link>
 
           {/* APP 5: NEXT PROJECT IDEA */}
           <div className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-50 ${darkMode ? "border-white" : "border-black"}`}>
@@ -393,44 +331,9 @@ export default function Home() {
         isDarkMode={darkMode}
       />
 
-      {showLoginGuide && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-          <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-            <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20} /></button>
-
-            <div className="text-center mb-4">
-              <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-3 border-2 border-black">
-                <AlertCircle size={32} className="text-yellow-600" />
-              </div>
-              <h2 className="text-lg font-black uppercase leading-tight text-red-500">Google Warning!</h2>
-              <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed">
-                App status "Beta". Kalau nampak warning merah, jangan panik. Ikut langkah di bawah.
-              </p>
-            </div>
-
-            <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-gray-50 border-black/10"}`}>
-              <p className="text-[9px] font-black uppercase opacity-50 mb-1">CARA LEPAS WARNING:</p>
-              <div className="flex items-start gap-3">
-                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
-                <p className="text-xs font-bold">Tekan link <span className="underline decoration-red-500 decoration-2">Advanced</span> (Kiri Bawah).</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
-                <p className="text-xs font-bold">Tekan <span className="underline decoration-red-500 decoration-2">Go to SplitIt (unsafe)</span>.</p>
-              </div>
-            </div>
-
-            <button onClick={openAuthOptions} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-blue-600 text-white border-black"}`}>
-              FAHAM, PILIH CARA LOGIN <ArrowRight size={14} />
-            </button>
-            <p className="text-[9px] text-center mt-3 opacity-40 font-bold">Safe & Secure. No password stored.</p>
-          </div>
-        </div>
-      )}
-
       {/* --- MODAL: HELP GUIDE --- */}
       {showHelpModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+        <div role="dialog" aria-modal="true" aria-labelledby="help-title" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
           <div className={`w-full max-w-[320px] max-h-[80vh] flex flex-col rounded-[2.5rem] border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95 overflow-hidden`}>
 
             {/* Header Bergaya */}
@@ -439,11 +342,11 @@ export default function Home() {
                 <div className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center ${darkMode ? "bg-white text-black" : "bg-black text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,0.2)]"}`}>
                   <HelpCircle size={28} />
                 </div>
-                <button onClick={() => setShowHelpModal(false)} className="p-1 opacity-40 hover:opacity-100 transition-opacity">
+                <button onClick={() => setShowHelpModal(false)} className="p-2 opacity-60 hover:opacity-100 transition-opacity" aria-label="Tutup bantuan">
                   <X size={24} />
                 </button>
               </div>
-              <h2 className="text-2xl font-black uppercase leading-none tracking-tighter italic">
+              <h2 id="help-title" className="text-2xl font-black uppercase leading-none tracking-tighter italic">
                 Manual<br />Pengguna
               </h2>
               <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-2">Tutorial & Tips Ringkas</p>
@@ -517,108 +420,6 @@ export default function Home() {
             </div>
 
           </div>
-        </div>
-      )}
-
-      {/* --- FLOATING AI AGENT (THE BOSS) --- */}
-
-      {/* 1. Trigger Button */}
-      <button
-        onClick={() => setShowAIChat(!showAIChat)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-xl border-2 border-black bg-yellow-400 flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:scale-95`}
-      >
-        {showAIChat ? <X size={28} className="text-black" /> : <Bot size={28} className="text-black" />}
-      </button>
-
-      {/* 2. Chat Window (Popover) */}
-      {showAIChat && (
-        <div className={`fixed bottom-24 right-6 z-50 w-80 max-w-[90vw] flex flex-col rounded-xl border-2 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in slide-in-from-bottom-10 zoom-in-95 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"}`}>
-
-          {/* Header */}
-          <div className={`p-4 border-b-2 flex justify-between items-center ${darkMode ? "border-white bg-black/20" : "border-black bg-gray-50"}`}>
-            <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                <Bot size={18} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black uppercase leading-none">The Boss 🤖</h3>
-                <p className="text-[9px] font-bold opacity-60">Financial Ruthless Advisor</p>
-              </div>
-            </div>
-            <button onClick={() => setShowAIChat(false)} className="opacity-50 hover:opacity-100">
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Body (Messages) */}
-          <div className="h-64 overflow-y-auto p-4 space-y-4 text-xs font-bold relative bg-opacity-50">
-
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex gap-2 items-end ${msg.sender === 'user' ? "justify-end" : ""}`}>
-                {msg.sender === 'ai' && (
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mb-1 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                    <Bot size={12} />
-                  </div>
-                )}
-
-                <div className={`p-3 rounded-2xl border-2 max-w-[80%] ${msg.sender === 'user' ?
-                  "bg-black text-white border-black rounded-br-sm" :
-                  (darkMode ? "bg-gray-800 border-white rounded-bl-sm" : "bg-gray-100 border-black rounded-bl-sm")}`}>
-                  <p className="leading-snug">{msg.text}</p>
-                </div>
-              </div>
-            ))}
-
-            {isAIThinking && (
-              <div className="flex gap-2 items-end">
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mb-1 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                  <Bot size={12} />
-                </div>
-                <div className={`p-3 rounded-2xl rounded-bl-sm border-2 ${darkMode ? "bg-gray-800 border-white" : "bg-gray-100 border-black"}`}>
-                  <div className="flex gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce"></span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce delay-75"></span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce delay-150"></span>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Quick Actions (Chips) */}
-          <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar mask-linear">
-            {["💸 Can I Buy This?", "🤬 Minta Hutang", "🔥 Roast Me"].map((action) => (
-              <button
-                key={action}
-                onClick={() => handleSendMessage(action)}
-                className={`whitespace-nowrap px-3 py-1.5 rounded-full border-2 text-[10px] font-black uppercase transition-all hover:scale-105 active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`}
-              >
-                {action}
-              </button>
-            ))}
-          </div>
-
-          {/* Footer (Input) */}
-          <div className={`p-3 border-t-2 ${darkMode ? "border-white bg-[#1E1E1E]" : "border-black bg-white"}`}>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(chatInput)}
-                placeholder="Tanya Boss..."
-                className={`flex-1 px-3 py-2 rounded-lg border-2 text-xs font-bold outline-none focus:ring-2 focus:ring-yellow-400 ${darkMode ? "bg-black border-white text-white" : "bg-gray-50 border-black text-black"}`}
-              />
-              <button
-                onClick={() => handleSendMessage(chatInput)}
-                className={`p-2 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-white text-black border-white hover:bg-gray-200" : "bg-yellow-400 text-black border-black hover:bg-yellow-300"}`}
-              >
-                <Send size={16} />
-              </button>
-            </div>
-          </div>
-
         </div>
       )}
 

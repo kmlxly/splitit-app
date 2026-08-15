@@ -2,13 +2,14 @@
 
 import { sql } from "@/lib/db";
 import { requireServerUser } from "@/lib/auth/server";
+import { requireSessionAccess } from "@/lib/authorization";
 
 type SessionPayload = {
   id: string;
   name: string;
   currency?: string;
-  people?: any[];
-  paid_status?: Record<string, any>;
+  people?: unknown[];
+  paid_status?: Record<string, boolean>;
 };
 
 type BillPayload = {
@@ -18,8 +19,8 @@ type BillPayload = {
   type?: string | null;
   total_amount?: number | null;
   paid_by?: string | null;
-  details?: any;
-  menu_items?: any;
+  details?: unknown;
+  menu_items?: unknown;
   misc_amount?: number | null;
   discount_amount?: number | null;
   tax_method?: string | null;
@@ -54,7 +55,7 @@ export async function getMySessionsAndBills() {
     return { sessions: [], bills: [] };
   }
 
-  const sessionIds = allSessions.map((s: any) => s.id);
+  const sessionIds = allSessions.map((session) => session.id);
 
   const billRows = await sql`
     SELECT *
@@ -67,6 +68,13 @@ export async function getMySessionsAndBills() {
 
 export async function joinSessionAsMember(sessionId: string) {
   const user = await requireUser();
+  if (!sessionId || sessionId.length < 8 || sessionId.length > 128) {
+    throw new Error("Link jemputan tidak sah.");
+  }
+  const sessions = await sql`
+    SELECT id FROM public.sessions WHERE id = ${sessionId} LIMIT 1
+  `;
+  if (sessions.length === 0) throw new Error("Sesi tidak ditemui.");
   await sql`
     INSERT INTO public.session_members (session_id, user_id)
     VALUES (${sessionId}, ${user.id})
@@ -76,7 +84,8 @@ export async function joinSessionAsMember(sessionId: string) {
 }
 
 export async function getBillsForSession(sessionId: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireSessionAccess(user.id, sessionId);
   const rows = await sql`
     SELECT * FROM public.bills
     WHERE session_id = ${sessionId}
@@ -86,8 +95,8 @@ export async function getBillsForSession(sessionId: string) {
 
 export async function upsertSession(payload: SessionPayload) {
   const user = await requireUser();
-  await sql`
-    INSERT INTO public.sessions
+  const rows = await sql`
+    INSERT INTO public.sessions AS target
       (id, owner_id, name, currency, people, paid_status, updated_at)
     VALUES
       (${payload.id}, ${user.id}, ${payload.name},
@@ -101,17 +110,27 @@ export async function upsertSession(payload: SessionPayload) {
       people = EXCLUDED.people,
       paid_status = EXCLUDED.paid_status,
       updated_at = now()
+    WHERE target.owner_id = ${user.id}
+       OR EXISTS (
+         SELECT 1 FROM public.session_members sm
+         WHERE sm.session_id = target.id AND sm.user_id = ${user.id}
+       )
+    RETURNING id
   `;
+  if (rows.length === 0) {
+    throw new Error("Anda tidak mempunyai akses untuk mengubah sesi ini.");
+  }
   return { success: true };
 }
 
 export async function upsertBills(bills: BillPayload[]) {
-  await requireUser();
+  const user = await requireUser();
   if (bills.length === 0) return { success: true };
 
   for (const b of bills) {
-    await sql`
-      INSERT INTO public.bills
+    await requireSessionAccess(user.id, b.session_id);
+    const rows = await sql`
+      INSERT INTO public.bills AS target
         (id, session_id, title, type, total_amount, paid_by, details, menu_items,
          misc_amount, discount_amount, tax_method, discount_method,
          original_currency, original_amount, exchange_rate)
@@ -138,7 +157,23 @@ export async function upsertBills(bills: BillPayload[]) {
         original_currency = EXCLUDED.original_currency,
         original_amount = EXCLUDED.original_amount,
         exchange_rate = EXCLUDED.exchange_rate
+      WHERE EXISTS (
+        SELECT 1
+        FROM public.sessions s
+        WHERE s.id = target.session_id
+          AND (
+            s.owner_id = ${user.id}
+            OR EXISTS (
+              SELECT 1 FROM public.session_members sm
+              WHERE sm.session_id = s.id AND sm.user_id = ${user.id}
+            )
+          )
+      )
+      RETURNING id
     `;
+    if (rows.length === 0) {
+      throw new Error("Anda tidak mempunyai akses untuk mengubah bil ini.");
+    }
   }
   return { success: true };
 }
@@ -153,9 +188,25 @@ export async function deleteSession(sessionId: string) {
 }
 
 export async function deleteBill(billId: string) {
-  await requireUser();
-  await sql`
-    DELETE FROM public.bills WHERE id = ${billId}
+  const user = await requireUser();
+  const rows = await sql`
+    DELETE FROM public.bills b
+    WHERE b.id = ${billId}
+      AND EXISTS (
+        SELECT 1 FROM public.sessions s
+        WHERE s.id = b.session_id
+          AND (
+            s.owner_id = ${user.id}
+            OR EXISTS (
+              SELECT 1 FROM public.session_members sm
+              WHERE sm.session_id = s.id AND sm.user_id = ${user.id}
+            )
+          )
+      )
+    RETURNING b.id
   `;
+  if (rows.length === 0) {
+    throw new Error("Bil tidak ditemui atau akses ditolak.");
+  }
   return { success: true };
 }

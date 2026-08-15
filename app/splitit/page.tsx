@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import html2canvas from "html2canvas";
 import AuthModal from "@/components/Auth";
+import AppOnboarding, { APP_ONBOARDING_STEPS } from "@/components/AppOnboarding";
+import { createStringId } from "@/lib/clientIds";
 import Cropper from "react-easy-crop";
 import { useUser } from "@/lib/auth/client";
 import {
@@ -19,7 +21,7 @@ import {
     Moon, Sun, CheckCircle, Trash2,
     Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X,
     ChevronDown, ChevronUp, Receipt, Users, AlertCircle,
-    CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight, Info, Folder, Calculator, Save, ShoppingBag, User, Globe, Camera, Loader2, Image as ImageIcon, XCircle, List, Crop, UserPlus
+    CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight, Folder, Save, User, Globe, Camera, Loader2, Image as ImageIcon, List, UserPlus
 } from "lucide-react";
 
 // --- 1. HELPER FUNCTIONS ---
@@ -273,11 +275,9 @@ function SplitItContent() {
 
     // Auth & Sync State
     const stackUser = useUser();
-    const user = stackUser
-        ? { ...stackUser, email: stackUser.primaryEmail || "" }
-        : null;
+    const user = stackUser ?? null;
     const [syncStatus, setSyncStatus] = useState<"SAVED" | "SAVING" | "ERROR" | "OFFLINE" | "SYNCING">("OFFLINE");
-    const [pendingChanges, setPendingChanges] = useState(false);
+    const [, setPendingChanges] = useState(false);
 
     // Data State
     const [sessions, setSessions] = useState<Session[]>([]);
@@ -286,7 +286,6 @@ function SplitItContent() {
     // UI Modal States
     const [showSessionModal, setShowSessionModal] = useState(false);
     const [showCurrencyModal, setShowCurrencyModal] = useState(false);
-    const [showLoginGuide, setShowLoginGuide] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [showScanModal, setShowScanModal] = useState(false);
     const [showScanMethodModal, setShowScanMethodModal] = useState(false);
@@ -358,15 +357,8 @@ function SplitItContent() {
     const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
-    // 1. Trigger bila tekan butang LOGIN (Buka Warning dulu)
     const handleLoginClick = () => {
-        setShowLoginGuide(true);
-    };
-
-    // 2. Lepas faham warning, buka Menu Pilihan (Google/Email)
-    const openAuthOptions = () => {
-        setShowLoginGuide(false); // Tutup warning
-        setShowAuthModal(true);   // Buka AuthModal
+        setShowAuthModal(true);
     };
 
     // --- V5 FIX: AUTO-CALCULATE (MESIN KIRA AGRESIF) ---
@@ -496,7 +488,7 @@ function SplitItContent() {
                 if (savedSessions) {
                     try {
                         parsedSessions = JSON.parse(savedSessions);
-                    } catch (e) {
+                    } catch {
                         parsedSessions = [];
                     }
                 }
@@ -514,7 +506,7 @@ function SplitItContent() {
                 } else {
                     // Kalau array kosong atau user baru, buat session default
                     const newSession: Session = {
-                        id: `s${Date.now()}`, name: "Sesi Lepak 1", createdAt: Date.now(),
+                        id: createStringId("session"), name: "Sesi Lepak 1", createdAt: Date.now(),
                         people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
                         bills: [], paidStatus: {}, currency: "RM"
                     };
@@ -525,7 +517,7 @@ function SplitItContent() {
             setIsLoaded(true);
         };
         initApp();
-    }, []);
+    }, [router, searchParams, user]);
 
     useEffect(() => {
         if (!isLoaded) return;
@@ -552,7 +544,7 @@ function SplitItContent() {
                 try {
                     const data = JSON.parse(rawImport);
                     const newSession: Session = {
-                        id: `trip-${Date.now()}`,
+                        id: createStringId("trip"),
                         name: data.tripName,
                         createdAt: Date.now(),
                         ownerId: user?.id,
@@ -681,7 +673,7 @@ function SplitItContent() {
     const createNewSession = () => {
         if (!newSessionName.trim()) return;
         const newSession: Session = {
-            id: user ? crypto.randomUUID() : `s${Date.now()}`,
+            id: createStringId("session"),
             name: newSessionName, createdAt: Date.now(),
             people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
             bills: [], paidStatus: {}, currency: "RM"
@@ -857,7 +849,7 @@ function SplitItContent() {
         }
 
         const newBill: Bill = {
-            id: editingBillId || (user ? crypto.randomUUID() : `b${Date.now()}`),
+            id: editingBillId || createStringId("bill"),
             title: billTitle, type: billType, totalAmount: grandTotal, paidBy: payerId,
             details: calculatedDetails, itemsSubtotal, miscAmount: miscTotal, discountAmount: discountTotal, taxMethod, discountMethod, originalCurrency: formCurrency,
             originalAmount: parseFloat(foreignAmount) || 0,
@@ -894,7 +886,7 @@ function SplitItContent() {
 
     const calculateSettlement = () => {
         // 1. Kira Net Balance Individu (Untuk Kad Atas) - Kekal Logik Asal
-        let bal: Record<string, number> = {};
+        const bal: Record<string, number> = {};
         people.forEach(p => bal[p.id] = 0);
 
         bills.forEach(b => {
@@ -913,7 +905,7 @@ function SplitItContent() {
         // V5 FIX: Guna Pairwise Matriks, bukan Global Simplification.
         // Ini memastikan A hutang B, B hutang C tidak diringkaskan jadi A hutang C (sebab user confuse).
 
-        let debtMap: Record<string, Record<string, number>> = {};
+        const debtMap: Record<string, Record<string, number>> = {};
 
         people.forEach(p => debtMap[p.id] = {});
 
@@ -929,8 +921,8 @@ function SplitItContent() {
             });
         });
 
-        let txs: Transfer[] = [];
-        let processed = new Set<string>();
+        const txs: Transfer[] = [];
+        const processed = new Set<string>();
 
         people.forEach(pA => {
             people.forEach(pB => {
@@ -995,7 +987,7 @@ function SplitItContent() {
             try {
                 document.execCommand('copy');
                 setCopied(true); setTimeout(() => setCopied(false), 2000);
-            } catch (err) {
+            } catch {
                 alert("Browser tak bagi copy. Sila screenshot manual.");
             }
             document.body.removeChild(textArea);
@@ -1004,7 +996,7 @@ function SplitItContent() {
     };
 
     const getTransferDetails = (fromId: string, toId: string) => {
-        let details: string[] = [];
+        const details: string[] = [];
         bills.forEach(b => {
             if (b.paidBy === toId) {
                 if (b.type === "EQUAL") {
@@ -1044,7 +1036,7 @@ function SplitItContent() {
                 const mappedItems: ScannedItem[] = itemsArray.map((item: any, idx: number) => ({ id: `scan-${Date.now()}-${idx}`, name: item.name || "Unknown Item", price: item.price ? String(item.price.toFixed(2)) : "0.00", selected: true, sharedBy: [] }));
                 setScannedItems(mappedItems);
                 // Normalize AI detected currency code
-                let aiCode = (parsedData.currency || currency).toUpperCase();
+                const aiCode = (parsedData.currency || currency).toUpperCase();
 
                 // Convert to API code first, then to app symbol
                 const apiCode = CURRENCY_MAP[aiCode] || aiCode;
@@ -1205,6 +1197,13 @@ function SplitItContent() {
 
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
+            <AppOnboarding
+                appName="SplitIt"
+                storageKey="splitit"
+                steps={APP_ONBOARDING_STEPS.splitit}
+                darkMode={darkMode}
+                accentClassName="bg-blue-400"
+            />
             <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
 
 
@@ -1290,13 +1289,13 @@ function SplitItContent() {
                                     <span className="text-[10px] uppercase font-bold opacity-60 mb-1">Total Hangus</span>
                                     <span className="text-xl font-mono font-black">{currency}{totalSpent.toFixed(2)}</span>
                                 </div>
-                                <button onClick={() => setShowSessionModal(true)} className={`${cardStyle} p-4 flex flex-col items-center justify-center cursor-pointer transition-all ${shadowStyle} ${darkMode ? "hover:bg-gray-800" : "hover:bg-yellow-50"}`}>
+                                <button data-guide="splitit-event" onClick={() => setShowSessionModal(true)} className={`${cardStyle} p-4 flex flex-col items-center justify-center cursor-pointer transition-all ${shadowStyle} ${darkMode ? "hover:bg-gray-800" : "hover:bg-yellow-50"}`}>
                                     <span className="text-[10px] uppercase font-bold opacity-60 mb-1 flex items-center gap-1">Event <Folder size={10} /></span>
                                     <div className="flex items-center gap-1 max-w-full"><span className="text-sm font-black truncate">{activeSession?.name || "Loading..."}</span><ChevronDown size={14} /></div>
                                 </button>
                             </div>
 
-                            <section className={`${cardStyle} p-5 ${darkMode ? "" : "bg-violet-100"} ${shadowStyle}`}>
+                            <section data-guide="splitit-people" className={`${cardStyle} p-5 ${darkMode ? "" : "bg-violet-100"} ${shadowStyle}`}>
                                 <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><Users size={16} /> Geng Lepak</h2></div>
                                 <div className="flex flex-wrap gap-2">
                                     {people.map(p => (
@@ -1316,7 +1315,7 @@ function SplitItContent() {
                                 </div>
                             </section>
 
-                            <section>
+                            <section data-guide="splitit-bills">
                                 <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><Receipt size={16} /> Resit / Bill</h2></div>
                                 <div className="space-y-4">
                                     {bills.length === 0 ? (
@@ -1697,7 +1696,7 @@ function SplitItContent() {
                                             <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">DuitNow QR (Optional)</label>
 
                                             <div className="flex items-center gap-3">
-                                                {people.find(p => p.id === paymentProfileId)?.qrImage ? (<div className="relative w-24 h-24 border-2 border-current rounded-lg overflow-hidden group flex-shrink-0"><img src={people.find(p => p.id === paymentProfileId)?.qrImage!} className="w-full h-full object-cover" alt="QR" /><button onClick={() => updatePaymentProfile(paymentProfileId, people.find(p => p.id === paymentProfileId)?.bankName || "", people.find(p => p.id === paymentProfileId)?.bankAccount || "", "")} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={16} className="text-white" /></button></div>) : (<div className="w-24 h-24 border-2 border-dashed border-current rounded-lg flex items-center justify-center opacity-30 flex-shrink-0"><QrCode size={24} /></div>)}
+                                                {people.find(p => p.id === paymentProfileId)?.qrImage ? (<div className="relative w-24 h-24 border-2 border-current rounded-lg overflow-hidden group flex-shrink-0"><img src={people.find(p => p.id === paymentProfileId)?.qrImage || ""} className="w-full h-full object-cover" alt="QR" /><button onClick={() => updatePaymentProfile(paymentProfileId, people.find(p => p.id === paymentProfileId)?.bankName || "", people.find(p => p.id === paymentProfileId)?.bankAccount || "", "")} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={16} className="text-white" /></button></div>) : (<div className="w-24 h-24 border-2 border-dashed border-current rounded-lg flex items-center justify-center opacity-30 flex-shrink-0"><QrCode size={24} /></div>)}
                                                 <div className="flex-1 space-y-2">
                                                     <div className={`p-2 rounded text-[9px] leading-tight font-bold ${darkMode ? "bg-yellow-900/30 text-yellow-200" : "bg-yellow-100 text-yellow-800"}`}><p>Sila upload gambar QR. Anda boleh crop & zoom selepas pilih gambar.</p></div>
                                                     <label className={`w-full py-2 px-3 border-2 rounded-xl flex items-center justify-center gap-2 cursor-pointer font-bold uppercase text-[10px] hover:opacity-80 ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}><Upload size={14} /> Pilih Gambar<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, paymentProfileId)} /></label>
@@ -1753,7 +1752,7 @@ function SplitItContent() {
                                             </div>
                                             {people.find(p => p.id === activeTransfer.toId)?.qrImage && (
                                                 <div className="w-28 h-28 mx-auto border-2 border-current rounded-xl overflow-hidden mb-1">
-                                                    <img src={people.find(p => p.id === activeTransfer.toId)?.qrImage!} className="w-full h-full object-cover bg-white" alt="QR" crossOrigin="anonymous" />
+                                                    <img src={people.find(p => p.id === activeTransfer.toId)?.qrImage || ""} className="w-full h-full object-cover bg-white" alt="QR" crossOrigin="anonymous" />
                                                 </div>
                                             )}
                                             <div className="flex justify-between items-center opacity-40 pt-2 border-t-2 border-dashed border-current/20 mt-2">
@@ -1893,8 +1892,8 @@ function SplitItContent() {
                                 <h3 className="text-white text-xs font-bold uppercase tracking-[0.2em] text-center opacity-80">Preview Resit</h3>
                                 <img src={previewImage} alt="Receipt Preview" className="w-full rounded-2xl border-2 border-white/20 shadow-2xl" />
                                 <div className="text-center space-y-3 mt-2">
-                                    <div className="bg-white/10 px-4 py-2 rounded-lg backdrop-blur"><p className="text-white text-[10px] font-bold uppercase tracking-wide animate-pulse">📲 iPhone: Tekan Lama (Long Press) Gambar</p><p className="text-white/50 text-[9px]">Pilih "Save to Photos" atau "Share"</p></div>
-                                    {typeof navigator !== "undefined" && navigator.share && (<button onClick={async () => { try { const blob = await (await fetch(previewImage)).blob(); const file = new File([blob], "Settlement.png", { type: "image/png" }); await navigator.share({ files: [file], title: 'Resit SplitIt' }); } catch (e) { } }} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-bold rounded-full text-[10px] uppercase tracking-widest hover:bg-blue-500 transition-colors mx-auto"><ExternalLink size={12} /> Share Sekarang</button>)}
+                                    <div className="bg-white/10 px-4 py-2 rounded-lg backdrop-blur"><p className="text-white text-[10px] font-bold uppercase tracking-wide animate-pulse">📲 iPhone: Tekan Lama (Long Press) Gambar</p><p className="text-white/50 text-[9px]">Pilih “Save to Photos” atau “Share”</p></div>
+                                    {typeof navigator !== "undefined" && navigator.share && (<button onClick={async () => { try { const blob = await (await fetch(previewImage)).blob(); const file = new File([blob], "Settlement.png", { type: "image/png" }); await navigator.share({ files: [file], title: 'Resit SplitIt' }); } catch { } }} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-bold rounded-full text-[10px] uppercase tracking-widest hover:bg-blue-500 transition-colors mx-auto"><ExternalLink size={12} /> Share Sekarang</button>)}
                                 </div>
                             </div>
                         </div>
@@ -1940,85 +1939,12 @@ function SplitItContent() {
                             </div>
                         </div>
                     )}
-                    {/* LOGIN GUIDE MODAL (Google Unverified Warning) */}
-                    {showLoginGuide && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-                            <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-                                <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20} /></button>
-
-                                <div className="text-center mb-4">
-                                    <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-3 border-2 border-black">
-                                        <AlertCircle size={32} className="text-yellow-600" />
-                                    </div>
-                                    <h2 className="text-lg font-black uppercase leading-tight text-red-500">Google Warning!</h2>
-                                    <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed">
-                                        App ni masih status "Beta" di Google. Anda mungkin nampak amaran keselamatan. Jangan risau, ini normal.
-                                    </p>
-                                </div>
-
-                                {/* Visual Guide (Kotak Arahan) */}
-                                <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-gray-50 border-black/10"}`}>
-                                    <p className="text-[9px] font-black uppercase opacity-50 mb-1">LANGKAH UNTUK LEPAS:</p>
-                                    <div className="flex items-start gap-3">
-                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
-                                        <p className="text-xs font-bold">Tekan link <span className="underline decoration-red-500 decoration-2">Advanced</span> di bawah kiri.</p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
-                                        <p className="text-xs font-bold">Tekan <span className="underline decoration-red-500 decoration-2">Go to SplitIt (unsafe)</span>.</p>
-                                    </div>
-                                </div>
-
-                                <button onClick={openAuthOptions} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-blue-600 text-white border-black"}`}>
-                                    FAHAM, TERUSKAN LOGIN <ArrowRight size={14} />
-                                </button>
-
-                                <p className="text-[9px] text-center mt-3 opacity-40 font-bold">Kami tak simpan password anda.</p>
-                            </div>
-                        </div>
-                    )}
                     {/* 1. AUTH MODAL (Pilihan Google/Email) */}
                     <AuthModal
                         isOpen={showAuthModal}
                         onClose={() => setShowAuthModal(false)}
                         isDarkMode={darkMode}
                     />
-
-                    {/* 2. LOGIN GUIDE MODAL (Warning Google) */}
-                    {showLoginGuide && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-                            <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-                                <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20} /></button>
-
-                                <div className="text-center mb-4">
-                                    <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-3 border-2 border-black">
-                                        <AlertCircle size={32} className="text-yellow-600" />
-                                    </div>
-                                    <h2 className="text-lg font-black uppercase leading-tight text-red-500">Google Warning!</h2>
-                                    <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed">
-                                        App status "Beta". Kalau nampak warning merah, jangan panik. Ikut langkah di bawah.
-                                    </p>
-                                </div>
-
-                                <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-gray-50 border-black/10"}`}>
-                                    <p className="text-[9px] font-black uppercase opacity-50 mb-1">CARA LEPAS WARNING:</p>
-                                    <div className="flex items-start gap-3">
-                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
-                                        <p className="text-xs font-bold">Tekan link <span className="underline decoration-red-500 decoration-2">Advanced</span> (Kiri Bawah).</p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
-                                        <p className="text-xs font-bold">Tekan <span className="underline decoration-red-500 decoration-2">Go to SplitIt (unsafe)</span>.</p>
-                                    </div>
-                                </div>
-
-                                <button onClick={openAuthOptions} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-blue-600 text-white border-black"}`}>
-                                    FAHAM, PILIH CARA LOGIN <ArrowRight size={14} />
-                                </button>
-                                <p className="text-[9px] text-center mt-3 opacity-40 font-bold">Safe & Secure. No password stored.</p>
-                            </div>
-                        </div>
-                    )}
                 </main>
             </div >
         </div >

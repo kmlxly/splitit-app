@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { createStringId } from "@/lib/clientIds";
 import html2canvas from "html2canvas";
 // Pastikan dah install: npm install react-easy-crop
 import Cropper from "react-easy-crop";
 import { 
   Moon, Sun, CheckCircle, Trash2, 
-  Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X, 
+  Edit3, Check, Bike, Tag, RotateCcw, Plus, X,
   ChevronDown, ChevronUp, Receipt, Users, AlertCircle, 
-  CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight, Info, Folder, Calculator, Save, ShoppingBag, User, Globe, Camera, Loader2, Image as ImageIcon, XCircle, List, Crop
+  CreditCard, QrCode, Upload, Wallet, ExternalLink, ArrowRight, Folder, Save, User, Globe, Camera, Loader2, Image as ImageIcon, List
 } from "lucide-react";
 
 // --- 1. HELPER FUNCTIONS (DILETAKKAN DI ATAS UNTUK ELAK ERROR) ---
@@ -211,22 +213,7 @@ export default function OfflineBackup() {
     const savedVersion = localStorage.getItem("splitit_version");
 
     if (savedVersion !== APP_VERSION) {
-        console.log(`New version detected: ${APP_VERSION}. Updating...`);
-        
-        // Update version dalam storage
         localStorage.setItem("splitit_version", APP_VERSION);
-        
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                for(let registration of registrations) {
-                    registration.unregister();
-                }
-            });
-        }
-        
-        // Force Reload page untuk dapatkan kod HTML/JS baru dari Vercel
-        window.location.reload();
-        return; // Stop execution supaya tak load state lama
     }
 
     const savedMode = localStorage.getItem("splitit_darkmode");
@@ -245,7 +232,7 @@ export default function OfflineBackup() {
         }
     } else {
         const newSession: Session = {
-            id: `s${Date.now()}`, name: "Sesi Lepak 1", createdAt: Date.now(),
+            id: createStringId("session"), name: "Sesi Lepak 1", createdAt: Date.now(),
             people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
             bills: [], paidStatus: {}, currency: "RM"
         };
@@ -282,7 +269,7 @@ export default function OfflineBackup() {
   const createNewSession = () => {
       if (!newSessionName.trim()) return;
       const newSession: Session = {
-          id: `s${Date.now()}`, name: newSessionName, createdAt: Date.now(),
+          id: createStringId("session"), name: newSessionName, createdAt: Date.now(),
           people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
           bills: [], paidStatus: {}, currency: "RM"
       };
@@ -441,7 +428,7 @@ export default function OfflineBackup() {
     }
 
     const newBill: Bill = {
-        id: editingBillId || `b${Date.now()}`, title: billTitle, type: billType, totalAmount: grandTotal, paidBy: payerId, 
+        id: editingBillId || createStringId("bill"), title: billTitle, type: billType, totalAmount: grandTotal, paidBy: payerId,
         details: calculatedDetails, itemsSubtotal, miscAmount: miscTotal, discountAmount: discountTotal, taxMethod, discountMethod,
         menuItems: billType === "ITEMIZED" ? menuItems : []
     };
@@ -464,17 +451,17 @@ export default function OfflineBackup() {
   };
   
   const calculateSettlement = () => {
-    let bal: Record<string, number> = {}; people.forEach(p => bal[p.id] = 0);
+    const bal: Record<string, number> = {}; people.forEach(p => bal[p.id] = 0);
     bills.forEach(b => {
         bal[b.paidBy] += b.totalAmount;
         b.details.forEach(d => { bal[d.personId] -= d.total; });
     });
     const netPeople = people.map(p => ({ ...p, net: bal[p.id] || 0 }));
-    let debtors = netPeople.filter(p => p.net < -0.01).map(p => ({...p, net: Math.abs(p.net)})).sort((a,b) => b.net - a.net);
-    let creditors = netPeople.filter(p => p.net > 0.01).sort((a,b) => b.net - a.net);
-    let txs: Transfer[] = []; let i=0, j=0;
+    const debtors = netPeople.filter(p => p.net < -0.01).map(p => ({...p, net: Math.abs(p.net)})).sort((a,b) => b.net - a.net);
+    const creditors = netPeople.filter(p => p.net > 0.01).sort((a,b) => b.net - a.net);
+    const txs: Transfer[] = []; let i=0, j=0;
     while(i < debtors.length && j < creditors.length) {
-        let amt = Math.min(debtors[i].net, creditors[j].net);
+        const amt = Math.min(debtors[i].net, creditors[j].net);
         if (amt > 0.01) txs.push({ fromId: debtors[i].id, fromName: debtors[i].name, toId: creditors[j].id, toName: creditors[j].name, amount: amt });
         debtors[i].net -= amt; creditors[j].net -= amt;
         if (debtors[i].net < 0.01) i++; if (creditors[j].net < 0.01) j++;
@@ -527,7 +514,7 @@ export default function OfflineBackup() {
 
   // --- HELPER: CONTEXT FOR SETTLEMENT ---
   const getTransferDetails = (fromId: string, toId: string) => {
-        let details: string[] = [];
+        const details: string[] = [];
         bills.forEach(b => {
             if (b.paidBy === toId) {
                 if (b.type === "EQUAL") {
@@ -686,7 +673,7 @@ export default function OfflineBackup() {
         {/* HEADER */}
         <header className={`p-6 border-b-2 relative z-10 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
             <div className="flex justify-between items-center">
-                <a href="/" className="flex items-center gap-3 cursor-pointer group">
+                <Link href="/" className="flex items-center gap-3 cursor-pointer group">
                      <div className={`w-12 h-12 border-2 rounded-xl flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105 ${darkMode ? "bg-white border-white" : "bg-white/10 backdrop-blur border-black"}`}>
                         <img src="/icon.png" width={40} height={40} alt="Logo" className="object-cover"/>
                      </div>
@@ -694,7 +681,7 @@ export default function OfflineBackup() {
                         <h1 className="text-2xl font-black tracking-tight leading-none uppercase group-hover:underline decoration-2 underline-offset-2">SplitIt.</h1>
                         <p className="text-[10px] uppercase tracking-widest font-bold mt-1 opacity-70 truncate max-w-[100px]">{activeSession?.name || "Loading..."}</p>
                      </div>
-                </a>
+                </Link>
                 <div className="flex gap-2 items-center">
                     <button onClick={() => setShowCurrencyModal(true)} className={`w-10 h-10 text-xs font-black ${buttonBase}`}>{currency}</button>
                     <button onClick={() => setShowSessionModal(true)} className={`p-2 ${buttonBase}`}><Folder size={20}/></button>
@@ -1004,7 +991,7 @@ export default function OfflineBackup() {
                                     <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">DuitNow QR (Optional)</label>
                                     
                                     <div className="flex items-center gap-3">
-                                        {people.find(p=>p.id===paymentProfileId)?.qrImage ? (<div className="relative w-24 h-24 border-2 border-current rounded-lg overflow-hidden group flex-shrink-0"><img src={people.find(p=>p.id===paymentProfileId)?.qrImage!} className="w-full h-full object-cover" alt="QR"/><button onClick={() => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", people.find(p=>p.id===paymentProfileId)?.bankAccount || "", "")} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={16} className="text-white"/></button></div>) : (<div className="w-24 h-24 border-2 border-dashed border-current rounded-lg flex items-center justify-center opacity-30 flex-shrink-0"><QrCode size={24}/></div>)}
+                                        {people.find(p=>p.id===paymentProfileId)?.qrImage ? (<div className="relative w-24 h-24 border-2 border-current rounded-lg overflow-hidden group flex-shrink-0"><img src={people.find(p=>p.id===paymentProfileId)?.qrImage || ""} className="w-full h-full object-cover" alt="QR"/><button onClick={() => updatePaymentProfile(paymentProfileId, people.find(p=>p.id===paymentProfileId)?.bankName || "", people.find(p=>p.id===paymentProfileId)?.bankAccount || "", "")} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><Trash2 size={16} className="text-white"/></button></div>) : (<div className="w-24 h-24 border-2 border-dashed border-current rounded-lg flex items-center justify-center opacity-30 flex-shrink-0"><QrCode size={24}/></div>)}
                                         <div className="flex-1 space-y-2">
                                             <div className={`p-2 rounded text-[9px] leading-tight font-bold ${darkMode ? "bg-yellow-900/30 text-yellow-200" : "bg-yellow-100 text-yellow-800"}`}><p>Sila upload gambar QR. Anda boleh crop & zoom selepas pilih gambar.</p></div>
                                             <label className={`w-full py-2 px-3 border-2 rounded-xl flex items-center justify-center gap-2 cursor-pointer font-bold uppercase text-[10px] hover:opacity-80 ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}><Upload size={14}/> Pilih Gambar<input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, paymentProfileId)}/></label>
@@ -1068,7 +1055,7 @@ export default function OfflineBackup() {
                                     {/* QR CONTAINER - UPDATED SIZE */}
                                     {people.find(p=>p.id===activeTransfer.toId)?.qrImage && (
                                         <div className="w-28 h-28 mx-auto border-2 border-current rounded-xl overflow-hidden mb-1">
-                                            <img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage!} className="w-full h-full object-cover bg-white" alt="QR" crossOrigin="anonymous"/>
+                                            <img src={people.find(p=>p.id===activeTransfer.toId)?.qrImage || ""} className="w-full h-full object-cover bg-white" alt="QR" crossOrigin="anonymous"/>
                                         </div>
                                     )}
 
@@ -1325,7 +1312,7 @@ export default function OfflineBackup() {
                                     📲 iPhone: Tekan Lama (Long Press) Gambar
                                 </p>
                                 <p className="text-white/50 text-[9px]">
-                                    Pilih "Save to Photos" atau "Share"
+                                    Pilih “Save to Photos” atau “Share”
                                 </p>
                             </div>
 
@@ -1337,7 +1324,7 @@ export default function OfflineBackup() {
                                             const blob = await (await fetch(previewImage)).blob();
                                             const file = new File([blob], "Settlement.png", { type: "image/png" });
                                             await navigator.share({ files: [file], title: 'Resit SplitIt' });
-                                        } catch(e) {}
+                                        } catch {}
                                     }} 
                                     className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-bold rounded-full text-[10px] uppercase tracking-widest hover:bg-blue-500 transition-colors mx-auto"
                                 >

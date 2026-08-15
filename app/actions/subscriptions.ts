@@ -24,7 +24,7 @@ export async function getSubscriptions() {
     WHERE user_id = ${user.id}
     ORDER BY id ASC
   `;
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     id: Number(r.id),
     name: r.title,
     price: Number(r.price),
@@ -41,8 +41,8 @@ export async function upsertSubscriptions(payload: SubscriptionPayload[]) {
   if (payload.length === 0) return { success: true };
 
   for (const s of payload) {
-    await sql`
-      INSERT INTO public.subscriptions
+    const rows = await sql`
+      INSERT INTO public.subscriptions AS target
         (id, user_id, title, price, cycle, first_bill_date, category, share_with, link, updated_at)
       VALUES
         (${s.id}, ${user.id}, ${s.title}, ${s.price}, ${s.cycle},
@@ -57,7 +57,12 @@ export async function upsertSubscriptions(payload: SubscriptionPayload[]) {
         share_with = EXCLUDED.share_with,
         link = EXCLUDED.link,
         updated_at = now()
+      WHERE target.user_id = ${user.id}
+      RETURNING id
     `;
+    if (rows.length === 0) {
+      throw new Error("ID langganan bertembung dengan rekod pengguna lain.");
+    }
   }
   return { success: true };
 }

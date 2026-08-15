@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
-    ArrowLeft, Plus, Calendar, CreditCard,
+    Plus, CreditCard,
     AlertTriangle, Moon, Sun, Trash2, ExternalLink,
-    Tv, Wifi, Dumbbell, Zap, MousePointer2, Shield, Lock, Sparkles, Home, Heart, FileText, X, RefreshCw,
-    Cloud, BookOpen, ChevronDown, User, Eye, EyeOff, RotateCcw, AlertCircle, ArrowRight, Link as LinkIcon, Link2Off, Check
+    Tv, Wifi, Dumbbell, Zap, Shield, Sparkles, Home, Heart, FileText, X, RefreshCw,
+    Cloud, BookOpen, ChevronDown, User, Eye, EyeOff, RotateCcw, Link as LinkIcon, Link2Off, Check
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
+import AppOnboarding, { APP_ONBOARDING_STEPS } from "@/components/AppOnboarding";
+import { createNumericId } from "@/lib/clientIds";
 import { useUser } from "@/lib/auth/client";
 import {
     getSubscriptions,
@@ -16,6 +18,7 @@ import {
     deleteSubscription,
 } from "@/app/actions/subscriptions";
 import { insertBudgetTransaction } from "@/app/actions/budget";
+import { getDaysUntilBilling, isOriginalBillingDatePast } from "@/lib/billing";
 
 // --- 1. CONFIG & TYPES ---
 const APP_NAME = "Sub.Tracker";
@@ -51,18 +54,12 @@ export default function SubTrackerPage() {
     const [formShareWith, setFormShareWith] = useState("");
     const [formLink, setFormLink] = useState("");
 
-    const [totalMonthly, setTotalMonthly] = useState(0);
-    const [totalYearly, setTotalYearly] = useState(0);
-
     // Sync Status & Ghost Mode (Match Budget.AI)
     const [syncStatus, setSyncStatus] = useState<"SAVED" | "SAVING" | "ERROR" | "OFFLINE">("OFFLINE");
     const [isGhostMode, setIsGhostMode] = useState(false);
     const stackUser = useUser();
-    const user = stackUser
-        ? { ...stackUser, email: stackUser.primaryEmail || "" }
-        : null;
+    const user = stackUser ?? null;
     const [showAuthModal, setShowAuthModal] = useState(false);
-    const [showLoginGuide, setShowLoginGuide] = useState(false); // Google Warning Modal
 
     // Sync Consent State
     const [syncWithBudget, setSyncWithBudget] = useState(true);
@@ -83,7 +80,7 @@ export default function SubTrackerPage() {
             }
         };
         loadCloud();
-    }, [user?.id]);
+    }, [user]);
 
     // 0.1 SYNC TO CLOUD (Auto-Save)
     useEffect(() => {
@@ -114,22 +111,28 @@ export default function SubTrackerPage() {
 
     useEffect(() => {
         const savedData = localStorage.getItem("subtracker_data");
-        if (savedData) {
-            try {
-                const parsed = JSON.parse(savedData);
-                setSubs(parsed);
-                setSyncStatus(user ? "SAVED" : "OFFLINE");
-            } catch (e) {
-                console.error("Failed to load data:", e);
-                setSyncStatus("ERROR");
-            }
+        const savedSyncPref = localStorage.getItem("subtracker_sync_pref");
+        let nextSubs: Subscription[] | null = null;
+
+        try {
+            nextSubs = savedData ? JSON.parse(savedData) : null;
+        } catch (error) {
+            console.error("Failed to load data:", error);
+            const errorFrame = requestAnimationFrame(() => setSyncStatus("ERROR"));
+            return () => cancelAnimationFrame(errorFrame);
         }
 
-        // Load Sync Preference
-        const savedSyncPref = localStorage.getItem("subtracker_sync_pref");
-        if (savedSyncPref !== null) {
-            setSyncWithBudget(savedSyncPref === "true");
-        }
+        const frame = requestAnimationFrame(() => {
+            if (nextSubs) {
+                setSubs(nextSubs);
+                setSyncStatus(user ? "SAVED" : "OFFLINE");
+            }
+            if (savedSyncPref !== null) {
+                setSyncWithBudget(savedSyncPref === "true");
+            }
+        });
+
+        return () => cancelAnimationFrame(frame);
     }, [user]);
 
     // Save Sync Preference
@@ -138,70 +141,36 @@ export default function SubTrackerPage() {
     }, [syncWithBudget]);
 
     useEffect(() => {
-        setSyncStatus("SAVING");
+        let statusTimer: ReturnType<typeof setTimeout>;
         try {
             if (subs.length > 0) {
                 localStorage.setItem("subtracker_data", JSON.stringify(subs));
             } else {
                 localStorage.removeItem("subtracker_data");
             }
-            setTimeout(() => setSyncStatus(user ? "SAVED" : "OFFLINE"), 300);
-        } catch (e) {
-            setSyncStatus("ERROR");
+            statusTimer = setTimeout(() => setSyncStatus(user ? "SAVED" : "OFFLINE"), 300);
+        } catch {
+            statusTimer = setTimeout(() => setSyncStatus("ERROR"), 0);
         }
+
+        return () => clearTimeout(statusTimer);
     }, [subs, user]);
 
     // --- CALCULATIONS ---
-    useEffect(() => {
-        let monthlySum = 0;
-
-        subs.forEach(s => {
-            if (s.cycle === "Monthly") monthlySum += s.price;
-            else monthlySum += (s.price / 12); // Kira purata bulanan kalau yearly
-        });
-
-        setTotalMonthly(monthlySum);
-        setTotalYearly(monthlySum * 12); // "The Yearly Shock" Logic - Kira SEMUA item
-    }, [subs]);
+    const totalMonthly = useMemo(() => subs.reduce(
+        (sum, subscription) => sum + (subscription.cycle === "Monthly" ? subscription.price : subscription.price / 12),
+        0,
+    ), [subs]);
+    const totalYearly = totalMonthly * 12;
 
     // Helper: Kira berapa hari lagi (Countdown) - Smart Monthly Renewal
     const getDaysLeft = (dateStr: string, cycle: "Monthly" | "Yearly") => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Reset time untuk accurate comparison
-
-        let due = new Date(dateStr);
-        due.setHours(0, 0, 0, 0);
-
-        let diffTime = due.getTime() - today.getTime();
-        let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        // Smart Logic: Jika Monthly dan tarikh dah lepas, kira tarikh bulan depan
-        if (cycle === "Monthly" && diffDays < 0) {
-            // Ambil tarikh yang sama pada bulan depan
-            const nextMonth = new Date(due);
-            nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-            // Pastikan tarikh valid (cth: 31 Jan -> 28/29 Feb)
-            if (nextMonth.getDate() !== due.getDate()) {
-                // Kalau tarikh tak valid (cth: 31 Jan -> 28 Feb), guna hari terakhir bulan
-                nextMonth.setDate(0); // Set ke hari terakhir bulan sebelumnya (bulan depan)
-            }
-
-            diffTime = nextMonth.getTime() - today.getTime();
-            diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        }
-
-        return diffDays;
+        return getDaysUntilBilling(dateStr, cycle) ?? 0;
     };
 
     // Helper: Check jika tarikh asal dah lepas (untuk visual indicator)
     const isOriginalDatePassed = (dateStr: string, cycle: "Monthly" | "Yearly") => {
-        if (cycle !== "Monthly") return false;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const due = new Date(dateStr);
-        due.setHours(0, 0, 0, 0);
-        return due.getTime() < today.getTime();
+        return isOriginalBillingDatePast(dateStr) && cycle === "Monthly";
     };
 
     // Helper: Group subscriptions (Updated dengan cycle parameter)
@@ -271,7 +240,7 @@ export default function SubTrackerPage() {
         }
 
         const newSub: Subscription = {
-            id: editingId || Date.now(),
+            id: editingId || createNumericId(),
             name: formName.trim(),
             price: price,
             cycle: formCycle,
@@ -350,14 +319,14 @@ export default function SubTrackerPage() {
                 const isoDate = today.toISOString().split('T')[0];
 
                 const newTx = {
-                    id: Date.now(),
+                    id: createNumericId(),
                     user_id: user?.id, // Link to user if logged in
                     title: `Bayar: ${sub.name}`,
                     amount: -Math.abs(sub.price), // Mesti negatif
                     category: sub.category === "Gym/Health" ? "Lifestyle" : sub.category, // Map category
                     date: displayDate,
                     isoDate: isoDate,
-                    items: [{ id: Date.now() + 1, title: sub.name, amount: -Math.abs(sub.price) }]
+                    items: [{ id: createNumericId(), title: sub.name, amount: -Math.abs(sub.price) }]
                 };
 
                 // Save to localStorage
@@ -405,15 +374,8 @@ export default function SubTrackerPage() {
         return `RM${price.toFixed(2)}`;
     };
 
-    // 1. Trigger bila tekan butang LOGIN (Buka Warning dulu)
     const handleLoginClick = () => {
-        setShowLoginGuide(true);
-    };
-
-    // 2. Lepas faham warning, buka Menu Pilihan (Google/Email)
-    const openAuthOptions = () => {
-        setShowLoginGuide(false); // Tutup warning
-        setShowAuthModal(true);   // Buka AuthModal
+        setShowAuthModal(true);
     };
 
     // --- STYLES (NEO-BRUTALISM SHARED) ---
@@ -429,6 +391,13 @@ export default function SubTrackerPage() {
 
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
+            <AppOnboarding
+                appName="Sub.Tracker"
+                storageKey="sub-tracker"
+                steps={APP_ONBOARDING_STEPS.subTracker}
+                darkMode={darkMode}
+                accentClassName="bg-pink-400"
+            />
             <div className="max-w-md mx-auto min-h-screen flex flex-col relative">
 
                 {/* --- HEADER (Matched with Budget.AI) --- */}
@@ -461,6 +430,7 @@ export default function SubTrackerPage() {
                         <div className="flex gap-1.5 items-center flex-shrink-0">
                             {/* SYNC TOGGLE */}
                             <button
+                                data-guide="sub-sync"
                                 onClick={() => setShowSyncModal(true)}
                                 className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${syncWithBudget ? (darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white") : (darkMode ? "border-white/20 bg-transparent text-white/20 shadow-none" : "border-black/20 bg-white text-black/20")}`}
                                 title="Auto-Sync Settings"
@@ -504,7 +474,7 @@ export default function SubTrackerPage() {
                 <main className="flex-1 p-4 flex flex-col gap-4">
 
                     {/* 1. THE YEARLY SHOCK (Hero Card - Compact) */}
-                    <section className={`p-4 border-2 rounded-2xl ${shadowStyle} relative overflow-hidden ${darkMode ? "bg-[#222] border-white text-white" : "bg-red-500 border-black text-white"}`}>
+                    <section data-guide="sub-yearly" className={`p-4 border-2 rounded-2xl ${shadowStyle} relative overflow-hidden ${darkMode ? "bg-[#222] border-white text-white" : "bg-red-500 border-black text-white"}`}>
                         <div className="relative z-10 text-center">
                             <p className={`text-[9px] font-black uppercase tracking-widest border-2 inline-block px-2 py-0.5 rounded mb-1.5 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-white"}`}>
                                 REALITI CHECK
@@ -531,6 +501,7 @@ export default function SubTrackerPage() {
                                 <Shield size={14} className={darkMode ? "text-gray-400" : "text-gray-700"} /> Komitmen Wajib
                             </h2>
                             <button
+                                data-guide="sub-add-commitment"
                                 onClick={() => openAddModal("commitment")}
                                 className={`text-[9px] font-bold px-2 py-1 border-2 rounded transition-all active:scale-95 ${darkMode ? "border-white bg-white text-black hover:bg-white/80" : "border-black bg-black text-white hover:bg-black/80"}`}
                             >
@@ -632,6 +603,7 @@ export default function SubTrackerPage() {
                                 <Sparkles size={14} className={darkMode ? "text-pink-400" : "text-pink-600"} /> SUBSCRIPTIONS & LIFESTYLE
                             </h2>
                             <button
+                                data-guide="sub-add-lifestyle"
                                 onClick={() => openAddModal("lifestyle")}
                                 className={`text-[9px] font-bold px-2 py-1 border-2 rounded transition-all active:scale-95 ${darkMode ? "border-white bg-white text-black hover:bg-white/80" : "border-black bg-black text-white hover:bg-black/80"}`}
                             >
@@ -781,44 +753,6 @@ export default function SubTrackerPage() {
                     <p className="text-[10px] font-black uppercase tracking-widest leading-none">Sub.Tracker by kmlxly</p>
                     <p className="text-[9px] font-mono mt-1 opacity-70">{APP_VERSION}</p>
                 </div>
-
-                {/* --- LOGIN GUIDE MODAL (Google Unverified Warning) --- */}
-                {showLoginGuide && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-                        <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-                            <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20} /></button>
-
-                            <div className="text-center mb-4">
-                                <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-3 border-2 border-black">
-                                    <AlertCircle size={32} className="text-yellow-600" />
-                                </div>
-                                <h2 className="text-lg font-black uppercase leading-tight text-red-500">Google Warning!</h2>
-                                <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed">
-                                    App ni masih status "Beta" di Google. Anda mungkin nampak amaran keselamatan. Jangan risau, ini normal.
-                                </p>
-                            </div>
-
-                            {/* Visual Guide (Kotak Arahan) */}
-                            <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-gray-50 border-black/10"}`}>
-                                <p className="text-[9px] font-black uppercase opacity-50 mb-1">LANGKAH UNTUK LEPAS:</p>
-                                <div className="flex items-start gap-3">
-                                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
-                                    <p className="text-xs font-bold">Tekan link <span className="underline decoration-red-500 decoration-2">Advanced</span> di bawah kiri.</p>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
-                                    <p className="text-xs font-bold">Tekan <span className="underline decoration-red-500 decoration-2">Go to Budget.AI (unsafe)</span>.</p>
-                                </div>
-                            </div>
-
-                            <button onClick={openAuthOptions} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-blue-600 text-white border-black"}`}>
-                                FAHAM, TERUSKAN LOGIN <ArrowRight size={14} />
-                            </button>
-
-                            <p className="text-[9px] text-center mt-3 opacity-40 font-bold">Kami tak simpan password anda.</p>
-                        </div>
-                    </div>
-                )}
 
                 {/* --- AUTH MODAL --- */}
                 <AuthModal

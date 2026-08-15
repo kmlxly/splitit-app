@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import Link from "next/link";
 import {
-    Moon, Sun, ArrowLeft, Plus, Map, Calendar, ChevronRight, Plane, Edit2, Trash2, MoreVertical, X,
+    Moon, Sun, ArrowLeft, Plus, Calendar, ChevronRight, Plane, Edit2, Trash2, X,
     Maximize, ZoomIn, ZoomOut
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import Cropper from 'react-easy-crop';
 
 import { useUser } from "@/lib/auth/client";
@@ -18,13 +17,7 @@ import {
     deleteTrip as deleteTripAction,
 } from "@/app/actions/tripit";
 import AuthModal from "@/components/Auth";
-
-const CURRENCY_MAP: Record<string, string> = {
-    "RM": "MYR", "MYR": "MYR", "THB": "THB", "฿": "THB", "IDR": "IDR", "Rp": "IDR",
-    "SGD": "SGD", "S$": "SGD", "VND": "VND", "₫": "VND", "PHP": "PHP", "₱": "PHP",
-    "USD": "USD", "$": "USD", "JPY": "JPY", "¥": "JPY", "CNY": "CNY", "KRW": "KRW",
-    "₩": "KRW", "EUR": "EUR", "€": "EUR", "GBP": "GBP", "£": "GBP", "AUD": "AUD",
-};
+import AppOnboarding, { APP_ONBOARDING_STEPS } from "@/components/AppOnboarding";
 
 const API_TO_SYMBOL: Record<string, string> = {
     "MYR": "RM", "THB": "฿", "IDR": "Rp", "SGD": "S$", "VND": "₫", "PHP": "₱",
@@ -75,16 +68,13 @@ async function getCroppedImg(imageSrc: string, pixelCrop: any) {
 }
 
 export default function TripListPage() {
-    const router = useRouter();
     const [darkMode, setDarkMode] = useState(false);
 
     // --- STATE ---
     const [trips, setTrips] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const stackUser = useUser();
-    const user = stackUser
-        ? { ...stackUser, email: stackUser.primaryEmail || "" }
-        : null;
+    const user = stackUser ?? null;
     const [showAuthModal, setShowAuthModal] = useState(false);
 
     // Create Modal State
@@ -117,7 +107,7 @@ export default function TripListPage() {
     const [cropMode, setCropMode] = useState<'create' | 'edit'>('create');
 
     // Offline Mode State
-    const [isOffline, setIsOffline] = useState(false);
+    const [, setIsOffline] = useState(false);
 
     // Monitor Network Status
     React.useEffect(() => {
@@ -137,15 +127,6 @@ export default function TripListPage() {
             }
         };
     }, []);
-
-    // --- EFFECT: LOAD DATA ---
-    React.useEffect(() => {
-        if (user) {
-            fetchTrips();
-        } else if (stackUser !== undefined) {
-            setLoading(false);
-        }
-    }, [user?.id, stackUser]);
 
     const uploadImage = async (fileOrBlob: File | Blob, mode: 'create' | 'edit') => {
         if (!user) return alert("Sila log masuk semula.");
@@ -193,7 +174,7 @@ export default function TripListPage() {
         }
     };
 
-    const fetchTrips = async () => {
+    const fetchTrips = useCallback(async () => {
         if (!user) {
             setLoading(false);
             return;
@@ -224,7 +205,13 @@ export default function TripListPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user]);
+
+    // --- EFFECT: LOAD DATA ---
+    React.useEffect(() => {
+        if (stackUser === undefined) return;
+        void fetchTrips();
+    }, [fetchTrips, stackUser]);
 
     const handleCreateTrip = async () => {
         if (!user) return setShowAuthModal(true);
@@ -328,6 +315,13 @@ export default function TripListPage() {
 
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
+            <AppOnboarding
+                appName="TripIt"
+                storageKey="tripit"
+                steps={APP_ONBOARDING_STEPS.tripit}
+                darkMode={darkMode}
+                accentClassName="bg-indigo-400"
+            />
             <div className="max-w-md mx-auto min-h-screen flex flex-col relative">
 
                 {/* --- HEADER --- */}
@@ -353,6 +347,7 @@ export default function TripListPage() {
 
                     {/* NEW TRIP BUTTON */}
                     <button
+                        data-guide="tripit-create"
                         onClick={() => user ? setShowCreateModal(true) : setShowAuthModal(true)}
                         className={`w-full py-4 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 font-black uppercase transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white/10" : "border-black hover:bg-black/5"}`}
                     >
@@ -360,7 +355,7 @@ export default function TripListPage() {
                     </button>
 
                     {/* TRIP LIST */}
-                    <div className="space-y-4">
+                    <div data-guide="tripit-list" className="space-y-4">
                         <h3 className="text-xs font-black uppercase opacity-60 ml-1">Upcoming Trips</h3>
 
                         {loading ? (
@@ -368,7 +363,7 @@ export default function TripListPage() {
                         ) : trips.length === 0 ? (
                             <div className="text-center py-10 opacity-50 flex flex-col items-center">
                                 <Plane size={48} className="mb-2" />
-                                <p className="text-xs font-bold">No trips yet. Let's fly!</p>
+                                <p className="text-xs font-bold">No trips yet. Let’s fly!</p>
                             </div>
                         ) : (
                             trips.map(trip => {
@@ -506,7 +501,7 @@ export default function TripListPage() {
                                 {/* Image Preview & Upload */}
                                 <div className={`relative h-24 rounded-xl border-2 border-dashed mb-3 overflow-hidden flex items-center justify-center ${darkMode ? "border-white/20" : "border-black/10"}`}>
                                     {newCoverImage ? (
-                                        <img src={newCoverImage} className="w-full h-full object-cover" />
+                                        <img src={newCoverImage} alt="Preview cover trip baharu" className="w-full h-full object-cover" />
                                     ) : (
                                         <p className="text-[10px] font-bold opacity-40 uppercase">No Image Selected</p>
                                     )}
@@ -547,7 +542,7 @@ export default function TripListPage() {
                                             onClick={() => setNewCoverImage(url)}
                                             className={`flex-shrink-0 w-16 h-12 rounded-lg border-2 overflow-hidden transition-all ${newCoverImage === url ? "border-blue-500 scale-110" : "border-transparent opacity-60"}`}
                                         >
-                                            <img src={url} className="w-full h-full object-cover" />
+                                            <img src={url} alt={`Pilihan cover ${i + 1}`} className="w-full h-full object-cover" />
                                         </button>
                                     ))}
                                 </div>
@@ -658,7 +653,7 @@ export default function TripListPage() {
                                 {/* Image Preview & Upload */}
                                 <div className={`relative h-24 rounded-xl border-2 border-dashed mb-3 overflow-hidden flex items-center justify-center ${darkMode ? "border-white/20" : "border-black/10"}`}>
                                     {editCoverImage ? (
-                                        <img src={editCoverImage} className="w-full h-full object-cover" />
+                                        <img src={editCoverImage} alt="Preview cover trip" className="w-full h-full object-cover" />
                                     ) : (
                                         <p className="text-[10px] font-bold opacity-40 uppercase">No Image Selected</p>
                                     )}
@@ -699,7 +694,7 @@ export default function TripListPage() {
                                             onClick={() => setEditCoverImage(url)}
                                             className={`flex-shrink-0 w-16 h-12 rounded-lg border-2 overflow-hidden transition-all ${editCoverImage === url ? "border-blue-500 scale-110" : "border-transparent opacity-60"}`}
                                         >
-                                            <img src={url} className="w-full h-full object-cover" />
+                                            <img src={url} alt={`Pilihan cover ${i + 1}`} className="w-full h-full object-cover" />
                                         </button>
                                     ))}
                                 </div>

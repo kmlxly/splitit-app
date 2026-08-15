@@ -1,51 +1,48 @@
-# Kmlxly Apps (Super App) 🚀
+# Kmlxly Apps
 
-A personal web utilities toolbox built with **Next.js**.
-This project serves as a central hub (Super App) for various productivity tools, starting with **SplitIt**.
+Koleksi utiliti kewangan peribadi berasaskan Next.js: pembahagian bil, bajet, langganan dan perancangan perjalanan.
 
-## 📱 Apps Included
+## Modul
 
-### 1. SplitIt v3.1 (Bill Splitter AI)
-A brutalist-style bill splitting application turbo-charged with AI.
-* **🤖 AI Smart Scan:** Powered by **Google Gemini 2.0 Flash**. Automatically detects items, prices, SST/Tax, Service Charge, Discounts, and Deposits from receipts.
-* **✂️ Crop & Zoom:** Integrated `react-easy-crop` for precise QR code and receipt uploads.
-* **📝 Flexible Editing:** Edit scanned items, manage shared items, and auto-calculate complex splits (Equal/Itemized).
-* **💸 Smart Settlement:** Compact settlement cards showing exactly what each person ordered.
-* **📲 WhatsApp Ready:** One-click summary generation (works on HTTP/HTTPS).
-* **💳 Payment Profiles:** Save bank details & resizeable DuitNow QR codes.
+- **SplitIt** — pecah bil secara sama rata atau itemized, imbas resit dengan AI dan jana settlement.
+- **Budget.AI** — rekod transaksi, ringkasan bulanan dan analitik perbelanjaan.
+- **SubTracker** — jejak langganan berulang dan sync bayaran ke Budget.AI.
+- **TripIt** — itinerary, ahli dengan role, checklist, perbelanjaan peribadi dan dokumen percutian.
+- **Offline SplitIt** — aliran asas pembahagian bil yang kekal tersedia tanpa rangkaian selepas production shell dicache.
 
-## 🛠️ Tech Stack
-* **Framework:** Next.js 14 (App Router)
-* **Styling:** Tailwind CSS (Brutalism UI)
-* **Icons:** Lucide React
-* **AI Engine:** Google Gemini API (`gemini-2.0-flash` with fallback to `1.5-flash`)
-* **Image Handling:** html2canvas, react-easy-crop
+## Stack
 
-## 📂 Project Structure
+- Next.js 16 App Router, React 19 dan TypeScript
+- Tailwind CSS, Framer Motion dan Lucide
+- Neon Postgres + Neon Auth
+- Vercel Blob untuk fail
+- OpenRouter untuk scan resit/penyata dan pembantu kewangan
 
-src/app/ ├── page.tsx # Home / Menu Utama (App Selector) ├── layout.tsx # Global Layout └── splitit/ # SplitIt App Module └── page.tsx # Main Logic (SplitIt V3.1)
+## Pembangunan
 
-## 🚀 Getting Started
+```bash
+cp .env.example .env.local
+npm install
+npm run dev
+```
 
-1.  **Clone the repository**
-    ```bash
-    git clone [REPO_URL]
-    ```
+Buka `http://localhost:3000`. Rujuk [SETUP_INSTRUCTIONS.md](./SETUP_INSTRUCTIONS.md) untuk penyediaan Neon, OAuth dan Vercel Blob.
 
-2.  **Install dependencies**
-    ```bash
-    npm install
-    npm install react-easy-crop  # Critical for v3.0+
-    ```
+Pemeriksaan sebelum deploy:
 
-3.  **Setup API Key**
-    * Open `src/app/splitit/page.tsx`
-    * Replace `const API_KEY` with your valid Google Gemini API Key.
+```bash
+npm run lint
+npm run build
+npm audit --omit=dev
+```
 
-4.  **Run locally**
-    ```bash
-    npm run dev
-    ```
+Nota: lint masih digunakan sebagai debt tracker untuk beberapa komponen legacy yang besar; production build menjalankan semakan TypeScript penuh.
 
----
-*Built by kmlxly.*
+## Keselamatan dan privasi
+
+- Semua operasi cloud memerlukan sesi pengguna dan disekop kepada pemilik/ahli resource.
+- Endpoint AI dan upload mempunyai had saiz, jenis fail serta rate limit asas.
+- Dokumen TripIt baharu disimpan sebagai private blob dan distrim melalui endpoint yang memeriksa akses.
+- Kunci AI kekal di server; jangan tambah secret dengan awalan `NEXT_PUBLIC_`.
+
+Built by kmlxly.

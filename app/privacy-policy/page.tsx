@@ -1,6 +1,8 @@
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, Shield, Lock, Eye, Database, Trash2 } from "lucide-react";
+import { ArrowLeft, Shield, Eye, Database, Trash2 } from "lucide-react";
+
+const LAST_UPDATED = "15 Ogos 2026";
 
 export default function PrivacyPolicy() {
     return (
@@ -25,7 +27,7 @@ export default function PrivacyPolicy() {
                             Privacy<br />Policy.
                         </h1>
                         <p className="font-bold border-2 border-black inline-block px-4 py-1 rounded-full bg-white text-[10px] md:text-xs uppercase tracking-widest">
-                            Updated: {new Date().toLocaleDateString()}
+                            Dikemas kini: {LAST_UPDATED}
                         </p>
                     </div>
 
@@ -34,7 +36,7 @@ export default function PrivacyPolicy() {
                         <section className="border-l-4 md:border-l-8 border-black pl-4 md:pl-8">
                             <h2 className="text-xl md:text-2xl font-black uppercase mb-4">1. Intro</h2>
                             <p className="text-base md:text-lg font-bold leading-relaxed opacity-80">
-                                Welcome to <strong>Kmlxly Apps</strong> (SplitIt, TripIt, Sub.Tracker). Kami tak berminat nak jual data awak. Apps ini dibuat untuk membantu urusan harian, bukan untuk spy hidup orang.
+                                Selamat datang ke <strong>Kmlxly Apps</strong> (SplitIt, Budget.AI, TripIt dan Sub.Tracker). Kami tidak menjual data anda. Aplikasi ini dibina untuk membantu urusan harian.
                             </p>
                         </section>
 
@@ -66,10 +68,10 @@ export default function PrivacyPolicy() {
                         <div className="p-6 border-2 border-black rounded-2xl bg-blue-50">
                             <h3 className="text-lg md:text-xl font-black uppercase mb-2">Third Party Services</h3>
                             <p className="text-xs md:text-sm font-bold opacity-70 mb-2">
-                                We use trusted services to power our apps. We do not sell your data to them.
+                                Kami menggunakan penyedia berikut untuk menjalankan aplikasi. Imej resit, penyata yang anda pilih, dan ringkasan kewangan berkaitan boleh dihantar kepada OpenRouter serta penyedia modelnya untuk pemprosesan AI.
                             </p>
                             <div className="flex flex-wrap gap-2">
-                                {["Neon Auth", "Neon Postgres", "Vercel Blob", "Open-Meteo", "Gemini AI"].map((service) => (
+                                {["Neon Auth", "Neon Postgres", "Vercel Blob", "Open-Meteo", "OpenRouter AI"].map((service) => (
                                     <span key={service} className="px-3 py-1 bg-white border-2 border-black rounded-full text-[10px] font-black uppercase">
                                         {service}
                                     </span>
@@ -80,14 +82,14 @@ export default function PrivacyPolicy() {
                         <section className="bg-black text-white p-6 md:p-8 rounded-2xl md:rounded-[2rem]">
                             <h2 className="text-xl font-black uppercase mb-2 flex items-center gap-2"><Trash2 size={20} /> 4. Data Deletion</h2>
                             <p className="text-xs md:text-sm opacity-80 mb-4 leading-relaxed">
-                                Data anda kekal selagi anda guna app. Kalau nak padam akaun secara total, sila hubungi developer atau guna fungsi reset dalam app.
+                                Fungsi reset hanya memadam data pada peranti semasa. Untuk memadam akaun dan data cloud secara menyeluruh, hubungi developer.
                             </p>
                             <p className="text-[10px] md:text-xs font-mono bg-white/10 p-2 rounded inline-block">Contact: kmlxly4@gmail.com</p>
                         </section>
                     </div>
 
                     <div className="bg-gray-100 p-6 border-t-4 border-black text-center">
-                        <p className="font-black text-[10px] uppercase tracking-[0.3em] opacity-30">&copy; {new Date().getFullYear()} SplitIt.</p>
+                        <p className="font-black text-[10px] uppercase tracking-[0.3em] opacity-30">&copy; 2026 Kmlxly Apps.</p>
                     </div>
                 </div>
             </div>

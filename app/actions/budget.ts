@@ -10,7 +10,7 @@ type BudgetTransactionPayload = {
   category?: string | null;
   date?: string | null;
   iso_date?: string | null;
-  items?: any[];
+  items?: unknown[];
 };
 
 const requireUser = requireServerUser;
@@ -23,7 +23,7 @@ export async function getBudgetTransactions() {
     WHERE user_id = ${user.id}
     ORDER BY id DESC
   `;
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     id: Number(r.id),
     title: r.title,
     amount: Number(r.amount),
@@ -43,7 +43,7 @@ export async function getMonthlyBudgetTotal(monthStr: string) {
       AND iso_date <= ${monthStr + "-31"}
   `;
   return rows.reduce(
-    (acc: number, curr: any) => acc + Number(curr.amount || 0),
+    (acc, curr) => acc + Number(curr.amount || 0),
     0,
   );
 }
@@ -55,8 +55,8 @@ export async function upsertBudgetTransactions(
   if (payload.length === 0) return { success: true };
 
   for (const t of payload) {
-    await sql`
-      INSERT INTO public.budget_transactions
+    const rows = await sql`
+      INSERT INTO public.budget_transactions AS target
         (id, user_id, title, amount, category, date, iso_date, items, updated_at)
       VALUES
         (${t.id}, ${user.id}, ${t.title}, ${t.amount}, ${t.category ?? null},
@@ -69,20 +69,30 @@ export async function upsertBudgetTransactions(
         iso_date = EXCLUDED.iso_date,
         items = EXCLUDED.items,
         updated_at = now()
+      WHERE target.user_id = ${user.id}
+      RETURNING id
     `;
+    if (rows.length === 0) {
+      throw new Error("ID transaksi bertembung dengan rekod pengguna lain.");
+    }
   }
   return { success: true };
 }
 
 export async function insertBudgetTransaction(t: BudgetTransactionPayload) {
   const user = await requireUser();
-  await sql`
+  const rows = await sql`
     INSERT INTO public.budget_transactions
       (id, user_id, title, amount, category, date, iso_date, items)
     VALUES
       (${t.id}, ${user.id}, ${t.title}, ${t.amount}, ${t.category ?? null},
        ${t.date ?? null}, ${t.iso_date ?? null}, ${JSON.stringify(t.items ?? [])}::jsonb)
+    ON CONFLICT (id) DO NOTHING
+    RETURNING id
   `;
+  if (rows.length === 0) {
+    throw new Error("ID transaksi bertembung. Sila cuba semula.");
+  }
   return { success: true };
 }
 

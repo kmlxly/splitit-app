@@ -17,48 +17,51 @@ function JoinTripContent() {
     const [status, setStatus] = useState<"loading" | "error" | "success">("loading");
     const [message, setMessage] = useState("Checking invitation...");
     const [showAuthModal, setShowAuthModal] = useState(false);
-    const [tripId, setTripId] = useState<string | null>(null);
-
     useEffect(() => {
-        if (!token) {
-            setStatus("error");
-            setMessage("Invitation link is invalid (missing token).");
-            return;
-        }
+        let redirectTimer: ReturnType<typeof setTimeout> | undefined;
+        let cancelled = false;
+
+        if (!token) return undefined;
         // stackUser is undefined while loading; null when unauthenticated
-        if (stackUser === undefined) return;
-        processJoin();
-    }, [token, stackUser]);
+        if (stackUser === undefined) return undefined;
+        if (stackUser === null) return undefined;
 
-    const processJoin = async () => {
-        if (!token) return;
+        const processJoin = async () => {
+            try {
+                const data = await joinTripByToken(token);
+                if (cancelled) return;
 
-        if (!stackUser) {
-            setStatus("error");
-            setMessage("Sila log masuk terlebih dahulu untuk sertai trip ini.");
-            setShowAuthModal(true);
-            return;
-        }
-
-        try {
-            const data = await joinTripByToken(token);
-            if (data?.success) {
-                setStatus("success");
-                setMessage(data.message);
-                setTripId(data.trip_id);
-                setTimeout(() => {
-                    router.push(`/tripit/${data.trip_id}`);
-                }, 1500);
-            } else {
+                if (data?.success) {
+                    setStatus("success");
+                    setMessage(data.message);
+                    redirectTimer = setTimeout(() => {
+                        router.push(`/tripit/${data.trip_id}`);
+                    }, 1500);
+                } else {
+                    setStatus("error");
+                    setMessage(data?.message || "Gagal sertai trip. Token mungkin tidak sah.");
+                }
+            } catch (error: unknown) {
+                if (cancelled) return;
+                console.error(error);
                 setStatus("error");
-                setMessage(data?.message || "Gagal sertai trip. Token mungkin tidak sah.");
+                setMessage(error instanceof Error ? `Error: ${error.message}` : "Gagal sertai trip.");
             }
-        } catch (e: any) {
-            console.error(e);
-            setStatus("error");
-            setMessage("Error: " + (e.message || ""));
-        }
-    };
+        };
+
+        void processJoin();
+        return () => {
+            cancelled = true;
+            if (redirectTimer) clearTimeout(redirectTimer);
+        };
+    }, [router, stackUser, token]);
+
+    const displayStatus = !token || stackUser === null ? "error" : status;
+    const displayMessage = !token
+        ? "Invitation link is invalid (missing token)."
+        : stackUser === null
+            ? "Sila log masuk terlebih dahulu untuk sertai trip ini."
+            : message;
 
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6 font-sans">
@@ -66,25 +69,25 @@ function JoinTripContent() {
 
                 <div className="mb-6 flex justify-center">
                     <div className="p-4 rounded-2xl bg-indigo-100 border-2 border-indigo-900 text-indigo-900">
-                        <Plane size={40} className={status === "loading" ? "animate-bounce" : ""} />
+                        <Plane size={40} className={displayStatus === "loading" ? "animate-bounce" : ""} />
                     </div>
                 </div>
 
                 <h1 className="text-2xl font-black uppercase mb-2">Joining Trip</h1>
 
                 <div className="flex flex-col items-center gap-4">
-                    {status === "loading" && (
+                    {displayStatus === "loading" && (
                         <div className="flex items-center gap-2 text-indigo-600 font-bold">
                             <Loader2 size={18} className="animate-spin" />
-                            <p className="text-sm uppercase tracking-wider">{message}</p>
+                            <p className="text-sm uppercase tracking-wider">{displayMessage}</p>
                         </div>
                     )}
 
-                    {status === "error" && (
+                    {displayStatus === "error" && (
                         <div className="space-y-4">
                             <div className="flex items-center gap-2 text-red-600 font-bold justify-center">
                                 <AlertCircle size={18} />
-                                <p className="text-sm uppercase tracking-wider">{message}</p>
+                                <p className="text-sm uppercase tracking-wider">{displayMessage}</p>
                             </div>
                             {!stackUser && (
                                 <button onClick={() => setShowAuthModal(true)} className="w-full py-3 bg-black text-white rounded-xl font-black uppercase border-2 border-black">
@@ -97,7 +100,7 @@ function JoinTripContent() {
                         </div>
                     )}
 
-                    {status === "success" && (
+                    {displayStatus === "success" && (
                         <div className="space-y-4">
                             <div className="flex items-center gap-2 text-green-600 font-bold justify-center">
                                 <p className="text-sm uppercase tracking-wider">Berjaya! Membawa anda ke dashboard...</p>

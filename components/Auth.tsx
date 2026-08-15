@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth/client";
 import { Loader2, X, Cloud, ArrowRight, Lock, Mail, User as UserIcon } from "lucide-react";
 
@@ -17,12 +17,56 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    const focusable = dialog?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]',
+    );
+    focusable?.[0]?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+
+      const items = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]',
+        ),
+      );
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
   // --- GOOGLE LOGIN ---
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
+    setFeedback(null);
     try {
       const callbackURL =
         typeof window !== "undefined" ? window.location.pathname : "/";
@@ -31,12 +75,13 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
         callbackURL,
       });
       if (error) {
-        alert(error.message || "Gagal login dengan Google.");
+        setFeedback({ type: "error", text: error.message || "Gagal login dengan Google." });
         setGoogleLoading(false);
       }
       // On success, the browser will be redirected to Google's OAuth screen.
-    } catch (e: any) {
-      alert(e?.message || "Gagal login dengan Google.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Gagal login dengan Google.";
+      setFeedback({ type: "error", text: message });
       setGoogleLoading(false);
     }
   };
@@ -45,6 +90,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setFeedback(null);
 
     try {
       if (isSignUp) {
@@ -54,20 +100,24 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
           name: name || email.split("@")[0],
         });
         if (error) {
-          alert(error.message || "Daftar gagal.");
+          setFeedback({ type: "error", text: error.message || "Daftar gagal." });
           setLoading(false);
           return;
         }
-        alert(
-          "Daftar berjaya! Check email anda untuk sahkan pendaftaran (jika diperlukan)."
-        );
+        setLoading(false);
+        setIsSignUp(false);
+        setFeedback({
+          type: "success",
+          text: "Daftar berjaya. Semak e-mel anda jika pengesahan diperlukan.",
+        });
+        return;
       } else {
         const { error } = await authClient.signIn.email({
           email,
           password,
         });
         if (error) {
-          alert(error.message || "Login gagal.");
+          setFeedback({ type: "error", text: error.message || "Login gagal." });
           setLoading(false);
           return;
         }
@@ -76,9 +126,12 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
       setLoading(false);
       onClose();
       window.location.reload();
-    } catch (err: any) {
+    } catch (error: unknown) {
       setLoading(false);
-      alert(err?.message || "Auth error");
+      setFeedback({
+        type: "error",
+        text: error instanceof Error ? error.message : "Ralat pengesahan.",
+      });
     }
   };
 
@@ -92,11 +145,11 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
   const btnStyle = `w-full py-2.5 rounded-lg border-2 text-sm font-black uppercase tracking-wider flex justify-center items-center gap-2 transition-all active:translate-y-1 active:shadow-none ${isDarkMode ? "bg-indigo-600 border-white text-white hover:bg-indigo-500 shadow-[3px_3px_0px_0px_#fff]" : "bg-indigo-500 border-black text-white hover:bg-indigo-400 shadow-[3px_3px_0px_0px_#000]"}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onMouseDown={onClose}>
 
-      <div className={`w-full max-w-[320px] sm:max-w-xs rounded-xl border-2 relative transition-all ${modalBg} ${shadowStyle}`}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" aria-describedby="auth-description" onMouseDown={(event) => event.stopPropagation()} className={`w-full max-w-[340px] rounded-xl border-2 relative transition-all ${modalBg} ${shadowStyle}`}>
 
-        <button onClick={onClose} className={`absolute -top-3 -right-3 p-1.5 rounded-full border-2 hover:scale-110 transition-transform z-10 ${isDarkMode ? "bg-red-500 border-white text-white" : "bg-red-500 border-black text-white"}`}>
+        <button onClick={onClose} aria-label="Tutup login" className={`absolute -top-3 -right-3 p-2 rounded-full border-2 hover:scale-110 transition-transform z-10 ${isDarkMode ? "bg-red-500 border-white text-white" : "bg-red-500 border-black text-white"}`}>
             <X size={14} strokeWidth={4}/>
         </button>
 
@@ -106,10 +159,10 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                     <Cloud size={20} strokeWidth={2.5} />
                 </div>
                 <div className="text-center leading-tight">
-                    <h2 className="text-xl font-black uppercase tracking-tight">
+                    <h2 id="auth-title" className="text-xl font-black uppercase tracking-tight">
                         {isSignUp ? 'Join SplitIt' : 'Welcome Back'}
                     </h2>
-                    <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest mt-1">Cloud Sync Access</p>
+                    <p id="auth-description" className="text-xs font-bold opacity-60 uppercase tracking-widest mt-1">Akses sync cloud</p>
                 </div>
             </div>
 
@@ -144,17 +197,26 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                     {isSignUp && (
                         <div className={inputWrapperStyle}>
                             <div className="pl-3 opacity-50"><UserIcon size={16}/></div>
-                            <input className={inputFieldStyle} type="text" placeholder="Nama" value={name} onChange={(e) => setName(e.target.value)} required />
+                            <label htmlFor="auth-name" className="sr-only">Nama</label>
+                            <input id="auth-name" className={inputFieldStyle} type="text" autoComplete="name" placeholder="Nama" value={name} onChange={(e) => setName(e.target.value)} required />
                         </div>
                     )}
                     <div className={inputWrapperStyle}>
                         <div className="pl-3 opacity-50"><Mail size={16}/></div>
-                        <input className={inputFieldStyle} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                        <label htmlFor="auth-email" className="sr-only">E-mel</label>
+                        <input id="auth-email" className={inputFieldStyle} type="email" autoComplete="email" placeholder="E-mel" value={email} onChange={(e) => setEmail(e.target.value)} required />
                     </div>
                     <div className={inputWrapperStyle}>
                         <div className="pl-3 opacity-50"><Lock size={16}/></div>
-                        <input className={inputFieldStyle} type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                        <label htmlFor="auth-password" className="sr-only">Kata laluan</label>
+                        <input id="auth-password" className={inputFieldStyle} type="password" autoComplete={isSignUp ? "new-password" : "current-password"} minLength={8} placeholder="Kata laluan" value={password} onChange={(e) => setPassword(e.target.value)} required />
                     </div>
+
+                    {feedback && (
+                      <p role="status" className={`rounded-lg border-2 p-2 text-xs font-bold ${feedback.type === "error" ? "border-red-500 bg-red-50 text-red-700" : "border-green-500 bg-green-50 text-green-700"}`}>
+                        {feedback.text}
+                      </p>
+                    )}
 
                     <button className={`mt-2 ${btnStyle}`} disabled={loading}>
                         {loading ? <Loader2 className="animate-spin w-4 h-4"/> : (
@@ -166,7 +228,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                 </form>
 
                 <div className="mt-5 pt-4 border-t-2 border-dashed border-current border-opacity-30 text-center">
-                    <button onClick={() => setIsSignUp(!isSignUp)} className="text-xs font-black uppercase bg-current/10 px-3 py-1 rounded hover:bg-current/20 transition-colors">
+                    <button onClick={() => { setIsSignUp(!isSignUp); setFeedback(null); }} className="text-xs font-black uppercase bg-current/10 px-3 py-2 rounded hover:bg-current/20 transition-colors">
                         {isSignUp ? "Login Sini" : "Create Account"}
                     </button>
                 </div>

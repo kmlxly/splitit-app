@@ -1,6 +1,8 @@
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, Scale, AlertTriangle, CheckCircle, FileText } from "lucide-react";
+import { ArrowLeft, Scale, AlertTriangle, CheckCircle } from "lucide-react";
+
+const EFFECTIVE_DATE = "15 Ogos 2026";
 
 export default function TermsOfService() {
     return (
@@ -24,7 +26,7 @@ export default function TermsOfService() {
                             Terms of<br />Service.
                         </h1>
                         <p className="font-bold border-2 border-white inline-block px-4 py-1 rounded-full bg-black text-white text-[10px] md:text-xs uppercase tracking-widest">
-                            Effective: {new Date().toLocaleDateString()}
+                            Berkuat kuasa: {EFFECTIVE_DATE}
                         </p>
                     </div>
 
@@ -79,7 +81,7 @@ export default function TermsOfService() {
                     </div>
 
                     <div className="bg-black text-white p-6 border-t-4 border-black text-center">
-                        <p className="font-black text-[10px] uppercase tracking-widest opacity-40">SPLITIT &copy; {new Date().getFullYear()}</p>
+                        <p className="font-black text-[10px] uppercase tracking-widest opacity-40">KMLXLY APPS &copy; 2026</p>
                     </div>
                 </div>
             </div>

@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
-    ArrowLeft, Camera, Plus, Wallet,
-    TrendingUp, TrendingDown, MoreHorizontal,
+    Camera, Plus, Wallet,
+    TrendingUp, TrendingDown,
     ShoppingBag, Coffee, Car, Home, Zap,
-    Moon, Sun, ChevronDown, ChevronLeft, ChevronRight, ScanLine, X, Loader2, Utensils, Fuel, Trash2, Pencil, Image as ImageIcon, Calendar, User, Receipt, AlertCircle, ArrowRight, Eye, EyeOff, Target, Search, RotateCcw, Link as LinkIcon, Link2Off, Sparkles,
+    Moon, Sun, ChevronDown, ChevronLeft, ChevronRight, ScanLine, X, Loader2, Utensils, Trash2, Pencil, Image as ImageIcon, Calendar, User, Receipt, Eye, EyeOff, Target, Search, RotateCcw, Link as LinkIcon, Link2Off, Sparkles,
     ShieldCheck, AlertTriangle, Activity, BookOpen, ListTree
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
+import AppOnboarding, { APP_ONBOARDING_STEPS } from "@/components/AppOnboarding";
 import { useUser } from "@/lib/auth/client";
 import {
     getBudgetTransactions,
@@ -18,10 +19,15 @@ import {
     deleteBudgetTransaction,
 } from "@/app/actions/budget";
 import { motion, AnimatePresence } from "framer-motion";
+import { createNumericId } from "@/lib/clientIds";
 
 // --- 1. CONFIG & STYLES ---
 const APP_NAME = "Budget.AI";
 const APP_VERSION = "v1.2.0-polish";
+const MONTH_LABELS = [
+    "Jan", "Feb", "Mac", "Apr", "Mei", "Jun",
+    "Jul", "Ogo", "Sep", "Okt", "Nov", "Dis",
+] as const;
 
 // Helper: Compress Image
 const compressImage = (file: File): Promise<string> => {
@@ -151,11 +157,8 @@ export default function BudgetPage() {
     const [selectedDate, setSelectedDate] = useState<Date>(new Date()); // Default: current month
     const [showCalendarModal, setShowCalendarModal] = useState(false);
     const stackUser = useUser();
-    const user = stackUser
-        ? { ...stackUser, email: stackUser.primaryEmail || "" }
-        : null;
+    const user = stackUser ?? null;
     const [showAuthModal, setShowAuthModal] = useState(false);
-    const [showLoginGuide, setShowLoginGuide] = useState(false); // Google Warning Modal
 
     // Sync Status State
     const [syncStatus, setSyncStatus] = useState<"SAVED" | "SAVING" | "ERROR" | "OFFLINE">("OFFLINE");
@@ -180,8 +183,6 @@ export default function BudgetPage() {
     // Smart Search Bar State
     const [searchQuery, setSearchQuery] = useState("");
 
-    // NEW: Month Slider Offset
-    const [monthOffset, setMonthOffset] = useState(0);
     const [showWrappedModal, setShowWrappedModal] = useState(false);
 
     // Senarai Kategori (Kita extract keluar supaya senang nak map)
@@ -205,20 +206,18 @@ export default function BudgetPage() {
     // Calculated State
     const [balance, setBalance] = useState(0);
     const [expenseMonth, setExpenseMonth] = useState(0);
-    const currency = "RM"; // Currency symbol
-
     // Ref untuk Input Kamera
     const fileInputRef = useRef<HTMLInputElement>(null);
     const monthScrollRef = useRef<HTMLDivElement>(null);
 
-    const scrollToMonth = (year: number, month: number, isSmooth = true) => {
+    const scrollToMonth = useCallback((year: number, month: number, isSmooth = true) => {
         const element = document.getElementById(`month-${year}-${month}`);
         if (element && monthScrollRef.current) {
             const container = monthScrollRef.current;
             const scrollLeft = element.offsetLeft - container.offsetWidth / 2 + element.offsetWidth / 2;
             container.scrollTo({ left: scrollLeft, behavior: isSmooth ? 'smooth' : 'auto' });
         }
-    };
+    }, []);
 
     // --- EFFECT: LOAD & SAVE DATA ---
 
@@ -234,17 +233,17 @@ export default function BudgetPage() {
             }
         };
         loadCloud();
-    }, [user?.id]);
+    }, [user]);
 
     // Initial Scroll to current month
     useEffect(() => {
-        if (transactions.length > 0) {
+        const frame = requestAnimationFrame(() => {
             const now = new Date();
-            setTimeout(() => {
-                scrollToMonth(now.getFullYear(), now.getMonth(), false);
-            }, 500);
-        }
-    }, [transactions.length > 0]);
+            scrollToMonth(now.getFullYear(), now.getMonth(), false);
+        });
+
+        return () => cancelAnimationFrame(frame);
+    }, [scrollToMonth]);
 
     // 0.2 Polling Sync (replaces Supabase Realtime)
     useEffect(() => {
@@ -258,7 +257,7 @@ export default function BudgetPage() {
             }
         }, 15000);
         return () => clearInterval(interval);
-    }, [user?.id]);
+    }, [user]);
 
     // 0.1 SYNC TO CLOUD (Auto-Save)
     useEffect(() => {
@@ -396,7 +395,7 @@ export default function BudgetPage() {
             }));
 
             const newTx: Transaction = {
-                id: Date.now(),
+                id: createNumericId(),
                 title: "Settle Komitmen (Pukal)",
                 amount: -Math.abs(unpaidCommitments),
                 category: "Bills",
@@ -499,7 +498,7 @@ export default function BudgetPage() {
     }, []);
 
     // Helper: Filter transactions by selected date/month
-    const getFilteredTransactions = () => {
+    const getFilteredTransactions = useCallback(() => {
         const selectedYear = selectedDate.getFullYear();
         const selectedMonth = selectedDate.getMonth();
 
@@ -536,7 +535,7 @@ export default function BudgetPage() {
                 return true;
             }
         });
-    };
+    }, [selectedDate, transactions]);
 
     // --- EFFECT: AUTO CALCULATE ---
     useEffect(() => {
@@ -552,7 +551,7 @@ export default function BudgetPage() {
             .reduce((acc, curr) => acc + Math.abs(curr.amount), 0);
         setExpenseMonth(expense);
 
-    }, [transactions, selectedDate]);
+    }, [getFilteredTransactions]);
 
     // --- HANDLERS ---
 
@@ -595,7 +594,7 @@ export default function BudgetPage() {
         } else {
             // --- MODE BARU: Tambah item baru ---
             const newTx: Transaction = {
-                id: Date.now(),
+                id: createNumericId(),
                 title: newTitle.trim(),
                 category: newCategory,
                 amount: finalAmount,
@@ -739,7 +738,7 @@ export default function BudgetPage() {
                     const displayDate = txDate.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
 
                     return {
-                        id: Date.now() + idx,
+                        id: createNumericId(),
                         title: tx.title || `Transaction ${idx + 1}`,
                         category: category,
                         amount: isIncome ? Math.abs(amount) : -Math.abs(amount), // Income positive, expense negative
@@ -790,7 +789,7 @@ export default function BudgetPage() {
                 const displayDate = txDate.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
 
                 const previewTx: Transaction = {
-                    id: Date.now(),
+                    id: createNumericId(),
                     title: title,
                     category: finalCategory,
                     amount: finalCategory === "Income" ? Math.abs(amount) : -Math.abs(amount),
@@ -958,15 +957,8 @@ export default function BudgetPage() {
         }
     };
 
-    // 1. Trigger bila tekan butang LOGIN (Buka Warning dulu)
     const handleLoginClick = () => {
-        setShowLoginGuide(true);
-    };
-
-    // 2. Lepas faham warning, buka Menu Pilihan (Google/Email)
-    const openAuthOptions = () => {
-        setShowLoginGuide(false); // Tutup warning
-        setShowAuthModal(true);   // Buka AuthModal
+        setShowAuthModal(true);
     };
 
     // --- STYLES ---
@@ -978,7 +970,14 @@ export default function BudgetPage() {
 
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
-            <div className="max-w-md mx-auto min-h-screen flex flex-col relative">
+            <AppOnboarding
+                appName="Budget.AI"
+                storageKey="budget"
+                steps={APP_ONBOARDING_STEPS.budget}
+                darkMode={darkMode}
+                accentClassName="bg-orange-400"
+            />
+            <div className="max-w-md lg:max-w-6xl mx-auto min-h-screen flex flex-col relative">
 
                 {/* --- HEADER --- */}
                 <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
@@ -1023,6 +1022,7 @@ export default function BudgetPage() {
                                     }}
                                     className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white"}`}
                                     title={user.email || "User"}
+                                    aria-label="Log keluar"
                                 >
                                     <User size={16} />
                                 </button>
@@ -1035,6 +1035,7 @@ export default function BudgetPage() {
                             {/* CALENDAR BUTTON */}
                             <button
                                 onClick={() => setShowCalendarModal(true)}
+                                aria-label="Buka kalendar"
                                 className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}
                             >
                                 <Calendar size={16} />
@@ -1050,7 +1051,7 @@ export default function BudgetPage() {
                             </button>
 
                             {/* DARK MODE BUTTON */}
-                            <button onClick={() => setDarkMode(!darkMode)} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-white text-black shadow-none" : "border-black bg-black text-white"}`}>
+                            <button onClick={() => setDarkMode(!darkMode)} aria-label={darkMode ? "Guna tema cerah" : "Guna tema gelap"} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-white text-black shadow-none" : "border-black bg-black text-white"}`}>
                                 {darkMode ? <Sun size={16} /> : <Moon size={16} />}
                             </button>
                         </div>
@@ -1058,10 +1059,10 @@ export default function BudgetPage() {
                 </header>
 
                 {/* --- MAIN CONTENT --- */}
-                <main className="flex-1 p-6 flex flex-col gap-6">
+                <main className="flex-1 p-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] lg:items-start lg:gap-8">
 
                     {/* QUICK MONTH SELECTOR & REVIEW */}
-                    <section className="flex flex-col gap-3">
+                    <section className="flex flex-col gap-3 lg:col-start-1 lg:row-start-1">
                         <div className="flex items-center justify-between">
                             <h2 className="text-[10px] font-black uppercase tracking-widest opacity-60 flex items-center gap-2">
                                 <Calendar size={12} /> Review Belanja
@@ -1091,7 +1092,7 @@ export default function BudgetPage() {
                             </div>
                         </div>
 
-                        <div className="relative group">
+                        <div data-guide="budget-month" className="relative group">
                             {/* SUBTLE ARROWS FOR AFFORDANCE */}
                             <button
                                 onClick={() => {
@@ -1126,7 +1127,7 @@ export default function BudgetPage() {
                                     return months.map((m, idx) => {
                                         const isSelected = m.getMonth() === selectedDate.getMonth() && m.getFullYear() === selectedDate.getFullYear();
                                         const isRealCurrentMonth = m.getMonth() === now.getMonth() && m.getFullYear() === now.getFullYear();
-                                        const monthName = m.toLocaleDateString('default', { month: 'short' });
+                                        const monthName = MONTH_LABELS[m.getMonth()];
                                         const yearLabel = m.getFullYear();
                                         const mYear = m.getFullYear();
                                         const mMonth = m.getMonth();
@@ -1155,9 +1156,9 @@ export default function BudgetPage() {
                                                 )}
                                                 <div className="flex flex-col items-center">
                                                     <span className="text-[10px] font-black uppercase tracking-tighter">{monthName}</span>
-                                                    <span className="text-[6px] font-bold opacity-40 -mt-1">{yearLabel}</span>
+                                                    <span className="text-[8px] font-bold opacity-50 -mt-0.5">{yearLabel}</span>
                                                 </div>
-                                                <span className="text-[8px] font-mono font-bold">RM {mTotal.toFixed(0)}</span>
+                                                <span className="text-[10px] font-mono font-bold">RM {mTotal.toFixed(0)}</span>
                                             </button>
                                         );
                                     });
@@ -1167,7 +1168,7 @@ export default function BudgetPage() {
                     </section>
 
                     {/* 1. BALANCE CARD */}
-                    <section className={`${cardStyle} p-6 ${shadowStyle} relative overflow-hidden transition-all duration-500 ${darkMode ? "bg-[#222]" : showSafeToSpend ? "bg-emerald-400" : "bg-orange-400"}`}>
+                    <section className={`${cardStyle} p-6 ${shadowStyle} relative overflow-hidden transition-all duration-500 lg:col-start-1 lg:row-start-2 ${darkMode ? "bg-[#222]" : showSafeToSpend ? "bg-emerald-400" : "bg-orange-400"}`}>
                         <div className="absolute -right-4 -top-4 opacity-20"><Wallet size={120} /></div>
 
                         <div className="relative z-10">
@@ -1176,7 +1177,7 @@ export default function BudgetPage() {
                                 <div className="animate-in fade-in slide-in-from-left-4 duration-300">
                                     <div className="flex justify-between items-center mb-4">
                                         <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                                            Baki Wallet • {selectedDate.toLocaleDateString('default', { month: 'short' }).toUpperCase()} {selectedDate.getFullYear()}
+                                            Baki Wallet • {MONTH_LABELS[selectedDate.getMonth()].toUpperCase()} {selectedDate.getFullYear()}
                                         </span>
 
                                         <button
@@ -1199,7 +1200,7 @@ export default function BudgetPage() {
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                                            Safe-To-Spend • {selectedDate.toLocaleDateString('default', { month: 'short' }).toUpperCase()} {selectedDate.getFullYear()}
+                                            Safe-To-Spend • {MONTH_LABELS[selectedDate.getMonth()].toUpperCase()} {selectedDate.getFullYear()}
                                         </span>
 
                                         <button
@@ -1235,7 +1236,7 @@ export default function BudgetPage() {
                     </section>
 
                     {/* Feature 2: BUDGET LIMIT & PROGRESS BAR */}
-                    <section className={`${cardStyle} p-4 ${shadowStyle}`}>
+                    <section data-guide="budget-limit" className={`${cardStyle} p-4 ${shadowStyle} lg:col-start-1 lg:row-start-3`}>
                         <div
                             onClick={handleSetBudgetLimit}
                             className="cursor-pointer transition-all hover:opacity-80 active:scale-[0.98]"
@@ -1298,7 +1299,7 @@ export default function BudgetPage() {
                     </section>
 
                     {/* 2. ACTION BUTTONS */}
-                    <section className="grid grid-cols-2 gap-3">
+                    <section className="grid grid-cols-2 gap-3 lg:col-start-1 lg:row-start-4">
                         {/* Hidden File Input for AI Camera */}
                         <input
                             type="file"
@@ -1310,6 +1311,7 @@ export default function BudgetPage() {
                         />
 
                         <button
+                            data-guide="budget-scan"
                             onClick={() => setShowScanMethodModal(true)}
                             disabled={isScanning}
                             className={`col-span-2 py-4 text-sm ${buttonBase} ${darkMode ? "bg-indigo-600 border-white text-white shadow-none" : "bg-indigo-500 border-black text-white"} relative overflow-hidden`}
@@ -1330,16 +1332,16 @@ export default function BudgetPage() {
                             )}
                         </button>
 
-                        <button onClick={openNewModal} className={`py-3 text-[10px] ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"}`}>
+                        <button data-guide="budget-manual" onClick={openNewModal} className={`py-3 text-[10px] ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"}`}>
                             <Plus size={14} /> MANUAL INPUT
                         </button>
-                        <button onClick={() => setShowAnalytics(!showAnalytics)} className={`py-3 text-[10px] ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"} ${showAnalytics ? "bg-yellow-300 text-black border-black" : ""}`}>
+                        <button data-guide="budget-analytics" onClick={() => setShowAnalytics(!showAnalytics)} className={`py-3 text-[10px] ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"} ${showAnalytics ? "bg-yellow-300 text-black border-black" : ""}`}>
                             {showAnalytics ? "TUTUP DATA" : "ANALITIK"} <ScanLine size={14} />
                         </button>
                     </section>
 
                     {/* 3. RECENT TRANSACTIONS / ANALYTICS VIEW */}
-                    <section>
+                    <section className="lg:col-start-2 lg:row-start-1 lg:row-span-4">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                                 {showAnalytics ? <TrendingDown size={16} /> : <ShoppingBag size={16} />}
@@ -1466,15 +1468,15 @@ export default function BudgetPage() {
                                                     <div className="h-10 w-full flex rounded-xl border-2 border-black overflow-hidden bg-gray-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                                                         <div
                                                             className="h-full bg-red-700 flex items-center justify-center border-r-2 border-black"
-                                                            style={{ width: `${(totalCommitments / (totalCommitments + expenseMonth)) * 100}%` }}
+                                                            style={{ width: `${totalCommitments + expenseMonth > 0 ? (totalCommitments / (totalCommitments + expenseMonth)) * 100 : 0}%` }}
                                                         >
-                                                            <span className="text-[10px] font-black text-white">{((totalCommitments / (totalCommitments + expenseMonth)) * 100).toFixed(0)}%</span>
+                                                            <span className="text-[10px] font-black text-white">{(totalCommitments + expenseMonth > 0 ? (totalCommitments / (totalCommitments + expenseMonth)) * 100 : 0).toFixed(0)}%</span>
                                                         </div>
                                                         <div
                                                             className="h-full bg-orange-400 flex items-center justify-center"
-                                                            style={{ width: `${(expenseMonth / (totalCommitments + expenseMonth)) * 100}%` }}
+                                                            style={{ width: `${totalCommitments + expenseMonth > 0 ? (expenseMonth / (totalCommitments + expenseMonth)) * 100 : 0}%` }}
                                                         >
-                                                            <span className="text-[10px] font-black text-black">{((expenseMonth / (totalCommitments + expenseMonth)) * 100).toFixed(0)}%</span>
+                                                            <span className="text-[10px] font-black text-black">{(totalCommitments + expenseMonth > 0 ? (expenseMonth / (totalCommitments + expenseMonth)) * 100 : 0).toFixed(0)}%</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1483,7 +1485,6 @@ export default function BudgetPage() {
                                                 {(() => {
                                                     // Simple logic: Balance / Total Expenses (approximation of saving rate)
                                                     const income = balance + totalCommitments + expenseMonth; // Rough estimate of total in
-                                                    const totalOut = totalCommitments + expenseMonth;
                                                     const savingRate = income > 0 ? (balance / income) * 100 : 0;
 
                                                     const isHealthy = savingRate > 20;
@@ -1639,7 +1640,7 @@ export default function BudgetPage() {
                                 <div className="mt-6">
                                     <h4 className="text-xs font-black uppercase mb-3 opacity-70">Kalendar Belanja Harian</h4>
                                     {(() => {
-                                        const { dailyData, firstDayMonday, daysInMonth } = getDailyExpenses();
+                                        const { dailyData, firstDayMonday } = getDailyExpenses();
                                         const weekDays = ['I', 'S', 'R', 'K', 'J', 'S', 'A']; // Isnin-Ahad
 
                                         return (
@@ -1723,7 +1724,7 @@ export default function BudgetPage() {
                                     return (
                                         <div className={`${cardStyle} p-4 bg-indigo-50 border-indigo-200 mb-4 animate-in fade-in zoom-in-95`}>
                                             <div className="flex justify-between items-center mb-3">
-                                                <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-900">Ringkasan {selectedDate.toLocaleDateString('default', { month: 'short' })}</h3>
+                                                <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-900">Ringkasan {MONTH_LABELS[selectedDate.getMonth()]}</h3>
                                                 <TrendingDown size={14} className="text-indigo-600" />
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
@@ -1892,7 +1893,7 @@ export default function BudgetPage() {
                         }
                     </section >
 
-                    <div className="pt-8 pb-6 text-center space-y-4">
+                    <div className="pt-8 pb-6 text-center space-y-4 lg:col-span-2">
                         <button
                             onClick={handleResetData}
                             className={`mx-auto px-5 py-2 rounded-full border border-red-500 text-red-500 text-[9px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 ${darkMode ? "border-red-500 text-red-500 hover:bg-red-500 hover:text-white" : "border-red-500 text-red-500 hover:bg-red-500 hover:text-white"}`}
@@ -2566,46 +2567,6 @@ export default function BudgetPage() {
                     )
                 }
 
-                {/* --- LOGIN GUIDE MODAL (Google Unverified Warning) --- */}
-                {
-                    showLoginGuide && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-                            <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
-                                <button onClick={() => setShowLoginGuide(false)} className="absolute top-4 right-4 opacity-50 hover:opacity-100"><X size={20} /></button>
-
-                                <div className="text-center mb-4">
-                                    <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-3 border-2 border-black">
-                                        <AlertCircle size={32} className="text-yellow-600" />
-                                    </div>
-                                    <h2 className="text-lg font-black uppercase leading-tight text-red-500">Google Warning!</h2>
-                                    <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed">
-                                        App ni masih status "Beta" di Google. Anda mungkin nampak amaran keselamatan. Jangan risau, ini normal.
-                                    </p>
-                                </div>
-
-                                {/* Visual Guide (Kotak Arahan) */}
-                                <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-gray-50 border-black/10"}`}>
-                                    <p className="text-[9px] font-black uppercase opacity-50 mb-1">LANGKAH UNTUK LEPAS:</p>
-                                    <div className="flex items-start gap-3">
-                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
-                                        <p className="text-xs font-bold">Tekan link <span className="underline decoration-red-500 decoration-2">Advanced</span> di bawah kiri.</p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
-                                        <p className="text-xs font-bold">Tekan <span className="underline decoration-red-500 decoration-2">Go to Budget.AI (unsafe)</span>.</p>
-                                    </div>
-                                </div>
-
-                                <button onClick={openAuthOptions} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-blue-600 text-white border-black"}`}>
-                                    FAHAM, TERUSKAN LOGIN <ArrowRight size={14} />
-                                </button>
-
-                                <p className="text-[9px] text-center mt-3 opacity-40 font-bold">Kami tak simpan password anda.</p>
-                            </div>
-                        </div>
-                    )
-                }
-
                 {/* --- MODAL: BUDGET LIMIT --- */}
                 {
                     showBudgetLimitModal && (
@@ -2780,7 +2741,7 @@ export default function BudgetPage() {
                                                                 <Calendar size={20} />
                                                             </div>
                                                             <div>
-                                                                <p className="text-[9px] font-black uppercase opacity-60">Bulan Paling "Parah"</p>
+                                                                <p className="text-[9px] font-black uppercase opacity-60">Bulan Paling “Parah”</p>
                                                                 <h4 className="text-sm font-black uppercase">{peakMonthName}</h4>
                                                                 <p className="text-[10px] font-bold">Terpaksa lepaskan RM {peakMonthIdx ? Math.abs(peakMonthIdx[1]).toFixed(0) : "0"}</p>
                                                             </div>

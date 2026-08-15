@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-    Grid,
     Moon,
     Sun,
     ArrowLeft,
@@ -44,9 +44,7 @@ import {
     ShieldCheck,
     FileText,
     Lock,
-    Download,
     ExternalLink,
-    Briefcase,
     ListChecks,
     Circle,
     CheckCircle2,
@@ -54,8 +52,6 @@ import {
     CloudRain,
     Snowflake,
     Wind,
-    Thermometer,
-    Droplets,
 } from "lucide-react";
 import { useUser } from "@/lib/auth/client";
 import { uploadFileToBlob } from "@/lib/uploadClient";
@@ -204,7 +200,7 @@ const fetchExchangeRate = async (fromCurr: string, toCurr: string) => {
         if (!res.ok) return null;
         const data = await res.json();
         return data.rates?.[apiTo] || null;
-    } catch (e) {
+    } catch {
         return null;
     }
 };
@@ -215,6 +211,7 @@ export default function TripDetailPage({
     params: Promise<{ id: string }>;
 }) {
     const { id } = React.use(params);
+    const router = useRouter();
     // --- STATE ---
     const [darkMode, setDarkMode] = useState(false);
     const [activeTab, setActiveTab] = useState<
@@ -230,9 +227,7 @@ export default function TripDetailPage({
     const [copied, setCopied] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const stackUser = useUser();
-    const user = stackUser
-        ? { ...stackUser, email: stackUser.primaryEmail || "" }
-        : null;
+    const user = stackUser ?? null;
 
     // Document State
     const [showAddDocModal, setShowAddDocModal] = useState(false);
@@ -244,11 +239,6 @@ export default function TripDetailPage({
     // Checklist State
     const [showAddChecklistModal, setShowAddChecklistModal] = useState(false);
     const [newChecklistTitle, setNewChecklistTitle] = useState("");
-    const [newItemName, setNewItemName] = useState("");
-    const [activeChecklistId, setActiveChecklistId] = useState<string | null>(
-        null,
-    );
-
     // Offline Mode State
     const [isOffline, setIsOffline] = useState(false);
 
@@ -505,44 +495,17 @@ export default function TripDetailPage({
         }
     };
 
-    // --- EFFECT: LOAD DATA ---
-    useEffect(() => {
-        if (stackUser === undefined) return;
-        fetchTripData();
-    }, [id, stackUser]);
-
-    // Fetch weather for all itinerary items with locations (with rate limiting)
-    // Fetch weather for all itinerary items with locations (with rate limiting)
-    useEffect(() => {
-        if (items.length > 0) {
-            // Get unique location-date combinations
-            const uniqueMap = new Map();
-            items.forEach((item: any) => {
-                if (item.location && item.day_date) {
-                    const key = `${item.location}_${item.day_date}`;
-                    if (!uniqueMap.has(key)) {
-                        uniqueMap.set(key, { location: item.location, date: item.day_date });
-                    }
-                }
-            });
-
-            const uniqueItems = Array.from(uniqueMap.values());
-
-            // Fetch with delay to respect rate limits
-            uniqueItems.forEach((ld: any, index: number) => {
-                const key = `${ld.location}_${ld.date}`;
-                // Skip if already fetched or currently fetching
-                if (weatherData[key] || fetchingRef.current.has(key)) return;
-
-                fetchingRef.current.add(key);
-                setTimeout(() => {
-                    fetchWeather(ld.location, ld.date);
-                }, index * 800); // 800ms delay to be safe but faster
-            });
+    const fetchPersonalExpenses = useCallback(async () => {
+        try {
+            if (!user) return;
+            const data = await getPersonalExpenses(id);
+            setPersonalExpenses((data || []) as any[]);
+        } catch (error: any) {
+            console.error("Gagal load belanja peribadi:", error.message);
         }
-    }, [items]);
+    }, [id, user]);
 
-    const fetchTripData = async () => {
+    const fetchTripData = useCallback(async () => {
         console.log("Fetching trip with ID:", id);
         setLoading(true);
         try {
@@ -605,7 +568,13 @@ export default function TripDetailPage({
         } finally {
             setLoading(false);
         }
-    };
+    }, [fetchPersonalExpenses, id]);
+
+    // --- EFFECT: LOAD DATA ---
+    useEffect(() => {
+        if (stackUser === undefined) return;
+        void fetchTripData();
+    }, [fetchTripData, stackUser]);
 
     const copyToClipboard = (text: string, type: string) => {
         navigator.clipboard.writeText(text);
@@ -702,10 +671,9 @@ export default function TripDetailPage({
         }
     };
 
-    const fetchWeather = async (location: string, date: string) => {
+    const fetchWeather = useCallback(async (location: string, date: string) => {
         const key = `${location}_${date}`;
-        // Double check inside function in case state updated
-        if (!location || weatherData[key]) {
+        if (!location) {
             fetchingRef.current.delete(key);
             return;
         }
@@ -748,10 +716,7 @@ export default function TripDetailPage({
                     code: dailyData.daily.weathercode[dateIdx],
                 };
                 console.log("✅ Weather saved:", location, date, info);
-                setWeatherData((prev: any) => ({
-                    ...prev,
-                    [key]: info,
-                }));
+                setWeatherData((prev: any) => prev[key] ? prev : ({ ...prev, [key]: info }));
             } else {
                 console.log("⚠️ Date not found in forecast:", dateStr);
             }
@@ -760,7 +725,39 @@ export default function TripDetailPage({
         } finally {
             fetchingRef.current.delete(key);
         }
-    };
+    }, []);
+
+    // Fetch weather for unique itinerary location/date combinations.
+    useEffect(() => {
+        const fetchingKeys = fetchingRef.current;
+        const uniqueMap = new Map<string, { location: string; date: string }>();
+        items.forEach((item: any) => {
+            if (item.location && item.day_date) {
+                uniqueMap.set(`${item.location}_${item.day_date}`, {
+                    location: item.location,
+                    date: item.day_date,
+                });
+            }
+        });
+
+        const scheduled = new Map<ReturnType<typeof setTimeout>, string>();
+        Array.from(uniqueMap.values()).forEach((item, index) => {
+            const key = `${item.location}_${item.date}`;
+            if (weatherData[key] || fetchingKeys.has(key)) return;
+
+            fetchingKeys.add(key);
+            const timer = setTimeout(() => {
+                scheduled.delete(timer);
+                void fetchWeather(item.location, item.date);
+            }, index * 800);
+            scheduled.set(timer, key);
+        });
+
+        return () => scheduled.forEach((key, timer) => {
+            clearTimeout(timer);
+            fetchingKeys.delete(key);
+        });
+    }, [fetchWeather, items, weatherData]);
 
     const getWeatherIcon = (code: number) => {
         // Make sure to import these icons from 'lucide-react'
@@ -908,17 +905,7 @@ export default function TripDetailPage({
         localStorage.setItem("splitit_trip_import", JSON.stringify(importData));
 
         // Redirect to SplitIt with import flag
-        window.location.href = "/splitit?import=trip";
-    };
-
-    const fetchPersonalExpenses = async () => {
-        try {
-            if (!user) return;
-            const data = await getPersonalExpenses(id);
-            setPersonalExpenses((data || []) as any[]);
-        } catch (e: any) {
-            console.error("Gagal load belanja peribadi:", e.message);
-        }
+        router.push("/splitit?import=trip");
     };
 
     const handleAddDocument = async () => {
@@ -1124,7 +1111,6 @@ export default function TripDetailPage({
 
     // --- STYLES ---
     const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-50 text-black";
-    const cardStyle = `${darkMode ? "bg-[#1E1E1E] border-white" : "bg-white border-black"} border-2 rounded-2xl`;
     const tabActiveStyle = darkMode
         ? "bg-white text-black"
         : "bg-black text-white";
@@ -1293,7 +1279,6 @@ export default function TripDetailPage({
 
                                         return sortedDates.map((dateStr, idx) => {
                                             const isSelected = selectedDayIndex === idx;
-                                            const dateObj = new Date(dateStr);
                                             const dayNum = trip.start_date
                                                 ? Math.floor(
                                                     (new Date(dateStr).setHours(0, 0, 0, 0) -
@@ -2192,7 +2177,7 @@ export default function TripDetailPage({
                                     Travelers
                                 </h2>
                                 <p className="text-[10px] font-bold opacity-40 uppercase">
-                                    Manage who's on this adventure
+                                    Manage who’s on this adventure
                                 </p>
                             </div>
                             <button
@@ -2685,6 +2670,7 @@ export default function TripDetailPage({
                                     {editCoverImage ? (
                                         <img
                                             src={editCoverImage}
+                                            alt="Preview cover trip"
                                             className="w-full h-full object-cover"
                                         />
                                     ) : (
@@ -3203,7 +3189,7 @@ export default function TripDetailPage({
                                 className={`p-4 rounded-2xl border-2 ${darkMode ? "bg-white/5 border-white/10" : "bg-gray-50 border-black/5"}`}
                             >
                                 <p className="text-[9px] font-black uppercase opacity-40 mb-2">
-                                    What's going to happen:
+                                    What’s going to happen:
                                 </p>
                                 <ul className="space-y-2">
                                     <li className="flex items-center gap-2 text-[10px] font-bold uppercase">

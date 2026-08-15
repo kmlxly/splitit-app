@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { createAuthClient } from "@neondatabase/auth/next";
 
 export const authClient = createAuthClient();
@@ -22,17 +23,32 @@ export type AuthUser = {
  */
 export function useUser(): AuthUser | null | undefined {
   const { data, isPending } = authClient.useSession();
-  if (isPending) return undefined;
-  if (!data?.user) return null;
-  return {
-    id: data.user.id,
-    primaryEmail: data.user.email,
-    email: data.user.email,
-    displayName: data.user.name,
-    name: data.user.name,
-    imageUrl: data.user.image ?? null,
-    signOut: async () => {
-      await authClient.signOut();
-    },
-  };
+  const sessionUser = data?.user;
+  const userId = sessionUser?.id;
+  const userEmail = sessionUser?.email;
+  const userName = sessionUser?.name;
+  const userImage = sessionUser?.image;
+
+  return useMemo(() => {
+    if (isPending) return undefined;
+    if (!userId || !userEmail || !userName) return null;
+
+    return {
+      id: userId,
+      primaryEmail: userEmail,
+      email: userEmail,
+      displayName: userName,
+      name: userName,
+      imageUrl: userImage ?? null,
+      signOut: async () => {
+        await authClient.signOut();
+      },
+    };
+  }, [
+    isPending,
+    userEmail,
+    userId,
+    userImage,
+    userName,
+  ]);
 }

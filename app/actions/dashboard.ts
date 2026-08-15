@@ -2,11 +2,30 @@
 
 import { sql } from "@/lib/db";
 import { getServerUser } from "@/lib/auth/server";
+import { getDaysUntilBilling, type BillingCycle } from "@/lib/billing";
 
 type DashboardStats = {
   toCollect: number;
   pocketBalance: number;
   nextBill: string;
+};
+
+type SessionPerson = { id: string; name: string };
+type SessionRow = {
+  id: string;
+  owner_id: string;
+  people?: SessionPerson[];
+  paid_status?: Record<string, boolean>;
+};
+type BillRow = {
+  session_id: string;
+  paid_by: string;
+  details?: Array<{ personId: string; total: number | string }>;
+};
+type SubscriptionRow = {
+  title: string;
+  first_bill_date: string | null;
+  cycle: BillingCycle;
 };
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -32,24 +51,26 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   `;
 
   if (allSessions.length > 0) {
-    const sessionIds = allSessions.map((s: any) => s.id);
+    const sessions = allSessions as SessionRow[];
+    const sessionIds = sessions.map((session) => session.id);
     const myBills = await sql`
       SELECT * FROM public.bills WHERE session_id = ANY(${sessionIds}::text[])
     `;
+    const bills = myBills as BillRow[];
 
     let totalReceivable = 0;
     let totalPayable = 0;
 
-    allSessions.forEach((sess: any) => {
+    sessions.forEach((sess) => {
       const isOwner = sess.owner_id === userId;
       const people = sess.people || [];
       const paidStatus = sess.paid_status || {};
-      const peopleIds = people.map((p: any) => p.id);
+      const peopleIds = people.map((person) => person.id);
 
       // Robust identity check
       let myPersonId = isOwner ? "p1" : "";
-      const nameMatch = people.find((p: any) => {
-        const n = p.name.toLowerCase();
+      const nameMatch = people.find((person) => {
+        const n = person.name.toLowerCase();
         return n === "aku" || n === "me" || n === myEmailPrefix;
       });
       if (nameMatch) {
@@ -57,26 +78,27 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           myPersonId = nameMatch.id;
       }
       if (!myPersonId) {
-        const guest = people.find((p: any) => p.id !== "p1");
+        const guest = people.find((person) => person.id !== "p1");
         myPersonId = guest ? guest.id : people[0]?.id || "p1";
       }
 
-      const sessBills = myBills.filter((b: any) => b.session_id === sess.id);
+      const sessBills = bills.filter((bill) => bill.session_id === sess.id);
       const debtMap: Record<string, Record<string, number>> = {};
       peopleIds.forEach((id: string) => (debtMap[id] = {}));
 
-      sessBills.forEach((b: any) => {
-        const payerId = b.paid_by;
+      sessBills.forEach((bill) => {
+        const payerId = bill.paid_by;
         if (!debtMap[payerId]) return;
-        b.details?.forEach((d: any) => {
-          const consumerId = d.personId;
+        bill.details?.forEach((detail) => {
+          const consumerId = detail.personId;
+          const detailTotal = Number(detail.total);
           if (
             consumerId !== payerId &&
-            d.total > 0 &&
+            detailTotal > 0 &&
             debtMap[consumerId]
           ) {
             debtMap[consumerId][payerId] =
-              (debtMap[consumerId][payerId] || 0) + Number(d.total);
+              (debtMap[consumerId][payerId] || 0) + detailTotal;
           }
         });
       });
@@ -123,7 +145,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       AND iso_date <= ${currentMonthStr + "-31"}
   `;
   finalPocketBalance = budgetRows.reduce(
-    (acc: number, curr: any) => acc + Number(curr.amount || 0),
+    (acc, curr) => acc + Number(curr.amount || 0),
     0,
   );
 
@@ -132,31 +154,18 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     SELECT * FROM public.subscriptions WHERE user_id = ${userId}
   `;
   if (subRows.length > 0) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     let nearestDays = Infinity;
-    let nearestSub: any = null;
+    let nearestSub: SubscriptionRow | null = null;
 
-    subRows.forEach((sub: any) => {
-      if (!sub.first_bill_date) return;
-      const due = new Date(sub.first_bill_date);
-      due.setHours(0, 0, 0, 0);
-      let diffDays = Math.ceil(
-        (due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      if (sub.cycle === "Monthly" && diffDays < 0) {
-        const nextMonth = new Date(due);
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        if (nextMonth.getDate() !== due.getDate()) nextMonth.setDate(0);
-        diffDays = Math.ceil(
-          (nextMonth.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-        );
-      }
+    for (const sub of subRows as SubscriptionRow[]) {
+      if (!sub.first_bill_date) continue;
+      const diffDays = getDaysUntilBilling(sub.first_bill_date, sub.cycle);
+      if (diffDays === null) continue;
       if (diffDays >= 0 && diffDays < nearestDays) {
         nearestDays = diffDays;
         nearestSub = sub;
       }
-    });
+    }
     if (nearestSub) {
       const label = nearestDays === 0 ? "HARI NI!" : `${nearestDays} hari`;
       finalNextBill = `${nearestSub.title} (${label})`;

@@ -44,7 +44,6 @@ Required keys:
 - `NEON_AUTH_COOKIE_SECRET` — random string from `openssl rand -base64 32` (≥ 32 chars)
 - `BLOB_READ_WRITE_TOKEN` — from Vercel Blob
 - `OPENROUTER_API_KEY` — for AI features
-- `NEXT_PUBLIC_GEMINI_API_KEY` — for receipt scanning
 
 ## 5. Run
 
@@ -60,6 +59,6 @@ Open `http://localhost:3000`.
 - **Auth** — `@neondatabase/auth` (Better Auth under the hood). Server actions read the session via `getServerUser()` / `requireServerUser()` from `lib/auth/server.ts`. Client components use `useUser()` from `lib/auth/client.ts`.
 - **Auth API route** — `app/api/auth/[...path]/route.ts` proxies all auth traffic to your Neon Auth instance.
 - **User table** — Neon Auth creates and manages a `neon_auth.user` table automatically (you can introspect it from the SQL Editor or via Drizzle). Our application tables store the user id in a plain `TEXT` column (`user_id`, `owner_id`, `auth_id`) — we do **not** enforce a foreign key so Neon Auth can manage its own schema independently.
-- **Authorization** — RLS has been removed. Every server action calls `requireServerUser()` and filters by `user.id`.
+- **Authorization** — RLS has been removed. Server actions use the helpers in `lib/authorization.ts` to enforce resource ownership or trip roles (`owner`, `editor`, `viewer`).
 - **Realtime** — Supabase Realtime has been replaced with simple polling (`setInterval`) every 5–15 seconds in dashboards/lists.
-- **Storage** — Supabase Storage has been replaced with Vercel Blob, uploaded through `/api/upload` (which authenticates first via Neon Auth).
+- **Storage** — Supabase Storage has been replaced with Vercel Blob. Trip documents are uploaded as private blobs and served through the authorized `/api/documents/[id]` proxy.

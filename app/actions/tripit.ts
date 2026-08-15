@@ -2,6 +2,16 @@
 
 import { sql } from "@/lib/db";
 import { requireServerUser } from "@/lib/auth/server";
+import { del } from "@vercel/blob";
+import {
+  requireOwnPersonalExpense,
+  requireTripChecklistItemRole,
+  requireTripChecklistRole,
+  requireTripDocumentRole,
+  requireTripItemRole,
+  requireTripMemberRole,
+  requireTripRole,
+} from "@/lib/authorization";
 
 const requireUser = requireServerUser;
 
@@ -19,6 +29,7 @@ export async function getMyTrips() {
 
 export async function getTripById(tripId: string) {
   const user = await requireUser();
+  await requireTripRole(user.id, tripId);
   const trips = await sql`
     SELECT * FROM public.trips WHERE id = ${tripId}::uuid
   `;
@@ -73,7 +84,8 @@ export async function updateTrip(
     destination_currency?: string;
   },
 ) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripRole(user.id, tripId, ["owner"]);
   await sql`
     UPDATE public.trips SET
       name = ${payload.name},
@@ -89,7 +101,8 @@ export async function updateTrip(
 }
 
 export async function updateTripCover(tripId: string, coverUrl: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripRole(user.id, tripId, ["owner"]);
   await sql`
     UPDATE public.trips SET cover_image = ${coverUrl}
     WHERE id = ${tripId}::uuid
@@ -108,7 +121,8 @@ export async function deleteTrip(tripId: string) {
 
 // ============ TRIP ITEMS ============
 export async function getTripItems(tripId: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripRole(user.id, tripId);
   const rows = await sql`
     SELECT * FROM public.trip_items
     WHERE trip_id = ${tripId}::uuid
@@ -130,7 +144,8 @@ export async function addTripItem(payload: {
   original_amount?: number;
   exchange_rate?: number;
 }) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripRole(user.id, payload.trip_id, ["owner", "editor"]);
   const rows = await sql`
     INSERT INTO public.trip_items
       (trip_id, title, type, location, start_time, day_date, color, cost,
@@ -163,7 +178,8 @@ export async function updateTripItem(
     exchange_rate?: number;
   },
 ) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripItemRole(user.id, itemId, ["owner", "editor"]);
   await sql`
     UPDATE public.trip_items SET
       title = ${payload.title},
@@ -185,7 +201,8 @@ export async function toggleTripItemComplete(
   itemId: string,
   newStatus: boolean,
 ) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripItemRole(user.id, itemId, ["owner", "editor"]);
   await sql`
     UPDATE public.trip_items SET is_completed = ${newStatus}
     WHERE id = ${itemId}::uuid
@@ -194,7 +211,8 @@ export async function toggleTripItemComplete(
 }
 
 export async function deleteTripItem(itemId: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripItemRole(user.id, itemId, ["owner", "editor"]);
   await sql`
     DELETE FROM public.trip_items WHERE id = ${itemId}::uuid
   `;
@@ -203,7 +221,8 @@ export async function deleteTripItem(itemId: string) {
 
 // ============ TRIP MEMBERS ============
 export async function getTripMembers(tripId: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripRole(user.id, tripId);
   const rows = await sql`
     SELECT * FROM public.trip_members
     WHERE trip_id = ${tripId}::uuid
@@ -212,7 +231,8 @@ export async function getTripMembers(tripId: string) {
 }
 
 export async function addTripMember(tripId: string, name: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripRole(user.id, tripId, ["owner"]);
   const rows = await sql`
     INSERT INTO public.trip_members (trip_id, name, role)
     VALUES (${tripId}::uuid, ${name}, 'editor')
@@ -222,22 +242,35 @@ export async function addTripMember(tripId: string, name: string) {
 }
 
 export async function removeTripMember(memberId: string) {
-  await requireUser();
-  await sql`
-    DELETE FROM public.trip_members WHERE id = ${memberId}::uuid
+  const user = await requireUser();
+  await requireTripMemberRole(user.id, memberId, ["owner"]);
+  const rows = await sql`
+    DELETE FROM public.trip_members
+    WHERE id = ${memberId}::uuid AND role <> 'owner'
+    RETURNING id
   `;
+  if (rows.length === 0) throw new Error("Pemilik trip tidak boleh dibuang.");
   return { success: true };
 }
 
 // ============ TRIP DOCUMENTS ============
 export async function getTripDocuments(tripId: string) {
-  await requireUser();
+  const user = await requireUser();
+  const role = await requireTripRole(user.id, tripId);
   const rows = await sql`
     SELECT * FROM public.trip_documents
     WHERE trip_id = ${tripId}::uuid
+      AND (
+        is_private = FALSE
+        OR user_id = ${user.id}
+        OR ${role} = 'owner'
+      )
     ORDER BY created_at DESC
   `;
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    file_url: `/api/documents/${row.id}`,
+  }));
 }
 
 export async function addTripDocument(payload: {
@@ -248,26 +281,47 @@ export async function addTripDocument(payload: {
   is_private?: boolean;
 }) {
   const user = await requireUser();
+  await requireTripRole(user.id, payload.trip_id, ["owner", "editor"]);
   const rows = await sql`
     INSERT INTO public.trip_documents (trip_id, user_id, title, file_url, type, is_private)
     VALUES (${payload.trip_id}::uuid, ${user.id}, ${payload.title},
             ${payload.file_url}, ${payload.type}, ${payload.is_private ?? false})
     RETURNING *
   `;
-  return rows[0];
+  return {
+    ...rows[0],
+    file_url: `/api/documents/${rows[0].id}`,
+  };
 }
 
 export async function deleteTripDocument(docId: string) {
-  await requireUser();
-  await sql`
-    DELETE FROM public.trip_documents WHERE id = ${docId}::uuid
+  const user = await requireUser();
+  const role = await requireTripDocumentRole(user.id, docId, [
+    "owner",
+    "editor",
+  ]);
+  const rows = await sql`
+    DELETE FROM public.trip_documents
+    WHERE id = ${docId}::uuid
+      AND (${role} = 'owner' OR user_id = ${user.id})
+    RETURNING id, file_url
   `;
+  if (rows.length === 0) {
+    throw new Error("Hanya pemilik dokumen atau pemilik trip boleh memadamnya.");
+  }
+  const fileUrl = rows[0]?.file_url as string | undefined;
+  if (fileUrl) {
+    await del(fileUrl).catch((error: unknown) => {
+      console.error("Gagal memadam fail Blob:", error);
+    });
+  }
   return { success: true };
 }
 
 // ============ TRIP CHECKLISTS ============
 export async function getTripChecklists(tripId: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripRole(user.id, tripId);
   const checklists = await sql`
     SELECT * FROM public.trip_checklists
     WHERE trip_id = ${tripId}::uuid
@@ -275,21 +329,22 @@ export async function getTripChecklists(tripId: string) {
   `;
   if (checklists.length === 0) return [];
 
-  const checklistIds = checklists.map((c: any) => c.id);
+  const checklistIds = checklists.map((checklist) => checklist.id);
   const items = await sql`
     SELECT * FROM public.trip_checklist_items
     WHERE checklist_id = ANY(${checklistIds}::uuid[])
     ORDER BY created_at ASC
   `;
 
-  return checklists.map((cl: any) => ({
-    ...cl,
-    trip_checklist_items: items.filter((it: any) => it.checklist_id === cl.id),
+  return checklists.map((checklist) => ({
+    ...checklist,
+    trip_checklist_items: items.filter((item) => item.checklist_id === checklist.id),
   }));
 }
 
 export async function addChecklist(tripId: string, title: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripRole(user.id, tripId, ["owner", "editor"]);
   const rows = await sql`
     INSERT INTO public.trip_checklists (trip_id, title)
     VALUES (${tripId}::uuid, ${title})
@@ -302,7 +357,8 @@ export async function addChecklistItem(
   checklistId: string,
   itemName: string,
 ) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripChecklistRole(user.id, checklistId, ["owner", "editor"]);
   const rows = await sql`
     INSERT INTO public.trip_checklist_items (checklist_id, item_name)
     VALUES (${checklistId}::uuid, ${itemName})
@@ -316,6 +372,7 @@ export async function toggleChecklistItem(
   newStatus: boolean,
 ) {
   const user = await requireUser();
+  await requireTripChecklistItemRole(user.id, itemId, ["owner", "editor"]);
   await sql`
     UPDATE public.trip_checklist_items
     SET is_checked = ${newStatus}, checked_by = ${user.id}
@@ -325,7 +382,8 @@ export async function toggleChecklistItem(
 }
 
 export async function deleteChecklist(checklistId: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripChecklistRole(user.id, checklistId, ["owner", "editor"]);
   await sql`
     DELETE FROM public.trip_checklists WHERE id = ${checklistId}::uuid
   `;
@@ -333,7 +391,8 @@ export async function deleteChecklist(checklistId: string) {
 }
 
 export async function deleteChecklistItem(itemId: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireTripChecklistItemRole(user.id, itemId, ["owner", "editor"]);
   await sql`
     DELETE FROM public.trip_checklist_items WHERE id = ${itemId}::uuid
   `;
@@ -343,6 +402,7 @@ export async function deleteChecklistItem(itemId: string) {
 // ============ PERSONAL EXPENSES ============
 export async function getPersonalExpenses(tripId: string) {
   const user = await requireUser();
+  await requireTripRole(user.id, tripId);
   const rows = await sql`
     SELECT * FROM public.trip_personal_expenses
     WHERE trip_id = ${tripId}::uuid AND user_id = ${user.id}
@@ -361,6 +421,7 @@ export async function addPersonalExpense(payload: {
   exchange_rate?: number;
 }) {
   const user = await requireUser();
+  await requireTripRole(user.id, payload.trip_id);
   const rows = await sql`
     INSERT INTO public.trip_personal_expenses
       (trip_id, user_id, title, amount, category, original_currency, original_amount, exchange_rate)
@@ -376,9 +437,11 @@ export async function addPersonalExpense(payload: {
 }
 
 export async function deletePersonalExpense(expenseId: string) {
-  await requireUser();
+  const user = await requireUser();
+  await requireOwnPersonalExpense(user.id, expenseId);
   await sql`
-    DELETE FROM public.trip_personal_expenses WHERE id = ${expenseId}::uuid
+    DELETE FROM public.trip_personal_expenses
+    WHERE id = ${expenseId}::uuid AND user_id = ${user.id}
   `;
   return { success: true };
 }
