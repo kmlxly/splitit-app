@@ -11,6 +11,7 @@ import {
 import { useUser, authClient } from "@/lib/auth/client";
 import AuthModal from "@/components/Auth";
 import WelcomeScreen from "@/components/WelcomeScreen";
+import MobileBottomDock from "@/components/MobileBottomDock";
 import { getDashboardStats } from "@/app/actions/dashboard";
 
 export default function Home() {
@@ -407,53 +408,7 @@ export default function Home() {
       </div>
 
       {/* FLOATING BOTTOM DOCK NAVIGATION (MOBILE FIRST) */}
-      <nav
-        className={`fixed bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm py-2 px-3 rounded-full border-2 backdrop-blur-xl flex items-center justify-between z-40 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
-          darkMode ? "bg-[#18181B]/95 border-white text-white" : "bg-white/95 border-black text-black"
-        }`}
-      >
-        <Link
-          href="/"
-          className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 text-[10px] font-black uppercase transition-all ${
-            darkMode ? "bg-white text-black shadow-sm" : "bg-black text-white shadow-sm"
-          }`}
-        >
-          <Grid size={13} />
-          <span>Home</span>
-        </Link>
-
-        <Link
-          href="/splitit"
-          className="p-2 rounded-full hover:bg-current/10 transition-colors opacity-70 hover:opacity-100"
-          title="SplitIt"
-        >
-          <Receipt size={17} />
-        </Link>
-
-        <Link
-          href="/budget"
-          className="p-2 rounded-full hover:bg-current/10 transition-colors opacity-70 hover:opacity-100"
-          title="Budget.AI"
-        >
-          <Wallet size={17} />
-        </Link>
-
-        <Link
-          href="/tripit"
-          className="p-2 rounded-full hover:bg-current/10 transition-colors opacity-70 hover:opacity-100"
-          title="TripIt"
-        >
-          <Plane size={17} />
-        </Link>
-
-        <Link
-          href="/sub-tracker"
-          className="p-2 rounded-full hover:bg-current/10 transition-colors opacity-70 hover:opacity-100"
-          title="Sub.Tracker"
-        >
-          <RefreshCw size={17} />
-        </Link>
-      </nav>
+      <MobileBottomDock activeTab="home" darkMode={darkMode} />
 
       {/* MODAL: AUTHENTICATION */}
       <AuthModal

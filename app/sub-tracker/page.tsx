@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import AuthModal from "@/components/Auth";
 import AppOnboarding, { APP_ONBOARDING_STEPS } from "@/components/AppOnboarding";
+import MobileBottomDock from "@/components/MobileBottomDock";
 import { createNumericId } from "@/lib/clientIds";
 import { useUser } from "@/lib/auth/client";
 import {
@@ -379,11 +380,11 @@ export default function SubTrackerPage() {
     };
 
     // --- STYLES (NEO-BRUTALISM SHARED) ---
-    const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-200 text-black";
-    const cardStyle = `${darkMode ? "bg-[#1E1E1E] border-white" : "bg-white border-black"} border-2 rounded-2xl`;
-    const shadowStyle = darkMode ? "" : "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]";
-    const buttonBase = `border-2 font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"} ${shadowStyle} hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]`;
-    const inputStyle = `w-full p-2.5 rounded-xl border-2 outline-none font-bold text-sm ${darkMode ? "bg-black border-white text-white focus:bg-white/10" : "bg-white border-black focus:bg-yellow-50"}`;
+    const bgStyle = darkMode ? "bg-[#121214] text-white" : "bg-[#F4F5F7] text-black";
+    const cardStyle = `${darkMode ? "bg-[#18181B] border-white/20" : "bg-white border-black"} border-2 rounded-3xl`;
+    const shadowStyle = darkMode ? "shadow-[3px_3px_0px_0px_rgba(255,255,255,0.15)]" : "shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]";
+    const buttonBase = `border-2 font-black uppercase tracking-wider rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"} ${shadowStyle} hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]`;
+    const inputStyle = `w-full p-2.5 rounded-2xl border-2 outline-none font-bold text-sm ${darkMode ? "bg-[#121214] border-white/30 text-white focus:border-white" : "bg-white border-black/30 text-black focus:border-black"}`;
 
     // Category options based on type
     const commitmentCategories: Subscription["category"][] = ["Loan", "Insurance", "Savings", "Bills", "Utility"];
@@ -398,10 +399,10 @@ export default function SubTrackerPage() {
                 darkMode={darkMode}
                 accentClassName="bg-pink-400"
             />
-            <div className="max-w-md mx-auto min-h-screen flex flex-col relative">
+            <div className="max-w-md mx-auto min-h-screen flex flex-col relative pb-28">
 
                 {/* --- HEADER (Matched with Budget.AI) --- */}
-                <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
+                <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white/20 bg-[#121214]" : "border-black bg-[#F4F5F7]"}`}>
                     <div className="flex justify-between items-center">
 
                         {/* 1. KIRI: Logo & Info (Vertical Stack) */}
@@ -957,6 +958,7 @@ export default function SubTrackerPage() {
                     </div>
                 )}
 
+                <MobileBottomDock activeTab="subtracker" darkMode={darkMode} />
             </div>
         </div>
     );

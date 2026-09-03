@@ -18,6 +18,7 @@ import {
 } from "@/app/actions/tripit";
 import AuthModal from "@/components/Auth";
 import AppOnboarding, { APP_ONBOARDING_STEPS } from "@/components/AppOnboarding";
+import MobileBottomDock from "@/components/MobileBottomDock";
 
 const API_TO_SYMBOL: Record<string, string> = {
     "MYR": "RM", "THB": "฿", "IDR": "Rp", "SGD": "S$", "VND": "₫", "PHP": "₱",
@@ -311,7 +312,7 @@ export default function TripListPage() {
     };
 
     // --- STYLES ---
-    const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-50 text-black";
+    const bgStyle = darkMode ? "bg-[#121214] text-white" : "bg-[#F4F5F7] text-black";
 
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
@@ -322,10 +323,10 @@ export default function TripListPage() {
                 darkMode={darkMode}
                 accentClassName="bg-indigo-400"
             />
-            <div className="max-w-md mx-auto min-h-screen flex flex-col relative">
+            <div className="max-w-md mx-auto min-h-screen flex flex-col relative pb-28">
 
                 {/* --- HEADER --- */}
-                <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white bg-black" : "border-black bg-white"}`}>
+                <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white/20 bg-[#121214]" : "border-black bg-[#F4F5F7]"}`}>
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
                             <Link href="/" className={`p-2 rounded-xl border-2 transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`}>
@@ -343,7 +344,7 @@ export default function TripListPage() {
                 </header>
 
                 {/* --- MAIN CONTENT --- */}
-                <main className="flex-1 p-4 flex flex-col gap-4">
+                <main className="flex-1 p-4 pb-28 flex flex-col gap-4">
 
                     {/* NEW TRIP BUTTON */}
                     <button
@@ -778,6 +779,7 @@ export default function TripListPage() {
             )}
 
             <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} isDarkMode={darkMode} />
+            <MobileBottomDock activeTab="tripit" darkMode={darkMode} />
         </div>
     );
 }

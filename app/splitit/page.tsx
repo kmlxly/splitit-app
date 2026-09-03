@@ -19,6 +19,7 @@ import {
     getBillsForSession,
 } from "@/app/actions/splitit";
 import { expandScannedItems, resolveDetectedBillTotal } from "@/lib/receiptScanner";
+import MobileBottomDock from "@/components/MobileBottomDock";
 import {
     Moon, Sun, CheckCircle, Trash2,
     Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X,
@@ -1438,13 +1439,13 @@ function SplitItContent() {
     };
 
     // --- STYLES ---
-    const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-200 text-black";
-    const cardStyle = `${darkMode ? "bg-[#1E1E1E] border-white" : "bg-white border-black"} border-2 rounded-2xl`;
-    const shadowStyle = darkMode ? "" : "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]";
-    const buttonBase = `border-2 font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"} ${shadowStyle} hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]`;
-    const inputStyle = `w-full p-3 rounded-xl bg-transparent border-2 outline-none font-bold transition-all focus:ring-0 ${darkMode ? "border-white focus:border-lime-300 placeholder:text-white/50" : "border-black focus:border-blue-500 placeholder:text-black/50"}`;
+    const bgStyle = darkMode ? "bg-[#121214] text-white" : "bg-[#F4F5F7] text-black";
+    const cardStyle = `${darkMode ? "bg-[#18181B] border-white/20" : "bg-white border-black"} border-2 rounded-3xl`;
+    const shadowStyle = darkMode ? "shadow-[3px_3px_0px_0px_rgba(255,255,255,0.15)]" : "shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]";
+    const buttonBase = `border-2 font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"} ${shadowStyle} hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]`;
+    const inputStyle = `w-full p-3 rounded-2xl bg-transparent border-2 outline-none font-bold transition-all focus:ring-0 ${darkMode ? "border-white/30 focus:border-white placeholder:text-white/40" : "border-black/30 focus:border-black placeholder:text-black/40"}`;
 
-    if (!isLoaded) return <div className="min-h-screen bg-gray-200 flex items-center justify-center"><Loader2 className="animate-spin text-black" /></div>;
+    if (!isLoaded) return <div className={`min-h-screen ${bgStyle} flex items-center justify-center`}><Loader2 className="animate-spin text-current" /></div>;
 
     // --- MANUAL SYNC DEBUGGER ---
     const forceSync = async () => {
@@ -1487,14 +1488,8 @@ function SplitItContent() {
             />
             <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
 
-
-
-
-
-
-
                 {/* HEADER - MATCHING BUDGET.AI STYLE */}
-                <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 relative z-10 transition-colors duration-300 ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
+                <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 relative z-10 transition-colors duration-300 ${darkMode ? "border-white/20 bg-[#121214]" : "border-black bg-[#F4F5F7]"}`}>
                     <div className="flex justify-between items-center">
 
                         {/* 1. KIRI: Logo & Info (Vertical Stack) */}
@@ -1561,7 +1556,7 @@ function SplitItContent() {
                     </div>
                 </header>
 
-                <main className="flex-1 p-6 flex flex-col gap-8 relative z-10">
+                <main className="flex-1 p-4 sm:p-6 pb-28 flex flex-col gap-6 relative z-10">
                     {/* DASHBOARD */}
                     {mode === "DASHBOARD" && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -2248,7 +2243,8 @@ function SplitItContent() {
                         isDarkMode={darkMode}
                     />
                 </main>
-            </div >
+                <MobileBottomDock activeTab="splitit" darkMode={darkMode} />
+            </div>
         </div >
     );
 }
