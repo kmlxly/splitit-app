@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  Grid, Layout, Moon, Sun, ArrowUpRight,
+  Grid, Moon, Sun, ArrowUpRight,
   LogIn, LogOut, User, Loader2,
-  X,
-  Wallet, HelpCircle, ChevronDown, ChevronUp,
-  ArrowDownLeft, CalendarClock, Lock, RefreshCw, Plane, // Tambah icons untuk Quick Stats
+  X, Wallet, HelpCircle, ChevronDown, ChevronUp,
+  Receipt, RefreshCw, Plane, AlertCircle, Sparkles, ChevronRight, Check
 } from "lucide-react";
-import { useUser } from "@/lib/auth/client";
+import { useUser, authClient } from "@/lib/auth/client";
 import AuthModal from "@/components/Auth";
+import WelcomeScreen from "@/components/WelcomeScreen";
 import { getDashboardStats } from "@/app/actions/dashboard";
 
 export default function Home() {
@@ -22,14 +22,13 @@ export default function Home() {
     ? { user: { ...user, email: user.primaryEmail || "" } }
     : null;
 
-  // State untuk Modal Login
+  // Guest & Welcome Flow State
+  const [guestDismissed, setGuestDismissed] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
-
-  // State untuk User Guide
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [activeGuideTab, setActiveGuideTab] = useState("splitit");
 
-  // Quick Stats State (Supabase Connected)
+  // Dashboard Stats State
   const [stats, setStats] = useState({
     toCollect: 0,
     pocketBalance: 0,
@@ -38,10 +37,9 @@ export default function Home() {
   const [, setLoadingStats] = useState(true);
 
   // --- FUNCTION: Load Stats via Server Action ---
-  const loadStats = React.useCallback(async () => {
+  const loadStats = useCallback(async () => {
     if (!user) return;
     setLoadingStats(true);
-
     try {
       const data = await getDashboardStats();
       setStats(data);
@@ -52,13 +50,16 @@ export default function Home() {
     }
   }, [user]);
 
-  // --- EFFECT: Dark Mode init ---
+  // --- EFFECT: Dark Mode & Guest Session Init ---
   useEffect(() => {
     const savedMode = localStorage.getItem("splitit_darkmode");
     if (savedMode !== null) setDarkMode(savedMode === "true");
+
+    const savedGuest = sessionStorage.getItem("kmlxly_guest_dismissed");
+    if (savedGuest === "true") setGuestDismissed(true);
   }, []);
 
-  // --- EFFECT: Stats Loading on Mount + on Tab Focus / Visibility ---
+  // --- EFFECT: Stats Loading on Mount + on Focus ---
   useEffect(() => {
     if (!user) return;
     loadStats();
@@ -86,350 +87,515 @@ export default function Home() {
   };
 
   const handleLogout = async () => {
-    const confirm = window.confirm("Nak logout ke?");
+    const confirm = window.confirm("Adakah anda pasti mahu log keluar?");
     if (confirm && user) {
       await user.signOut();
+      sessionStorage.removeItem("kmlxly_guest_dismissed");
+      setGuestDismissed(false);
     }
   };
 
-  // --- LOGIN FLOW ---
-  const handleLoginClick = () => {
-    setShowLoginModal(true);
+  const handleGoogleLogin = async () => {
+    try {
+      const callbackURL = typeof window !== "undefined" ? window.location.pathname : "/";
+      await authClient.signIn.social({
+        provider: "google",
+        callbackURL,
+      });
+    } catch (err) {
+      console.error("Google login error:", err);
+      setShowLoginModal(true);
+    }
   };
 
-  // --- STYLES ---
-  const bgStyle = darkMode ? "bg-black text-white" : "bg-gray-200 text-black";
+  const handleContinueGuest = () => {
+    setGuestDismissed(true);
+    sessionStorage.setItem("kmlxly_guest_dismissed", "true");
+  };
 
-  // Style Kad Link (Boleh Klik)
-  const cardStyle = `group relative border-2 rounded-2xl p-6 transition-all hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-[#1E1E1E] border-white hover:bg-[#252525]" : "bg-white border-black hover:bg-gray-50"}`;
+  // --- 1. WELCOME SCREEN (Shown to unauthenticated guests who haven't dismissed) ---
+  if (!session && !loadingSession && !guestDismissed) {
+    return (
+      <WelcomeScreen
+        onLoginGoogle={handleGoogleLogin}
+        onOpenEmailAuth={() => setShowLoginModal(true)}
+        onContinueGuest={handleContinueGuest}
+        isDarkMode={darkMode}
+      />
+    );
+  }
 
-  const btnStyle = `p-2 rounded-lg border-2 flex items-center justify-center gap-2 text-xs font-bold transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`;
+  // --- 2. MAIN MOBILE HOME DASHBOARD ---
+  const bgClass = darkMode ? "bg-[#121214] text-white" : "bg-[#F4F5F7] text-black";
 
   return (
-    <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle} flex flex-col`}>
+    <div className={`min-h-screen w-full transition-colors duration-200 ${bgClass} font-sans`}>
+      <div className="max-w-md mx-auto min-h-screen flex flex-col justify-between px-4 pb-28 pt-[calc(env(safe-area-inset-top)+0.75rem)] space-y-5 relative">
 
-      {/* HEADER */}
-      <header className={`px-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-6 border-b-2 flex justify-between items-center ${darkMode ? "border-white bg-black" : "border-black bg-gray-200"}`}>
-
-        {/* Logo Area */}
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 border-2 rounded-lg flex items-center justify-center ${darkMode ? "bg-white border-white" : "bg-black border-black"}`}>
-            <Grid size={20} className={darkMode ? "text-black" : "text-white"} />
-          </div>
-          <div>
-            <h1 className="text-xl font-black uppercase tracking-tighter leading-none">Kmlxly Apps.</h1>
-            {/* Status Login */}
-            {session ? (
-              <p className="text-[10px] font-bold text-green-500 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                ONLINE
+        {/* TOP MOBILE APP BAR */}
+        <header className="flex items-center justify-between pt-1">
+          {/* User Profile / Greeting */}
+          <div className="flex items-center gap-2.5">
+            <div className={`w-9 h-9 rounded-2xl border-2 flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+              darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"
+            }`}>
+              {session?.user.email ? session.user.email[0].toUpperCase() : "G"}
+            </div>
+            <div>
+              <h1 className="text-sm font-black uppercase tracking-tight leading-none">
+                {session ? `Hi, ${session.user.email.split("@")[0]}!` : "Hai, Geng!"}
+              </h1>
+              <p className="text-[10px] font-bold opacity-50 uppercase tracking-wider mt-0.5">
+                {session ? "Cloud Synced" : "Guest Mode"}
               </p>
+            </div>
+          </div>
+
+          {/* Right Action Pills */}
+          <div className="flex items-center gap-1.5">
+            {loadingSession ? (
+              <div className="p-2 rounded-full border-2">
+                <Loader2 size={14} className="animate-spin" />
+              </div>
+            ) : session ? (
+              <button
+                onClick={handleLogout}
+                className={`px-2.5 py-1.5 rounded-full border-2 text-[10px] font-black uppercase flex items-center gap-1 transition-all active:scale-95 ${
+                  darkMode ? "border-white/30 hover:border-white text-white" : "border-black/30 hover:border-black text-black"
+                }`}
+                title="Log Keluar"
+              >
+                <User size={12} />
+                <LogOut size={11} className="opacity-60" />
+              </button>
             ) : (
-              <p className="text-[10px] font-bold opacity-50">GUEST MODE</p>
+              <button
+                onClick={() => setShowLoginModal(true)}
+                className="px-3 py-1.5 rounded-full border-2 text-[10px] font-black uppercase bg-[#FF6B55] text-black border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+              >
+                MASUK
+              </button>
             )}
+
+            {/* Help Button */}
+            <button
+              onClick={() => setShowHelpModal(true)}
+              className={`p-2 rounded-full border-2 transition-all active:scale-95 ${
+                darkMode ? "border-white/30 text-white hover:border-white" : "border-black/30 text-black hover:border-black"
+              }`}
+              aria-label="Bantuan"
+            >
+              <HelpCircle size={15} />
+            </button>
+
+            {/* Dark / Light Toggle */}
+            <button
+              onClick={toggleDarkMode}
+              className={`p-2 rounded-full border-2 transition-all active:scale-95 ${
+                darkMode ? "border-white/30 text-white hover:border-white" : "border-black/30 text-black hover:border-black"
+              }`}
+              aria-label="Tukar tema"
+            >
+              {darkMode ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+          </div>
+        </header>
+
+        {/* SMART FINANCE STATUS CARD (DRIBBBLE 'STABILIZING LABOR COST' INSPIRED) */}
+        <div className={`p-4 rounded-3xl border-2 transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${
+          darkMode ? "bg-[#18181B] border-white/20 text-white" : "bg-black text-white border-black"
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-2xl bg-amber-400 text-black flex items-center justify-center font-black border-2 border-amber-300">
+                <AlertCircle size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">FINANCE RADAR</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                </div>
+                <p className="text-xs font-bold leading-tight mt-0.5">
+                  {session
+                    ? (stats.toCollect !== 0
+                        ? (stats.toCollect > 0 ? `RM ${stats.toCollect.toFixed(0)} perlu dikutip dari rakan.` : `Ada baki perlu dibayar.`)
+                        : "Semua bil & baki kewangan diselaraskan.")
+                    : "Mod Tetamu: Akses SplitIt & Budget tanpa internet."}
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/splitit"
+              className="w-8 h-8 rounded-full border-2 border-white/30 hover:border-white flex items-center justify-center text-white transition-transform active:scale-90"
+              title="Pergi ke SplitIt"
+            >
+              <ArrowUpRight size={15} />
+            </Link>
           </div>
         </div>
 
-        {/* Right Controls */}
-        <div className="flex gap-2">
-          {loadingSession ? (
-            <div className={btnStyle}>
-              <Loader2 size={18} className="animate-spin" />
+        {/* HERO BENTO METRIC CARD (DRIBBBLE 'REVENUE' INSPIRED) */}
+        <div className="p-5 rounded-3xl border-2 border-black bg-[#FF6B55] text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-80">BAKI DUIT POKET</p>
+              <h2 className="text-3xl font-black tracking-tight font-mono mt-0.5">
+                {session ? `RM ${stats.pocketBalance.toFixed(2)}` : "RM 0.00"}
+              </h2>
             </div>
-          ) : session ? (
-            <button onClick={handleLogout} className={btnStyle} title="Logout">
-              <User size={18} />
-              <span className="hidden sm:inline">{session.user.email?.split('@')[0]}</span>
-              <LogOut size={14} className="opacity-50" />
-            </button>
-          ) : (
-            <button onClick={handleLoginClick} className={btnStyle}>
-              <LogIn size={18} />
-              <span className="hidden sm:inline">LOGIN</span>
-            </button>
-          )}
+            <span className="px-2.5 py-1 rounded-full bg-black text-white text-[9px] font-black uppercase tracking-wider">
+              {session ? "SAFE TO SPEND" : "OFFLINE"}
+            </span>
+          </div>
 
-          <button onClick={() => setShowHelpModal(true)} className={btnStyle} title="Bantuan" aria-label="Buka bantuan">
-            <HelpCircle size={18} />
-          </button>
-
-          <button onClick={toggleDarkMode} className={btnStyle} aria-label={darkMode ? "Guna tema cerah" : "Guna tema gelap"}>
-            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-        </div>
-      </header>
-
-      {/* MAIN CONTENT */}
-      <main className="flex-1 p-6 pb-28 max-w-2xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-4">
-
-        <div className="space-y-2">
-          <h2 className="text-4xl font-black uppercase leading-none">
-            {session ? `Welcome, ${session.user.email?.split('@')[0]}!` : "Pilih Tools."}
-          </h2>
-          <p className="opacity-60 font-bold text-sm">
-            {session ? "Semua data anda disinkronasi." : "Login untuk simpan data di cloud."}
-          </p>
-        </div>
-
-        {/* --- QUICK STATS DASHBOARD (PILL V3) --- */}
-        <section className="grid grid-cols-3 gap-3 mb-6">
-
-          {/* STAT 1: SPLITIT (KUTIP/BAYAR) */}
-          <div className="flex flex-col gap-1.5">
-            <div className="flex justify-between items-center px-1">
-              <span className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>
-                {stats.toCollect >= 0 ? "KUTIP" : "BAYAR"}
-              </span>
-              <div className={stats.toCollect >= 0
-                ? (darkMode ? "text-indigo-400" : "text-indigo-600")
-                : (darkMode ? "text-red-500" : "text-red-600")
-              }>
-                {stats.toCollect >= 0 ? <ArrowDownLeft size={12} /> : <ArrowUpRight size={12} />}
-              </div>
-            </div>
-            <div className={`relative h-8 rounded-full border-2 flex items-center justify-center px-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${stats.toCollect >= 0
-              ? (darkMode ? "bg-indigo-600 border-white text-white" : "bg-indigo-100 border-black text-indigo-900")
-              : (darkMode ? "bg-red-600 border-white text-white" : "bg-red-100 border-black text-red-900")
-              }`}>
-              <p className="text-[11px] font-black font-mono tracking-tighter truncate">
+          <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-black/15">
+            <div className="bg-black/10 rounded-2xl p-2.5">
+              <span className="text-[9px] font-black uppercase opacity-70 block">KUTIP BIL (SPLITIT)</span>
+              <span className="text-sm font-black font-mono">
                 {session ? `RM ${Math.abs(stats.toCollect).toFixed(0)}` : "LOG MASUK"}
-              </p>
-              {!session && <div className="absolute inset-0 flex items-center justify-center"><Lock size={10} /></div>}
-            </div>
-          </div>
-
-          {/* STAT 2: BUDGET (BAKI) */}
-          <div className="flex flex-col gap-1.5">
-            <div className="flex justify-between items-center px-1">
-              <span className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>BAKI</span>
-              <Wallet size={12} className={darkMode ? "text-orange-400" : "text-orange-600"} />
-            </div>
-            <div className={`relative h-8 rounded-full border-2 flex items-center justify-center px-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-orange-600 border-white text-white" : "bg-orange-100 border-black text-orange-900"
-              }`}>
-              <p className="text-[11px] font-black font-mono tracking-tighter truncate">
-                {session ? `RM ${stats.pocketBalance.toFixed(0)}` : "LOG MASUK"}
-              </p>
-              {!session && <div className="absolute inset-0 flex items-center justify-center"><Lock size={10} /></div>}
-            </div>
-          </div>
-
-          {/* STAT 3: SUB.TRACKER (BIL) */}
-          <div className="flex flex-col gap-1.5">
-            <div className="flex justify-between items-center px-1">
-              <span className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-white/60" : "text-black/60"}`}>BIL</span>
-              <CalendarClock size={12} className={darkMode ? "text-pink-400" : "text-pink-600"} />
-            </div>
-            <div className={`relative h-8 rounded-full border-2 flex items-center justify-center px-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${darkMode ? "bg-pink-600 border-white text-white" : "bg-pink-100 border-black text-pink-900"
-              }`}>
-              <p className="text-[10px] font-black uppercase truncate leading-none text-center">
-                {session ? stats.nextBill.split(' (')[0] : "LOG MASUK"}
-              </p>
-              {!session && <div className="absolute inset-0 flex items-center justify-center"><Lock size={10} /></div>}
-            </div>
-          </div>
-        </section>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-          {/* APP 1: SPLITIT (ACTIVE) - Structure Asal Kekal */}
-          <Link href="/splitit" className={cardStyle}>
-            <div className="flex justify-between items-start mb-4">
-              <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-indigo-500 border-indigo-400 text-white" : "bg-indigo-100 border-indigo-800 text-indigo-800"}`}>
-                <img src="/icon.png" alt="Logo" className="w-6 h-6 object-contain" />
-              </div>
-              <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
-            </div>
-            <h3 className="text-xl font-black uppercase mb-1">SplitIt v5.1</h3>
-            <p className="text-xs font-bold opacity-60 leading-relaxed">
-              Kira bil. Support Multiplayer, Direct Tukar Currency, Offline Mode & AI Scan.
-            </p>
-            <div className="mt-4 pt-4 border-t border-dashed border-current border-opacity-20 flex gap-2">
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Finance</span>
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Utility</span>
-            </div>
-          </Link>
-
-          {/* APP 2: BUDGET.AI (ACTIVE) */}
-          <Link href="/budget" className={cardStyle}>
-            <div className="flex justify-between items-start mb-4">
-              <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-orange-600 border-white text-white" : "bg-orange-100 border-orange-900 text-orange-900"}`}>
-                <Wallet size={24} />
-              </div>
-              <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
-            </div>
-
-            <h3 className="text-xl font-black uppercase mb-1">Budget.AI</h3>
-
-            <p className="text-xs font-bold opacity-60 leading-relaxed">
-              Track duit poket. Auto-Scan Resit, Analitik Belanja & Monitor Baki.
-            </p>
-            <div className="mt-4 pt-4 border-t border-dashed border-current border-opacity-20 flex gap-2">
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Personal</span>
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Tracker</span>
-            </div>
-          </Link>
-
-          {/* APP 3: SUB.TRACKER (ACTIVE) */}
-          <Link href="/sub-tracker" className={cardStyle}>
-            <div className="flex justify-between items-start mb-4">
-              <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-pink-600 border-white text-white" : "bg-pink-100 border-pink-900 text-pink-900"}`}>
-                <RefreshCw size={24} />
-              </div>
-              <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
-            </div>
-
-            <h3 className="text-xl font-black uppercase mb-1">Sub.Tracker</h3>
-
-            <p className="text-xs font-bold opacity-60 leading-relaxed">
-              Urus komitmen wajib & subscription lifestyle. Realiti check kos setahun.
-            </p>
-            <div className="mt-4 pt-4 border-t border-dashed border-current border-opacity-20 flex gap-2">
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Fixed Cost</span>
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Lifestyle</span>
-            </div>
-          </Link>
-
-          {/* APP 4: TRIPIT */}
-          <Link href="/tripit" className={cardStyle}>
-            <div className="flex justify-between items-start mb-4">
-              <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-indigo-600 border-white text-white" : "bg-indigo-100 border-indigo-900 text-indigo-900"}`}>
-                <Plane size={24} />
-              </div>
-              <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
-            </div>
-
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-xl font-black uppercase">TripIt</h3>
-              <span className="flex items-center gap-1 rounded border border-black bg-indigo-500 px-1.5 py-0.5 text-[9px] font-black text-white animate-[pulse_3s_ease-in-out_infinite] motion-reduce:animate-none">
-                <span className="h-1 w-1 rounded-full bg-white" aria-hidden="true" />
-                NEW
               </span>
             </div>
-            <p className="text-xs font-bold opacity-60 leading-relaxed">
-              Travel Planner + Budget. Itinerary, Target Belanja & Split Bill dalam satu app.
-            </p>
-            <div className="mt-4 pt-4 border-t border-dashed border-current border-opacity-20 flex gap-2">
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Itinerary</span>
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Budget</span>
-              <span className="text-[9px] font-black uppercase px-2 py-1 rounded border border-current opacity-60">Split</span>
+            <div className="bg-black/10 rounded-2xl p-2.5">
+              <span className="text-[9px] font-black uppercase opacity-70 block">BIL TERDEKAT</span>
+              <span className="text-xs font-black uppercase truncate block">
+                {session ? stats.nextBill.split(' (')[0] : "LOG MASUK"}
+              </span>
             </div>
-          </Link>
+          </div>
+        </div>
 
-          {/* APP 5: NEXT PROJECT IDEA */}
-          <div className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-50 ${darkMode ? "border-white" : "border-black"}`}>
-            <Layout size={32} className="mb-3" />
-            <h3 className="text-lg font-black uppercase">Next Project?</h3>
-            <p className="text-xs font-bold mt-1">Ada Idea App Apa Next?</p>
+        {/* CORE MINI-APPS SECTION */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-black uppercase tracking-wider opacity-80">Aplikasi Pilihan</h3>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full border border-current opacity-60">
+              4 Modul
+            </span>
           </div>
 
+          <div className="grid grid-cols-1 gap-2.5">
+            {/* 1. SPLITIT */}
+            <Link
+              href="/splitit"
+              className={`p-4 rounded-3xl border-2 transition-all group active:scale-[0.99] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${
+                darkMode ? "bg-[#18181B] border-white/20 hover:border-white" : "bg-white border-black hover:bg-neutral-50"
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-[#FF6B55] text-black border-2 border-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <Receipt size={22} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black uppercase tracking-tight">SplitIt v5.2</h4>
+                    <p className="text-[11px] font-bold opacity-60">Kira bil makan, OCR scan resit & multiplayer</p>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full border-2 border-current opacity-50 group-hover:opacity-100 flex items-center justify-center transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                  <ArrowUpRight size={14} />
+                </div>
+              </div>
+              <div className="flex gap-1.5 mt-3 pt-2.5 border-t border-dashed border-current/10">
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#FF6B55]/15 text-[#FF6B55] border border-[#FF6B55]/40">AI Scanner</span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Tax Split</span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Multiplayer</span>
+              </div>
+            </Link>
+
+            {/* 2. BUDGET.AI */}
+            <Link
+              href="/budget"
+              className={`p-4 rounded-3xl border-2 transition-all group active:scale-[0.99] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${
+                darkMode ? "bg-[#18181B] border-white/20 hover:border-white" : "bg-white border-black hover:bg-neutral-50"
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-[#FBBF24] text-black border-2 border-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <Wallet size={22} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black uppercase tracking-tight">Budget.AI</h4>
+                    <p className="text-[11px] font-bold opacity-60">Track perbelanjaan harian & baki poket</p>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full border-2 border-current opacity-50 group-hover:opacity-100 flex items-center justify-center transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                  <ArrowUpRight size={14} />
+                </div>
+              </div>
+              <div className="flex gap-1.5 mt-3 pt-2.5 border-t border-dashed border-current/10">
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#FBBF24]/15 text-[#D97706] border border-[#FBBF24]/40">Duit Poket</span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Auto-Category</span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Analitik</span>
+              </div>
+            </Link>
+
+            {/* 3. TRIPIT */}
+            <Link
+              href="/tripit"
+              className={`p-4 rounded-3xl border-2 transition-all group active:scale-[0.99] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${
+                darkMode ? "bg-[#18181B] border-white/20 hover:border-white" : "bg-white border-black hover:bg-neutral-50"
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-[#6366F1] text-white border-2 border-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <Plane size={22} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-base font-black uppercase tracking-tight">TripIt</h4>
+                      <span className="px-1.5 py-0.2 rounded-md bg-[#6366F1] text-white text-[8px] font-black uppercase">NEW</span>
+                    </div>
+                    <p className="text-[11px] font-bold opacity-60">Itinerary trip & perbelanjaan kumpulan</p>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full border-2 border-current opacity-50 group-hover:opacity-100 flex items-center justify-center transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                  <ArrowUpRight size={14} />
+                </div>
+              </div>
+              <div className="flex gap-1.5 mt-3 pt-2.5 border-t border-dashed border-current/10">
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#6366F1]/15 text-[#6366F1] border border-[#6366F1]/40">Travel Itinerary</span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Group Split</span>
+              </div>
+            </Link>
+
+            {/* 4. SUB.TRACKER */}
+            <Link
+              href="/sub-tracker"
+              className={`p-4 rounded-3xl border-2 transition-all group active:scale-[0.99] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${
+                darkMode ? "bg-[#18181B] border-white/20 hover:border-white" : "bg-white border-black hover:bg-neutral-50"
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-[#10B981] text-black border-2 border-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <RefreshCw size={22} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black uppercase tracking-tight">Sub.Tracker</h4>
+                    <p className="text-[11px] font-bold opacity-60">Radar langganan & semakan kos setahun</p>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full border-2 border-current opacity-50 group-hover:opacity-100 flex items-center justify-center transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                  <ArrowUpRight size={14} />
+                </div>
+              </div>
+              <div className="flex gap-1.5 mt-3 pt-2.5 border-t border-dashed border-current/10">
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#10B981]/15 text-[#059669] border border-[#10B981]/40">Komitmen Wajib</span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Yearly Shock</span>
+              </div>
+            </Link>
+          </div>
         </div>
 
-      </main>
+        {/* FOOTER LINKS */}
+        <footer className="pt-2 text-center space-y-2">
+          <p className="text-[9px] font-black uppercase tracking-[0.25em] opacity-40">Built by kmlxly</p>
+          <div className="flex justify-center gap-3">
+            <Link href="/privacy-policy" className="text-[9px] font-bold uppercase tracking-wider opacity-50 hover:opacity-100">
+              Privacy Policy
+            </Link>
+            <span className="opacity-20">•</span>
+            <Link href="/terms-of-service" className="text-[9px] font-bold uppercase tracking-wider opacity-50 hover:opacity-100">
+              Terms of Service
+            </Link>
+          </div>
+        </footer>
 
-      {/* FOOTER - KEKAL ASAL (Privacy & Terms) */}
-      <footer className="p-10 flex flex-col items-center gap-4">
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Built by kmlxly</p>
-        <div className="flex gap-4 items-center">
-          <Link href="/privacy-policy" className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 border-2 rounded-lg transition-all hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:scale-95 ${darkMode ? "border-white/20 text-white/40 hover:border-white hover:text-white hover:shadow-white" : "border-black/20 text-black/40 hover:border-black hover:text-black"}`}>Privacy Policy</Link>
-          <Link href="/terms-of-service" className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 border-2 rounded-lg transition-all hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:scale-95 ${darkMode ? "border-white/20 text-white/40 hover:border-white hover:text-white hover:shadow-white" : "border-black/20 text-black/40 hover:border-black hover:text-black"}`}>Terms of Service</Link>
-        </div>
-      </footer>
+      </div>
 
-      {/* MODALS (Kekal Asal) */}
+      {/* FLOATING BOTTOM DOCK NAVIGATION (MOBILE FIRST) */}
+      <nav
+        className={`fixed bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm py-2 px-3 rounded-full border-2 backdrop-blur-xl flex items-center justify-between z-40 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
+          darkMode ? "bg-[#18181B]/95 border-white text-white" : "bg-white/95 border-black text-black"
+        }`}
+      >
+        <Link
+          href="/"
+          className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 text-[10px] font-black uppercase transition-all ${
+            darkMode ? "bg-white text-black shadow-sm" : "bg-black text-white shadow-sm"
+          }`}
+        >
+          <Grid size={13} />
+          <span>Home</span>
+        </Link>
+
+        <Link
+          href="/splitit"
+          className="p-2 rounded-full hover:bg-current/10 transition-colors opacity-70 hover:opacity-100"
+          title="SplitIt"
+        >
+          <Receipt size={17} />
+        </Link>
+
+        <Link
+          href="/budget"
+          className="p-2 rounded-full hover:bg-current/10 transition-colors opacity-70 hover:opacity-100"
+          title="Budget.AI"
+        >
+          <Wallet size={17} />
+        </Link>
+
+        <Link
+          href="/tripit"
+          className="p-2 rounded-full hover:bg-current/10 transition-colors opacity-70 hover:opacity-100"
+          title="TripIt"
+        >
+          <Plane size={17} />
+        </Link>
+
+        <Link
+          href="/sub-tracker"
+          className="p-2 rounded-full hover:bg-current/10 transition-colors opacity-70 hover:opacity-100"
+          title="Sub.Tracker"
+        >
+          <RefreshCw size={17} />
+        </Link>
+      </nav>
+
+      {/* MODAL: AUTHENTICATION */}
       <AuthModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         isDarkMode={darkMode}
       />
 
-      {/* --- MODAL: HELP GUIDE --- */}
+      {/* MODAL: USER MANUAL GUIDE */}
       {showHelpModal && (
-        <div role="dialog" aria-modal="true" aria-labelledby="help-title" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-          <div className={`w-full max-w-[320px] max-h-[80vh] flex flex-col rounded-[2.5rem] border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95 overflow-hidden`}>
-
-            {/* Header Bergaya */}
-            <div className="p-6 pb-2">
-              <div className="flex justify-between items-start mb-4">
-                <div className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center ${darkMode ? "bg-white text-black" : "bg-black text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,0.2)]"}`}>
-                  <HelpCircle size={28} />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="help-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in"
+        >
+          <div
+            className={`w-full max-w-[340px] max-h-[82vh] flex flex-col rounded-3xl border-2 ${
+              darkMode ? "bg-[#18181B] border-white text-white" : "bg-white border-black text-black"
+            } shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95 overflow-hidden`}
+          >
+            {/* Header */}
+            <div className="p-5 pb-2">
+              <div className="flex justify-between items-start mb-3">
+                <div className={`w-10 h-10 rounded-2xl border-2 flex items-center justify-center ${
+                  darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"
+                }`}>
+                  <HelpCircle size={20} />
                 </div>
-                <button onClick={() => setShowHelpModal(false)} className="p-2 opacity-60 hover:opacity-100 transition-opacity" aria-label="Tutup bantuan">
-                  <X size={24} />
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="p-1.5 opacity-60 hover:opacity-100 transition-opacity"
+                  aria-label="Tutup bantuan"
+                >
+                  <X size={20} />
                 </button>
               </div>
-              <h2 id="help-title" className="text-2xl font-black uppercase leading-none tracking-tighter italic">
-                Manual<br />Pengguna
+              <h2 id="help-title" className="text-xl font-black uppercase leading-tight tracking-tight">
+                Panduan Pengguna
               </h2>
-              <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-2">Tutorial & Tips Ringkas</p>
+              <p className="text-[10px] font-bold opacity-50 uppercase tracking-wider mt-0.5">
+                Tip ringkas fungsi aplikasi
+              </p>
             </div>
 
-            {/* Compact Accordion Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2.5">
-
-              {/* 1. SPLIT IT */}
-              <div className={`border-2 rounded-2xl overflow-hidden transition-all ${darkMode ? "border-white" : "border-black"}`}>
+            {/* Accordion List */}
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+              {/* 1. SPLITIT */}
+              <div className={`border-2 rounded-2xl overflow-hidden transition-all ${darkMode ? "border-white/20" : "border-black/20"}`}>
                 <button
                   onClick={() => setActiveGuideTab(activeGuideTab === "splitit" ? "" : "splitit")}
-                  className={`w-full px-4 py-3 flex justify-between items-center font-black uppercase text-[11px] tracking-tight ${activeGuideTab === "splitit" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""}`}
+                  className={`w-full px-3.5 py-2.5 flex justify-between items-center font-black uppercase text-[11px] tracking-tight ${
+                    activeGuideTab === "splitit" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""
+                  }`}
                 >
-                  1. SplitIt (Bil Group) {activeGuideTab === "splitit" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  <span>1. SplitIt (Bil Kedai Makan)</span>
+                  {activeGuideTab === "splitit" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {activeGuideTab === "splitit" && (
-                  <div className="px-4 py-3 space-y-2 text-[10px] font-bold leading-snug animate-in slide-in-from-top-2 border-t-2 border-current border-opacity-10">
-                    <p className="flex gap-2 items-start"><span className="text-blue-500">▶</span> Snap Resit panjang guna AI.</p>
-                    <p className="flex gap-2 items-start"><span className="text-blue-500">▶</span> Agih item & kongsi makan.</p>
-                    <p className="flex gap-2 items-start"><span className="text-blue-500">▶</span> Auto-kira SST & Service Charge.</p>
-                    <p className="flex gap-2 items-start"><span className="text-blue-500">▶</span> Share resit terus ke WhatsApp.</p>
+                  <div className="px-3.5 py-2.5 space-y-1.5 text-[10px] font-bold leading-snug border-t-2 border-current/10">
+                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Snap resit panjang guna kamera AI.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Agih item individu & kongsi ramai-ramai.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Auto-agih SST & Service Charge ikut % makan.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Kongsi resit ke WhatsApp.</p>
                   </div>
                 )}
               </div>
 
               {/* 2. BUDGET.AI */}
-              <div className={`border-2 rounded-2xl overflow-hidden transition-all ${darkMode ? "border-white" : "border-black"}`}>
+              <div className={`border-2 rounded-2xl overflow-hidden transition-all ${darkMode ? "border-white/20" : "border-black/20"}`}>
                 <button
                   onClick={() => setActiveGuideTab(activeGuideTab === "budget" ? "" : "budget")}
-                  className={`w-full px-4 py-3 flex justify-between items-center font-black uppercase text-[11px] tracking-tight ${activeGuideTab === "budget" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""}`}
+                  className={`w-full px-3.5 py-2.5 flex justify-between items-center font-black uppercase text-[11px] tracking-tight ${
+                    activeGuideTab === "budget" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""
+                  }`}
                 >
-                  2. Budget.AI (Poket) {activeGuideTab === "budget" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  <span>2. Budget.AI (Duit Poket)</span>
+                  {activeGuideTab === "budget" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {activeGuideTab === "budget" && (
-                  <div className="px-4 py-3 space-y-2 text-[10px] font-bold leading-snug animate-in slide-in-from-top-2 border-t-2 border-current border-opacity-10">
-                    <p className="flex gap-2 items-start"><span className="text-orange-500">▶</span> Track belanja harian (AI/Manual).</p>
-                    <p className="flex gap-2 items-start"><span className="text-orange-500">▶</span> Safe-To-Spend: Link Sub.Tracker.</p>
-                    <p className="flex gap-2 items-start"><span className="text-orange-500">▶</span> Ghost Mode: Sembunyi baki.</p>
-                    <p className="flex gap-2 items-start"><span className="text-orange-500">▶</span> Analitik struktur perbelanjaan.</p>
+                  <div className="px-3.5 py-2.5 space-y-1.5 text-[10px] font-bold leading-snug border-t-2 border-current/10">
+                    <p className="flex gap-2 items-start"><span className="text-[#FBBF24]">▶</span> Catat belanja harian dengan AI/Manual.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FBBF24]">▶</span> Pantau Safe-To-Spend harian.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FBBF24]">▶</span> Analisis pecahan kategori bulanan.</p>
                   </div>
                 )}
               </div>
 
-              {/* 3. SUB.TRACKER */}
-              <div className={`border-2 rounded-2xl overflow-hidden transition-all ${darkMode ? "border-white/50" : "border-black/50"}`}>
+              {/* 3. TRIPIT */}
+              <div className={`border-2 rounded-2xl overflow-hidden transition-all ${darkMode ? "border-white/20" : "border-black/20"}`}>
+                <button
+                  onClick={() => setActiveGuideTab(activeGuideTab === "tripit" ? "" : "tripit")}
+                  className={`w-full px-3.5 py-2.5 flex justify-between items-center font-black uppercase text-[11px] tracking-tight ${
+                    activeGuideTab === "tripit" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""
+                  }`}
+                >
+                  <span>3. TripIt (Percutian)</span>
+                  {activeGuideTab === "tripit" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                {activeGuideTab === "tripit" && (
+                  <div className="px-3.5 py-2.5 space-y-1.5 text-[10px] font-bold leading-snug border-t-2 border-current/10">
+                    <p className="flex gap-2 items-start"><span className="text-[#6366F1]">▶</span> Rancang jadual & kos perjalanan trip.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#6366F1]">▶</span> Catat belanja berkumpulan semasa travel.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#6366F1]">▶</span> Auto-kira hutang akhir kembara.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. SUB.TRACKER */}
+              <div className={`border-2 rounded-2xl overflow-hidden transition-all ${darkMode ? "border-white/20" : "border-black/20"}`}>
                 <button
                   onClick={() => setActiveGuideTab(activeGuideTab === "subtracker" ? "" : "subtracker")}
-                  className={`w-full px-4 py-3 flex justify-between items-center font-black uppercase text-[11px] tracking-tight ${activeGuideTab === "subtracker" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""}`}
+                  className={`w-full px-3.5 py-2.5 flex justify-between items-center font-black uppercase text-[11px] tracking-tight ${
+                    activeGuideTab === "subtracker" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""
+                  }`}
                 >
-                  3. Sub.Tracker <span className="text-[8px] border px-1 rounded-md ml-1 border-current opacity-60">BETA</span> {activeGuideTab === "subtracker" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  <span>4. Sub.Tracker (Komitmen)</span>
+                  {activeGuideTab === "subtracker" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {activeGuideTab === "subtracker" && (
-                  <div className="px-4 py-3 space-y-2 text-[10px] font-bold leading-snug animate-in slide-in-from-top-2 border-t-2 border-current border-opacity-10">
-                    <p className="flex gap-2 items-start"><span className="text-pink-500">▶</span> Urus komitmen wajib bulanan.</p>
-                    <p className="flex gap-2 items-start"><span className="text-pink-500">▶</span> Yearly Shock: Kira kos setahun.</p>
-                    <p className="flex gap-2 items-start"><span className="text-pink-500">▶</span> Auto-Next-Month bayaran.</p>
+                  <div className="px-3.5 py-2.5 space-y-1.5 text-[10px] font-bold leading-snug border-t-2 border-current/10">
+                    <p className="flex gap-2 items-start"><span className="text-[#10B981]">▶</span> Pantau komitmen & bil langganan tetap.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#10B981]">▶</span> Yearly Shock: Semak kos terkumpul 1 tahun.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#10B981]">▶</span> Peringatan tarikh pembaharuan automatik.</p>
                   </div>
                 )}
               </div>
-
             </div>
 
-            <div className="p-6">
+            {/* Footer button */}
+            <div className="p-4 pt-2">
               <button
                 onClick={() => setShowHelpModal(false)}
-                className={`w-full py-4 rounded-2xl font-black uppercase text-xs border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]`}
+                className={`w-full py-3 rounded-2xl font-black uppercase text-xs border-2 transition-all active:translate-x-[1px] active:translate-y-[1px] active:shadow-none ${
+                  darkMode
+                    ? "bg-white text-black border-white shadow-[2px_2px_0px_0px_rgba(255,255,255,0.3)]"
+                    : "bg-black text-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                }`}
               >
                 FAHAM & TUTUP
               </button>
             </div>
-
           </div>
         </div>
       )}
