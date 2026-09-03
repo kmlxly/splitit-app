@@ -1477,6 +1477,18 @@ function SplitItContent() {
         }
     };
 
+    const isModalOrFormOpen =
+        mode === "FORM" ||
+        showAuthModal ||
+        showScanMethodModal ||
+        showScanModal ||
+        showPaymentModal ||
+        showPayModal ||
+        showSessionModal ||
+        showCurrencyModal ||
+        showPreviewModal ||
+        showInviteModal;
+
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
             <AppOnboarding
@@ -1485,6 +1497,7 @@ function SplitItContent() {
                 steps={APP_ONBOARDING_STEPS.splitit}
                 darkMode={darkMode}
                 accentClassName="bg-blue-400"
+                hidden={isModalOrFormOpen}
             />
             <div className="max-w-md mx-auto min-h-screen flex flex-col relative overflow-hidden">
 
@@ -1556,7 +1569,7 @@ function SplitItContent() {
                     </div>
                 </header>
 
-                <main className="flex-1 p-4 sm:p-6 pb-28 flex flex-col gap-6 relative z-10">
+                <main className="flex-1 p-4 sm:p-6 pb-32 flex flex-col gap-6 relative z-10">
                     {/* DASHBOARD */}
                     {mode === "DASHBOARD" && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1677,7 +1690,7 @@ function SplitItContent() {
                                 <h2 className="text-2xl font-black uppercase tracking-tight">{editingBillId ? "Edit Bill" : "Add New Bill"}</h2>
                             </div>
 
-                            <div className={`flex-1 space-y-8 overflow-y-auto pb-6 px-1 ${darkMode ? "scrollbar-thumb-white" : "scrollbar-thumb-black"} scrollbar-thin`}>
+                            <div className={`flex-1 space-y-8 overflow-y-auto pb-32 px-1 ${darkMode ? "scrollbar-thumb-white" : "scrollbar-thumb-black"} scrollbar-thin`}>
                                 <div className={`${cardStyle} p-5 space-y-5 ${darkMode ? "bg-[#1E1E1E]" : "bg-white"} ${shadowStyle}`}>
                                     <div className="space-y-2"><label className="text-xs uppercase font-black tracking-wider opacity-70">Store / Place Name</label><input value={billTitle} onChange={e => setBillTitle(e.target.value)} placeholder="e.g. Village Bistro" className={inputStyle} /></div>
                                     {/* --- V5 UI: SMART CURRENCY INPUT --- */}
@@ -2239,7 +2252,7 @@ function SplitItContent() {
                         isDarkMode={darkMode}
                     />
                 </main>
-                <MobileBottomDock activeTab="splitit" darkMode={darkMode} />
+                <MobileBottomDock activeTab="splitit" darkMode={darkMode} hidden={isModalOrFormOpen} />
             </div>
         </div >
     );

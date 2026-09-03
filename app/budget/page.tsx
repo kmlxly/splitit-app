@@ -1009,6 +1009,17 @@ export default function BudgetPage() {
     const buttonBase = `border-2 font-black uppercase tracking-wider rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"} ${shadowStyle} hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]`;
     const inputStyle = `w-full p-3 rounded-2xl border-2 outline-none font-bold mb-3 ${darkMode ? "bg-[#121214] border-white/30 text-white focus:border-white" : "bg-white border-black/30 text-black focus:border-black"}`;
 
+    const isModalOpen =
+        showManualModal ||
+        showAllTransactions ||
+        showScanMethodModal ||
+        showScanResultModal ||
+        showCalendarModal ||
+        showAuthModal ||
+        showBudgetLimitModal ||
+        showWrappedModal ||
+        isScanning;
+
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
             <AppOnboarding
@@ -1017,8 +1028,9 @@ export default function BudgetPage() {
                 steps={APP_ONBOARDING_STEPS.budget}
                 darkMode={darkMode}
                 accentClassName="bg-orange-400"
+                hidden={isModalOpen}
             />
-            <div className="max-w-md mx-auto min-h-screen flex flex-col relative pb-28">
+            <div className="max-w-md mx-auto min-h-screen flex flex-col relative pb-32">
 
                 {/* --- HEADER --- */}
                 <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white/20 bg-[#121214]" : "border-black bg-[#F4F5F7]"}`}>
@@ -1100,7 +1112,7 @@ export default function BudgetPage() {
                 </header>
 
                 {/* --- MAIN CONTENT --- */}
-                <main className="flex-1 p-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] lg:items-start lg:gap-8">
+                <main className="flex-1 p-6 pb-32 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] lg:items-start lg:gap-8">
 
                     {/* QUICK MONTH SELECTOR & REVIEW */}
                     <section className="flex flex-col gap-3 lg:col-start-1 lg:row-start-1">
@@ -2827,7 +2839,7 @@ export default function BudgetPage() {
                     isDarkMode={darkMode}
                 />
 
-                <MobileBottomDock activeTab="budget" darkMode={darkMode} />
+                <MobileBottomDock activeTab="budget" darkMode={darkMode} hidden={isModalOpen} />
             </div>
         </div>
     );

@@ -313,6 +313,7 @@ export default function TripListPage() {
 
     // --- STYLES ---
     const bgStyle = darkMode ? "bg-[#121214] text-white" : "bg-[#F4F5F7] text-black";
+    const isModalOpen = showAuthModal || showCreateModal || showEditModal || imageToCrop !== null;
 
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
@@ -322,8 +323,9 @@ export default function TripListPage() {
                 steps={APP_ONBOARDING_STEPS.tripit}
                 darkMode={darkMode}
                 accentClassName="bg-indigo-400"
+                hidden={isModalOpen}
             />
-            <div className="max-w-md mx-auto min-h-screen flex flex-col relative pb-28">
+            <div className="max-w-md mx-auto min-h-screen flex flex-col relative pb-32">
 
                 {/* --- HEADER --- */}
                 <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white/20 bg-[#121214]" : "border-black bg-[#F4F5F7]"}`}>
@@ -344,7 +346,7 @@ export default function TripListPage() {
                 </header>
 
                 {/* --- MAIN CONTENT --- */}
-                <main className="flex-1 p-4 pb-28 flex flex-col gap-4">
+                <main className="flex-1 p-4 pb-32 flex flex-col gap-4">
 
                     {/* NEW TRIP BUTTON */}
                     <button
@@ -779,7 +781,7 @@ export default function TripListPage() {
             )}
 
             <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} isDarkMode={darkMode} />
-            <MobileBottomDock activeTab="tripit" darkMode={darkMode} />
+            <MobileBottomDock activeTab="tripit" darkMode={darkMode} hidden={isModalOpen} />
         </div>
     );
 }

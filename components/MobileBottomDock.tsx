@@ -9,9 +9,45 @@ export type ActiveDockTab = "home" | "splitit" | "budget" | "tripit" | "subtrack
 interface MobileBottomDockProps {
   activeTab: ActiveDockTab;
   darkMode: boolean;
+  hidden?: boolean;
 }
 
-export default function MobileBottomDock({ activeTab, darkMode }: MobileBottomDockProps) {
+export default function MobileBottomDock({ activeTab, darkMode, hidden = false }: MobileBottomDockProps) {
+  const [hasActiveModal, setHasActiveModal] = React.useState(false);
+
+  React.useEffect(() => {
+    const checkModals = () => {
+      // Auto-detect open modals, dialogs, bottom sheets, or onboarding tours
+      const modalElements = document.querySelectorAll(
+        '.fixed.inset-0:not([aria-hidden="true"]), [role="dialog"], [data-coachmark="true"]'
+      );
+      let found = false;
+      modalElements.forEach((el) => {
+        if (
+          el instanceof HTMLElement &&
+          el.offsetParent !== null &&
+          !el.closest('nav[aria-label="Mobile Bottom Navigation"]')
+        ) {
+          found = true;
+        }
+      });
+      setHasActiveModal(found);
+    };
+
+    checkModals();
+    const observer = new MutationObserver(checkModals);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const isHidden = hidden || hasActiveModal;
+
   const tabs = [
     {
       id: "home" as const,
@@ -53,7 +89,12 @@ export default function MobileBottomDock({ activeTab, darkMode }: MobileBottomDo
   return (
     <nav
       aria-label="Mobile Bottom Navigation"
-      className={`fixed bottom-[calc(env(safe-area-inset-bottom)+0.6rem)] left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm py-1.5 px-2.5 rounded-full border-2 backdrop-blur-xl flex items-center justify-between z-40 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
+      aria-hidden={isHidden}
+      className={`fixed bottom-[calc(env(safe-area-inset-bottom)+0.6rem)] left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm py-1.5 px-2.5 rounded-full border-2 backdrop-blur-xl flex items-center justify-between z-40 transition-all duration-300 ease-in-out shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
+        isHidden
+          ? "translate-y-28 opacity-0 pointer-events-none scale-95"
+          : "translate-y-0 opacity-100 pointer-events-auto scale-100"
+      } ${
         darkMode ? "bg-[#18181B]/95 border-white text-white" : "bg-white/95 border-black text-black"
       }`}
     >

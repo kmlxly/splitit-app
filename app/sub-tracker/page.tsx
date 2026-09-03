@@ -390,6 +390,8 @@ export default function SubTrackerPage() {
     const commitmentCategories: Subscription["category"][] = ["Loan", "Insurance", "Savings", "Bills", "Utility"];
     const lifestyleCategories: Subscription["category"][] = ["Entertainment", "Digital Service", "Gym/Health", "Education"];
 
+    const isModalOpen = showAddModal || showAuthModal || showSyncModal;
+
     return (
         <div className={`min-h-screen font-sans transition-colors duration-300 ${bgStyle}`}>
             <AppOnboarding
@@ -398,8 +400,9 @@ export default function SubTrackerPage() {
                 steps={APP_ONBOARDING_STEPS.subTracker}
                 darkMode={darkMode}
                 accentClassName="bg-pink-400"
+                hidden={isModalOpen}
             />
-            <div className="max-w-md mx-auto min-h-screen flex flex-col relative pb-28">
+            <div className="max-w-md mx-auto min-h-screen flex flex-col relative pb-32">
 
                 {/* --- HEADER (Matched with Budget.AI) --- */}
                 <header className={`px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 border-b-2 sticky top-0 z-40 transition-colors duration-300 ${darkMode ? "border-white/20 bg-[#121214]" : "border-black bg-[#F4F5F7]"}`}>
@@ -958,7 +961,7 @@ export default function SubTrackerPage() {
                     </div>
                 )}
 
-                <MobileBottomDock activeTab="subtracker" darkMode={darkMode} />
+                <MobileBottomDock activeTab="subtracker" darkMode={darkMode} hidden={isModalOpen} />
             </div>
         </div>
     );

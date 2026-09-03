@@ -126,6 +126,8 @@ type AppOnboardingProps = {
     steps: readonly OnboardingStep[];
     darkMode: boolean;
     accentClassName: string;
+    hidden?: boolean;
+    hideFloatingTrigger?: boolean;
 };
 
 type CoachmarkGeometry = {
@@ -141,10 +143,13 @@ export default function AppOnboarding({
     steps,
     darkMode,
     accentClassName,
+    hidden = false,
+    hideFloatingTrigger = false,
 }: AppOnboardingProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeStep, setActiveStep] = useState(0);
     const [geometry, setGeometry] = useState<CoachmarkGeometry | null>(null);
+    const [hasActiveModal, setHasActiveModal] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const popoverRef = useRef<HTMLDivElement>(null);
@@ -153,6 +158,32 @@ export default function AppOnboarding({
     const seenKey = `kmlxly:onboarding:${storageKey}:v4`;
     const currentStep = steps[activeStep];
     const isLastStep = activeStep === steps.length - 1;
+
+    useEffect(() => {
+        const checkModals = () => {
+            const modalElements = document.querySelectorAll(
+                '.fixed.inset-0:not([aria-hidden="true"]), [role="dialog"]:not([data-onboarding-app])'
+            );
+            let found = false;
+            modalElements.forEach((el) => {
+                if (el instanceof HTMLElement && el.offsetParent !== null && !el.closest('[data-onboarding-app]')) {
+                    found = true;
+                }
+            });
+            setHasActiveModal(found);
+        };
+
+        checkModals();
+        const observer = new MutationObserver(checkModals);
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["class", "style"],
+        });
+
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         const frame = window.requestAnimationFrame(() => {
@@ -253,27 +284,32 @@ export default function AppOnboarding({
 
     if (!currentStep) return null;
 
+    const shouldShowTrigger = !hidden && !hasActiveModal && !hideFloatingTrigger && !isOpen;
+
     return (
         <>
-            <button
-                ref={triggerRef}
-                type="button"
-                onClick={openTour}
-                aria-label={`Open ${appName} guide`}
-                title={`${appName} guide`}
-                className={`fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-30 flex min-h-11 items-center gap-2 rounded-xl border-2 px-3 text-[10px] font-black uppercase tracking-wider transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none ${darkMode
-                    ? "border-white bg-white text-black shadow-none hover:bg-zinc-200"
-                    : "border-black bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5"
-                    }`}
-            >
-                <CircleHelp size={16} aria-hidden="true" /> Guide
-            </button>
+            {shouldShowTrigger && (
+                <button
+                    ref={triggerRef}
+                    type="button"
+                    onClick={openTour}
+                    aria-label={`Open ${appName} guide`}
+                    title={`${appName} guide`}
+                    className={`fixed bottom-[calc(env(safe-area-inset-bottom)+4.8rem)] right-4 z-30 flex min-h-9 items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode
+                        ? "border-white bg-[#1E1E1E] text-white hover:bg-white hover:text-black shadow-none"
+                        : "border-black bg-white text-black hover:bg-black hover:text-white"
+                        }`}
+                >
+                    <CircleHelp size={14} aria-hidden="true" /> Guide
+                </button>
+            )}
 
             {isOpen && (
                 <>
                     {geometry && (
                         <div
                             aria-hidden="true"
+                            data-coachmark="true"
                             className={`pointer-events-none fixed z-[80] rounded-2xl border-[3px] ${darkMode ? "border-white" : "border-black"}`}
                             style={{
                                 top: geometry.target.top,
@@ -292,6 +328,7 @@ export default function AppOnboarding({
                         aria-labelledby={titleId}
                         aria-describedby={descriptionId}
                         data-onboarding-app={storageKey}
+                        data-coachmark="true"
                         className={`fixed z-[90] max-h-[calc(100vh-1.5rem)] overflow-y-auto rounded-2xl border-2 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-opacity duration-150 motion-reduce:transition-none ${darkMode ? "border-white bg-[#171717] text-white" : "border-black bg-[#fffdf5] text-black"} ${geometry ? "opacity-100" : "pointer-events-none opacity-0"}`}
                         style={{
                             top: geometry?.popover.top ?? 12,

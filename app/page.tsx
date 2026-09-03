@@ -128,10 +128,11 @@ export default function Home() {
 
   // --- 2. MAIN MOBILE HOME DASHBOARD ---
   const bgClass = darkMode ? "bg-[#121214] text-white" : "bg-[#F4F5F7] text-black";
+  const isModalOpen = showLoginModal || showHelpModal;
 
   return (
     <div className={`min-h-screen w-full transition-colors duration-200 ${bgClass} font-sans`}>
-      <div className="max-w-md mx-auto min-h-screen flex flex-col justify-between px-4 pb-28 pt-[calc(env(safe-area-inset-top)+0.75rem)] space-y-5 relative">
+      <div className="max-w-md mx-auto min-h-screen flex flex-col justify-between px-4 pb-32 pt-[calc(env(safe-area-inset-top)+0.75rem)] space-y-5 relative">
 
         {/* TOP MOBILE APP BAR */}
         <header className="flex items-center justify-between pt-1">
@@ -408,7 +409,7 @@ export default function Home() {
       </div>
 
       {/* FLOATING BOTTOM DOCK NAVIGATION (MOBILE FIRST) */}
-      <MobileBottomDock activeTab="home" darkMode={darkMode} />
+      <MobileBottomDock activeTab="home" darkMode={darkMode} hidden={isModalOpen} />
 
       {/* MODAL: AUTHENTICATION */}
       <AuthModal
