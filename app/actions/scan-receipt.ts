@@ -2,6 +2,7 @@
 
 import { requireServerUser } from "@/lib/auth/server";
 import { takeRateLimit } from "@/lib/rateLimit";
+import { SPLITIT_RECEIPT_PROMPT, expandScannedItems } from "@/lib/receiptScanner";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
 const MAX_ENCODED_BYTES = 12_000_000;
@@ -71,11 +72,14 @@ async function callOpenRouter(prompt: string, base64Data: string, mimeType: stri
     }
 }
 
-// For SplitIt — extract items, currency, tax, service, discount, deposit
+// For SplitIt — extract items, currency, tax, service, discount, deposit, totalAmount
 export async function scanReceipt(base64Data: string) {
     await authorizeScan(base64Data);
-    const prompt = `Extract items, prices, tax, service, discount, deposit, AND currency code (e.g. MYR, THB, USD) from receipt. Return valid JSON: { "items": [{"name": "Item", "price": 0.00}], "currency": "MYR", "tax": 0.00, "serviceCharge": 0.00, "discount": 0.00, "deposit": 0.00 }. If unsure, default currency to 'MYR'. Return ONLY the JSON, no markdown.`;
-    return callOpenRouter(prompt, base64Data, "image/jpeg");
+    const parsedData = await callOpenRouter(SPLITIT_RECEIPT_PROMPT, base64Data, "image/jpeg");
+    if (parsedData && Array.isArray(parsedData.items)) {
+        parsedData.items = expandScannedItems(parsedData.items);
+    }
+    return parsedData;
 }
 
 // For Budget — extract single transaction or multiple transactions (PDF bank statement)

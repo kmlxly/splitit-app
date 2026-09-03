@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth/server";
 import { takeRateLimit } from "@/lib/rateLimit";
+import { SPLITIT_RECEIPT_PROMPT, expandScannedItems } from "@/lib/receiptScanner";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const MODEL = "google/gemini-2.5-flash-lite";
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
         let prompt = "";
 
         if (type === "splitit" || type === "offline") {
-            prompt = `Extract items, prices, tax, service, discount, deposit, AND currency code (e.g. MYR, THB, USD) from receipt. Return valid JSON: { "items": [{"name": "Item", "price": 0.00}], "currency": "MYR", "tax": 0.00, "serviceCharge": 0.00, "discount": 0.00, "deposit": 0.00 }. If unsure, default currency to 'MYR'. Return ONLY the JSON, no markdown.`;
+            prompt = SPLITIT_RECEIPT_PROMPT;
         } else if (type === "budget" && isPDF) {
             prompt = `Extract ALL transactions from this bank statement. Return valid JSON:
 { "transactions": [{ "title": "Merchant/Description", "amount": 0.00, "category": "One of: Makan, Transport, Shopping, Bills, Utility, Income, Lain-lain", "date": "DD MMM YYYY" }] }
@@ -135,6 +136,11 @@ Amount positive. Return ONLY valid JSON.`;
         }
 
         const parsedData = await callOpenRouter(prompt, base64Data, mimeType);
+
+        if ((type === "splitit" || type === "offline") && parsedData && Array.isArray(parsedData.items)) {
+            parsedData.items = expandScannedItems(parsedData.items);
+        }
+
         return NextResponse.json(parsedData);
 
     } catch (error: unknown) {

@@ -58,13 +58,24 @@ export default function Home() {
     if (savedMode !== null) setDarkMode(savedMode === "true");
   }, []);
 
-  // --- EFFECT: Stats Loading + Polling (replaces Supabase Realtime) ---
+  // --- EFFECT: Stats Loading on Mount + on Tab Focus / Visibility ---
   useEffect(() => {
-    if (user) {
-      loadStats();
-      const interval = setInterval(loadStats, 10000); // poll every 10s
-      return () => clearInterval(interval);
-    }
+    if (!user) return;
+    loadStats();
+
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        loadStats();
+      }
+    };
+
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+
+    return () => {
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
   }, [user, loadStats]);
 
   // --- HANDLERS ---

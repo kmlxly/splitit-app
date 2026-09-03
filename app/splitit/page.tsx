@@ -18,6 +18,7 @@ import {
     deleteBill as deleteBillAction,
     getBillsForSession,
 } from "@/app/actions/splitit";
+import { expandScannedItems, resolveDetectedBillTotal } from "@/lib/receiptScanner";
 import {
     Moon, Sun, CheckCircle, Trash2,
     Edit3, Copy, Check, Bike, Tag, RotateCcw, Plus, X,
@@ -180,14 +181,22 @@ const compressImage = (file: File): Promise<string> => {
 };
 
 // --- DATABASE CONVERTERS (SQL <-> APP) ---
+const parseJsonField = (val: any, fallback: any = []) => {
+    if (!val) return fallback;
+    if (typeof val === "string") {
+        try { return JSON.parse(val); } catch { return fallback; }
+    }
+    return val;
+};
+
 const mapSqlBillToLocal = (sqlBill: any): Bill => ({
     id: sqlBill.id,
     title: sqlBill.title,
     type: sqlBill.type as BillType,
     totalAmount: Number(sqlBill.total_amount),
     paidBy: sqlBill.paid_by,
-    details: sqlBill.details || [],
-    menuItems: sqlBill.menu_items || [],
+    details: parseJsonField(sqlBill.details, []),
+    menuItems: parseJsonField(sqlBill.menu_items, []),
     itemsSubtotal: 0,
     miscAmount: Number(sqlBill.misc_amount || 0),
     discountAmount: Number(sqlBill.discount_amount || 0),
@@ -330,12 +339,17 @@ function SplitItContent() {
     const [isScanning, setIsScanning] = useState(false);
     const [scanStatus, setScanStatus] = useState("Ready");
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
-    const [scannedExtraInfo, setScannedExtraInfo] = useState({ tax: 0, service: 0, discount: 0, deposit: 0 });
+    const [scannedExtraInfo, setScannedExtraInfo] = useState({ totalAmount: 0, subtotal: 0, tax: 0, service: 0, discount: 0, deposit: 0 });
     const [includeScannedTax, setIncludeScannedTax] = useState(true);
     const [includeScannedDiscount, setIncludeScannedDiscount] = useState(true);
 
     // Refs
     const receiptRef = useRef<HTMLDivElement>(null);
+    const lastLocalSaveRef = useRef<number>(0);
+    const isSavingRef = useRef<boolean>(false);
+    const deletedBillIdsRef = useRef<Set<string>>(new Set());
+    const lastSyncedHashRef = useRef<string>("");
+    const lastUserActivityRef = useRef<number>(Date.now());
 
     // Form Inputs
     const [editingBillId, setEditingBillId] = useState<string | null>(null);
@@ -415,8 +429,8 @@ function SplitItContent() {
                         ownerId: s.owner_id,
                         createdAt: new Date(s.created_at).getTime(),
                         currency: s.currency || "RM",
-                        people: s.people || [],
-                        paidStatus: s.paid_status || {},
+                        people: parseJsonField(s.people, []),
+                        paidStatus: parseJsonField(s.paid_status, {}),
                         bills: allBills.filter((b: any) => b.session_id === s.id).map(mapSqlBillToLocal),
                         isShared: s.owner_id !== currentUser.id
                     }));
@@ -438,15 +452,24 @@ function SplitItContent() {
                             // CASE 1: Session tiada di Cloud (Belum sync) -> Add Local
                             mergedSessions.push(localS);
                         } else {
-                            // CASE 2: Conflict - Session wujud di Cloud & Local. Compare!
+                            // CASE 2: Conflict - Session wujud di Cloud & Local. Gabung bil pintar!
                             const cloudS = mergedSessions[cloudIndex];
+                            const cloudBillMap = new Map(cloudS.bills.map(b => [b.id, b]));
+                            const combinedBills = [...cloudS.bills];
 
-                            // Logik Mudah: Kalau Local ada lagi banyak bills dari Cloud, kita percaya Local 
-                            // (Sebab mungkin Save Bill ke DB fail tadi tapi Session header lepas)
-                            if (localS.bills.length > cloudS.bills.length) {
-                                console.log(`Restoring Local Session [${localS.name}] (Local: ${localS.bills.length} bills vs Cloud: ${cloudS.bills.length})`);
-                                mergedSessions[cloudIndex] = localS;
-                            }
+                            // Kekalkan bil tempatan yang belum wujud di cloud
+                            (localS.bills || []).forEach(lb => {
+                                if (!cloudBillMap.has(lb.id)) {
+                                    combinedBills.push(lb);
+                                }
+                            });
+
+                            mergedSessions[cloudIndex] = {
+                                ...cloudS,
+                                bills: combinedBills,
+                                people: (localS.people?.length || 0) > (cloudS.people?.length || 0) ? localS.people : cloudS.people,
+                                paidStatus: { ...cloudS.paidStatus, ...localS.paidStatus },
+                            };
                         }
                     });
 
@@ -532,6 +555,7 @@ function SplitItContent() {
             setBillTitle(extTitle || "");
             setBillTotal(extAmount || "");
             if (extCurrency) setFormCurrency(extCurrency);
+            if (people.length > 0) setPayerId(people[0].id);
             setMode("FORM");
             setBillType("EQUAL");
             router.replace("/splitit");
@@ -580,32 +604,85 @@ function SplitItContent() {
         }
     }, [isLoaded, searchParams, router, user, sessions.length]);
 
-    // 1.5 POLLING LISTENER (replaces Supabase Realtime)
+    // 1.5 POLLING LISTENER (Ultra-jimat Compute Neon: Visibility + Idle Guards)
     useEffect(() => {
         if (!user || !activeSessionId || deletingSessionId) return;
 
+        // Track user activity to detect idle
+        const handleActivity = () => {
+            lastUserActivityRef.current = Date.now();
+        };
+
+        window.addEventListener("pointerdown", handleActivity);
+        window.addEventListener("keydown", handleActivity);
+        window.addEventListener("scroll", handleActivity);
+
         const sync = async () => {
+            // 1. Tab tersembunyi / minimize / phone lock -> JANGAN POLL
+            if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+            // 2. User idle lebih 3 minit -> JANGAN POLL (biarkan Neon tidur)
+            if (Date.now() - lastUserActivityRef.current > 180000) return;
+
+            // 3. Baru sahaja ada simpanan tempatan (< 10s), tengah simpan, atau dalam borang
+            if (Date.now() - lastLocalSaveRef.current < 10000) return;
+            if (isSavingRef.current || mode === "FORM") return;
+
             setSyncStatus("SYNCING");
             try {
                 const data = await getBillsForSession(activeSessionId);
                 if (data) {
                     const freshBills = (data as any[]).map(mapSqlBillToLocal);
-                    setSessions(prev =>
-                        prev.map(s =>
-                            s.id === activeSessionId ? { ...s, bills: freshBills } : s,
-                        ),
-                    );
+                    setSessions(prev => {
+                        const cur = prev.find(s => s.id === activeSessionId);
+                        if (!cur) return prev;
+
+                        // Kekalkan bil tempatan yang belum selesai sync atau belum dipadam
+                        const serverIds = new Set(freshBills.map(b => b.id));
+                        const pendingLocal = cur.bills.filter(
+                            b => !serverIds.has(b.id) && !deletedBillIdsRef.current.has(b.id)
+                        );
+                        const merged = [...freshBills, ...pendingLocal];
+
+                        if (JSON.stringify(merged) === JSON.stringify(cur.bills)) {
+                            return prev; // Tiada perubahan, jangan trigger re-render / auto-save loop
+                        }
+
+                        return prev.map(s => s.id === activeSessionId ? { ...s, bills: merged } : s);
+                    });
                 }
             } catch (e) {
                 console.error("Poll sync bills error:", e);
             } finally {
-                setTimeout(() => setSyncStatus("SAVED"), 500);
+                setTimeout(() => {
+                    if (!isSavingRef.current) setSyncStatus("SAVED");
+                }, 500);
             }
         };
 
-        const interval = setInterval(sync, 5000);
-        return () => clearInterval(interval);
-    }, [activeSessionId, deletingSessionId, user]);
+        // Sync serta-merta bila tab kembali aktif
+        const handleVisibilityOrFocus = () => {
+            if (document.visibilityState === "visible") {
+                lastUserActivityRef.current = Date.now();
+                sync();
+            }
+        };
+
+        window.addEventListener("focus", handleVisibilityOrFocus);
+        document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+
+        // Selang polling dijimatkan kepada 25 saat (hanya bila screen aktif)
+        const interval = setInterval(sync, 25000);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener("pointerdown", handleActivity);
+            window.removeEventListener("keydown", handleActivity);
+            window.removeEventListener("scroll", handleActivity);
+            window.removeEventListener("focus", handleVisibilityOrFocus);
+            document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+        };
+    }, [activeSessionId, deletingSessionId, user, mode]);
 
     // 2. Save Logic (Auto Sync with Debounce)
     useEffect(() => {
@@ -616,31 +693,48 @@ function SplitItContent() {
         localStorage.setItem("splitit_darkmode", String(darkMode));
         if (activeSessionId) localStorage.setItem("splitit_active_session_id", activeSessionId);
 
-        // B. Cloud Sync
-        if (user) {
+        // B. Cloud Sync (untuk perubahan sampingan seperti nama, ahli, dsb)
+        if (user && !isSavingRef.current) {
+            const currentSession = sessions.find(s => s.id === activeSessionId);
+            if (!currentSession) return;
+
+            const sessionHash = JSON.stringify({
+                id: currentSession.id,
+                name: currentSession.name,
+                currency: currentSession.currency,
+                people: currentSession.people,
+                paidStatus: currentSession.paidStatus,
+                billsCount: currentSession.bills.length,
+            });
+
+            if (sessionHash === lastSyncedHashRef.current) {
+                return;
+            }
+
             setSyncStatus("SAVING");
             setPendingChanges(true);
 
             const timer = setTimeout(async () => {
                 try {
-                    const currentSession = sessions.find(s => s.id === activeSessionId);
-                    if (currentSession) {
+                    const sess = sessions.find(s => s.id === activeSessionId);
+                    if (sess) {
                         try {
                             await upsertSession({
-                                id: currentSession.id,
-                                name: currentSession.name,
-                                currency: currentSession.currency || "RM",
-                                people: currentSession.people,
-                                paid_status: currentSession.paidStatus,
+                                id: sess.id,
+                                name: sess.name,
+                                currency: sess.currency || "RM",
+                                people: sess.people,
+                                paid_status: sess.paidStatus,
                             });
                         } catch (sessError) {
                             console.error("Session Sync Error:", sessError);
                         }
 
-                        if (currentSession.bills && currentSession.bills.length > 0) {
-                            const billsPayload = currentSession.bills.map(b => mapLocalBillToSql(b, currentSession.id));
+                        if (sess.bills && sess.bills.length > 0) {
+                            const billsPayload = sess.bills.map(b => mapLocalBillToSql(b, sess.id));
                             await upsertBills(billsPayload);
                         }
+                        lastSyncedHashRef.current = sessionHash;
                     }
                     setSyncStatus("SAVED");
                 } catch (err) {
@@ -674,14 +768,22 @@ function SplitItContent() {
 
     const createNewSession = () => {
         if (!newSessionName.trim()) return;
+        lastLocalSaveRef.current = Date.now();
         const newSession: Session = {
             id: createStringId("session"),
-            name: newSessionName, createdAt: Date.now(),
+            name: newSessionName.trim(),
+            createdAt: Date.now(),
+            ownerId: user?.id,
             people: [{ id: "p1", name: "Aku" }, { id: "p2", name: "Member 1" }],
-            bills: [], paidStatus: {}, currency: "RM"
+            bills: [],
+            paidStatus: {},
+            currency: "RM"
         };
-        setSessions([...sessions, newSession]);
+        const nextSessions = [...sessions, newSession];
+        setSessions(nextSessions);
         setActiveSessionId(newSession.id);
+        localStorage.setItem("splitit_sessions", JSON.stringify(nextSessions));
+        localStorage.setItem("splitit_active_session_id", newSession.id);
         setNewSessionName("");
         setShowSessionModal(false);
         setMode("DASHBOARD");
@@ -852,16 +954,39 @@ function SplitItContent() {
     };
 
     const saveBill = async () => {
-        if (!billTitle || !billTotal || !payerId) return;
+        const activePayerId = payerId || people[0]?.id;
+        if (!billTitle.trim() || !billTotal || !activePayerId) {
+            if (people.length === 0) {
+                alert("Sila tambah sekurang-kurangnya seorang ahli dalam geng lepak dulu!");
+            } else if (!activePayerId) {
+                alert("Sila pilih Tukang Bayar!");
+            }
+            return;
+        }
+
         const grandTotal = parseFloat(billTotal);
+        if (isNaN(grandTotal) || grandTotal <= 0) {
+            alert("Sila masukkan jumlah bill yang sah!");
+            return;
+        }
+
         const miscTotal = parseFloat(miscFee) || 0;
         const discountTotal = parseFloat(discountFee) || 0;
         let calculatedDetails: BillDetail[] = [];
         let itemsSubtotal = 0;
 
+        const peopleCount = people.length > 0 ? people.length : 1;
+
         if (billType === "EQUAL") {
-            const splitAmt = grandTotal / people.length;
-            calculatedDetails = people.map(p => ({ personId: p.id, base: splitAmt, tax: 0, misc: 0, discount: 0, total: splitAmt }));
+            const splitAmt = grandTotal / peopleCount;
+            calculatedDetails = people.map(p => ({
+                personId: p.id,
+                base: splitAmt,
+                tax: 0,
+                misc: 0,
+                discount: 0,
+                total: splitAmt,
+            }));
             itemsSubtotal = grandTotal;
         } else {
             const personBaseMap: Record<string, number> = {};
@@ -870,44 +995,112 @@ function SplitItContent() {
                 const splitCount = item.sharedBy.length;
                 if (splitCount > 0) {
                     const share = item.price / splitCount;
-                    item.sharedBy.forEach(pid => { if (personBaseMap[pid] !== undefined) personBaseMap[pid] += share; });
+                    item.sharedBy.forEach(pid => {
+                        if (personBaseMap[pid] !== undefined) personBaseMap[pid] += share;
+                    });
                 }
             });
             itemsSubtotal = menuItems.reduce((sum, item) => sum + item.price, 0);
             const rawTax = grandTotal - (itemsSubtotal + miscTotal) + discountTotal;
             const taxTotal = rawTax > 0.05 ? rawTax : 0;
-            const miscPerHead = miscTotal / people.length;
+            const miscPerHead = miscTotal / peopleCount;
 
             calculatedDetails = people.map(p => {
                 const base = personBaseMap[p.id] || 0;
                 let taxShare = 0;
-                if (taxTotal > 0) { taxShare = taxMethod === "PROPORTIONAL" && itemsSubtotal > 0 ? (base / itemsSubtotal) * taxTotal : taxTotal / people.length; }
+                if (taxTotal > 0) {
+                    taxShare = taxMethod === "PROPORTIONAL" && itemsSubtotal > 0
+                        ? (base / itemsSubtotal) * taxTotal
+                        : taxTotal / peopleCount;
+                }
                 let discountShare = 0;
-                if (discountTotal > 0) { discountShare = discountMethod === "PROPORTIONAL" && itemsSubtotal > 0 ? (base / itemsSubtotal) * discountTotal : discountTotal / people.length; }
-                return { personId: p.id, base: base, tax: taxShare, misc: miscPerHead, discount: discountShare, total: base + taxShare + miscPerHead - discountShare };
+                if (discountTotal > 0) {
+                    discountShare = discountMethod === "PROPORTIONAL" && itemsSubtotal > 0
+                        ? (base / itemsSubtotal) * discountTotal
+                        : discountTotal / peopleCount;
+                }
+                return {
+                    personId: p.id,
+                    base: base,
+                    tax: taxShare,
+                    misc: miscPerHead,
+                    discount: discountShare,
+                    total: base + taxShare + miscPerHead - discountShare,
+                };
             });
         }
 
         const newBill: Bill = {
             id: editingBillId || createStringId("bill"),
-            title: billTitle, type: billType, totalAmount: grandTotal, paidBy: payerId,
-            details: calculatedDetails, itemsSubtotal, miscAmount: miscTotal, discountAmount: discountTotal, taxMethod, discountMethod, originalCurrency: formCurrency,
+            title: billTitle.trim(),
+            type: billType,
+            totalAmount: grandTotal,
+            paidBy: activePayerId,
+            details: calculatedDetails,
+            itemsSubtotal,
+            miscAmount: miscTotal,
+            discountAmount: discountTotal,
+            taxMethod,
+            discountMethod,
+            originalCurrency: formCurrency,
             originalAmount: parseFloat(foreignAmount) || 0,
             exchangeRate: parseFloat(exchangeRate) || 1,
-            menuItems: billType === "ITEMIZED" ? menuItems : []
-
+            menuItems: billType === "ITEMIZED" ? menuItems : [],
         };
 
+        // Kunci polling supaya tidak menimpa bil tempatan
+        lastLocalSaveRef.current = Date.now();
+        isSavingRef.current = true;
+
         let updatedBills = [...bills];
-        if (editingBillId) { updatedBills = bills.map(b => b.id === editingBillId ? newBill : b); }
-        else { updatedBills = [newBill, ...bills]; }
-        updateActiveSession({ bills: updatedBills });
+        if (editingBillId) {
+            updatedBills = bills.map(b => b.id === editingBillId ? newBill : b);
+        } else {
+            updatedBills = [newBill, ...bills];
+        }
+
+        // 1. Simpan ke local state & localStorage serta-merta
+        const nextSessions = sessions.map(s =>
+            s.id === activeSessionId ? { ...s, bills: updatedBills } : s
+        );
+        setSessions(nextSessions);
+        localStorage.setItem("splitit_sessions", JSON.stringify(nextSessions));
+
+        // 2. Reset borang & kembali ke Dashboard
         resetForm();
+
+        // 3. Simpan ke Cloud serta-merta jika user log masuk
+        if (user && activeSession) {
+            setSyncStatus("SAVING");
+            try {
+                await upsertSession({
+                    id: activeSession.id,
+                    name: activeSession.name,
+                    currency: activeSession.currency || "RM",
+                    people: activeSession.people,
+                    paid_status: activeSession.paidStatus,
+                });
+                await upsertBills([mapLocalBillToSql(newBill, activeSession.id)]);
+                setSyncStatus("SAVED");
+            } catch (err) {
+                console.error("Save bill cloud error:", err);
+                setSyncStatus("ERROR");
+            } finally {
+                isSavingRef.current = false;
+            }
+        } else {
+            isSavingRef.current = false;
+        }
     };
 
     const deleteBill = async (id: string) => {
         if (confirm("Padam resit ni?")) {
-            updateActiveSession({ bills: bills.filter(b => b.id !== id) });
+            lastLocalSaveRef.current = Date.now();
+            deletedBillIdsRef.current.add(id);
+            const updatedBills = bills.filter(b => b.id !== id);
+            const nextSessions = sessions.map(s => s.id === activeSessionId ? { ...s, bills: updatedBills } : s);
+            setSessions(nextSessions);
+            localStorage.setItem("splitit_sessions", JSON.stringify(nextSessions));
             if (user) {
                 try {
                     await deleteBillAction(id);
@@ -1055,7 +1248,7 @@ function SplitItContent() {
     // --- OCR / SCAN LOGIC ---
     const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
         setShowScanMethodModal(false); const file = e.target.files?.[0]; if (!file) return;
-        setIsScanning(true); setScanStatus("Memproses gambar (Compressing)..."); setShowScanModal(true); setScannedItems([]); setScannedExtraInfo({ tax: 0, service: 0, discount: 0, deposit: 0 });
+        setIsScanning(true); setScanStatus("Memproses gambar (Compressing)..."); setShowScanModal(true); setScannedItems([]); setScannedExtraInfo({ totalAmount: 0, subtotal: 0, tax: 0, service: 0, discount: 0, deposit: 0 });
         try {
             const base64Data = await compressImage(file);
             setScanStatus("AI sedang menganalisis resit...");
@@ -1072,13 +1265,20 @@ function SplitItContent() {
             const parsedData = await res.json();
 
             const itemsArray = parsedData.items || (Array.isArray(parsedData) ? parsedData : []);
-            if (Array.isArray(itemsArray)) {
-                const mappedItems: ScannedItem[] = itemsArray.map((item: any, idx: number) => ({ id: `scan-${Date.now()}-${idx}`, name: item.name || "Unknown Item", price: item.price ? String(item.price.toFixed(2)) : "0.00", selected: true, sharedBy: [] }));
+            const expandedItems = expandScannedItems(itemsArray);
+
+            if (Array.isArray(expandedItems) && expandedItems.length > 0) {
+                const mappedItems: ScannedItem[] = expandedItems.map((item, idx: number) => ({
+                    id: `scan-${Date.now()}-${idx}`,
+                    name: item.name || "Unknown Item",
+                    price: item.price ? item.price.toFixed(2) : "0.00",
+                    selected: true,
+                    sharedBy: item.sharedBy || []
+                }));
                 setScannedItems(mappedItems);
+
                 // Normalize AI detected currency code
                 const aiCode = (parsedData.currency || currency).toUpperCase();
-
-                // Convert to API code first, then to app symbol
                 const apiCode = CURRENCY_MAP[aiCode] || aiCode;
                 const appSymbol = API_TO_SYMBOL[apiCode] || aiCode;
 
@@ -1101,21 +1301,62 @@ function SplitItContent() {
                 const detectedService = parseFloat(parsedData.serviceCharge) || 0;
                 const detectedDiscount = parseFloat(parsedData.discount) || 0;
                 const detectedDeposit = parseFloat(parsedData.deposit) || 0;
-                setScannedExtraInfo({ tax: detectedTax, service: detectedService, discount: Math.abs(detectedDiscount), deposit: Math.abs(detectedDeposit) });
-            } else { alert("AI tidak menjumpai senarai item."); }
+                const detectedSubtotal = parseFloat(parsedData.subtotal) || 0;
+                const detectedTotal = parseFloat(parsedData.totalAmount) || 0;
+
+                setScannedExtraInfo({
+                    totalAmount: detectedTotal,
+                    subtotal: detectedSubtotal,
+                    tax: detectedTax,
+                    service: detectedService,
+                    discount: Math.abs(detectedDiscount),
+                    deposit: Math.abs(detectedDeposit)
+                });
+            } else {
+                alert("AI tidak menjumpai senarai item.");
+            }
 
         } catch (err: any) { console.error(err); alert(`Gagal scan: ${err.message}`); }
         setIsScanning(false);
     };
 
     const addSelectedScannedItems = () => {
-        const itemsToAdd = scannedItems.filter(i => i.selected); if (itemsToAdd.length === 0) return;
-        const newMenuItems = itemsToAdd.map(i => ({ id: `m${Date.now()}-${Math.random()}`, name: i.name, price: parseFloat(i.price), sharedBy: i.sharedBy }));
+        const itemsToAdd = scannedItems.filter(i => i.selected);
+        if (itemsToAdd.length === 0) return;
+
+        // 1. Masukkan item ke dalam menuItems dan kekalkan siapa yang berkongsi (sharedBy)
+        const newMenuItems = itemsToAdd.map(i => ({
+            id: `m${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name: i.name,
+            price: parseFloat(i.price) || 0,
+            sharedBy: i.sharedBy || []
+        }));
         setMenuItems([...menuItems, ...newMenuItems]);
-        const currentTotal = parseFloat(billTotal) || 0; const scannedTotal = itemsToAdd.reduce((sum, i) => sum + parseFloat(i.price), 0);
-        if (currentTotal === 0) { setBillTotal(scannedTotal.toFixed(2)); }
-        if (includeScannedTax && (scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0)) { const totalTaxService = scannedExtraInfo.tax + scannedExtraInfo.service; const currentMisc = parseFloat(miscFee) || 0; setMiscFee((currentMisc + totalTaxService).toFixed(2)); }
-        if (includeScannedDiscount && (scannedExtraInfo.discount > 0 || scannedExtraInfo.deposit > 0)) { const totalDeductions = scannedExtraInfo.discount + scannedExtraInfo.deposit; const currentDisc = parseFloat(discountFee) || 0; setDiscountFee((currentDisc + totalDeductions).toFixed(2)); }
+
+        // 2. Tentukan Total Amount Resit (Include Tax, atau Total biasa jika tiada tax)
+        const scannedItemsTotal = itemsToAdd.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0);
+        const resolvedTotal = resolveDetectedBillTotal({
+            totalAmount: scannedExtraInfo.totalAmount,
+            subtotal: scannedExtraInfo.subtotal,
+            tax: scannedExtraInfo.tax,
+            serviceCharge: scannedExtraInfo.service,
+            discount: scannedExtraInfo.discount,
+            deposit: scannedExtraInfo.deposit,
+            itemsSum: scannedItemsTotal,
+            includeTax: includeScannedTax,
+            includeDiscount: includeScannedDiscount,
+        });
+
+        // Setkan jumlah penuh resit (include tax atau total biasa)
+        setBillTotal(resolvedTotal.toFixed(2));
+
+        // 3. Masukkan diskaun jika ada
+        if (includeScannedDiscount && (scannedExtraInfo.discount > 0 || scannedExtraInfo.deposit > 0)) {
+            const totalDeductions = scannedExtraInfo.discount + scannedExtraInfo.deposit;
+            const currentDisc = parseFloat(discountFee) || 0;
+            setDiscountFee((currentDisc + totalDeductions).toFixed(2));
+        }
+
         setShowScanModal(false);
     };
 
@@ -1556,7 +1797,7 @@ function SplitItContent() {
                                             <button onClick={() => applyQuickTax(10)} className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider border-2 rounded-lg transition-all active:scale-95 ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`}>+10% SC</button>
                                         </div>
                                     </div>
-                                    <div className="space-y-2"><label className="text-xs uppercase font-black tracking-wider opacity-70">Tukang Bayar</label><div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">{people.map(p => (<button key={p.id} onClick={() => setPayerId(p.id)} className={`px-4 py-3 rounded-xl text-sm font-bold border-2 whitespace-nowrap transition-all ${payerId === p.id ? (darkMode ? "bg-white text-black border-white shadow-[2px_2px_0px_0px_#ffffff50]" : "bg-black text-white border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]") : (darkMode ? "border-[#444] text-gray-400 hover:border-white" : "border-gray-300 text-gray-500 hover:border-black hover:text-black hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]")}`}>{p.name}</button>))}</div></div>
+                                    <div className="space-y-2"><label className="text-xs uppercase font-black tracking-wider opacity-70">Tukang Bayar</label><div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">{people.map(p => { const isSelected = (payerId || people[0]?.id) === p.id; return (<button key={p.id} onClick={() => setPayerId(p.id)} className={`px-4 py-3 rounded-xl text-sm font-bold border-2 whitespace-nowrap transition-all ${isSelected ? (darkMode ? "bg-white text-black border-white shadow-[2px_2px_0px_0px_#ffffff50]" : "bg-black text-white border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]") : (darkMode ? "border-[#444] text-gray-400 hover:border-white" : "border-gray-300 text-gray-500 hover:border-black hover:text-black hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]")}`}>{p.name}</button>); })}</div></div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
@@ -1849,15 +2090,36 @@ function SplitItContent() {
                                             <button onClick={() => setShowScanModal(false)}><X size={20} /></button>
                                         </div>
                                         <div className="px-4 pt-4 space-y-2">
-                                            {(scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0) && (
-                                                <div className={`p-2 rounded-xl border-2 border-dashed flex items-start gap-2 ${darkMode ? "border-yellow-500/50 bg-yellow-500/10" : "border-yellow-600/30 bg-yellow-50"}`}>
-                                                    <AlertCircle size={14} className="mt-0.5 text-yellow-500" />
-                                                    <div className="flex-1">
-                                                        <p className="text-[9px] font-black uppercase opacity-70">Tax/SC: {currency}{(scannedExtraInfo.tax + scannedExtraInfo.service).toFixed(2)}</p>
-                                                        <label className="flex items-center gap-1.5 text-[9px] font-bold cursor-pointer"><input type="checkbox" checked={includeScannedTax} onChange={(e) => setIncludeScannedTax(e.target.checked)} className="accent-yellow-500 w-3 h-3" />Masuk Caj Tetap?</label>
+                                            {/* Banner Total Amount Termasuk Tax */}
+                                            <div className={`p-3 rounded-xl border-2 flex items-center justify-between ${darkMode ? "border-green-400/40 bg-green-400/10" : "border-green-600/40 bg-green-50"}`}>
+                                                <div className="flex items-center gap-2">
+                                                    <Receipt size={18} className={darkMode ? "text-green-400" : "text-green-600"} />
+                                                    <div>
+                                                        <p className="text-[10px] font-black uppercase tracking-wider opacity-70">
+                                                            {scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0 
+                                                                ? "Total Resit (Termasuk Tax/SC)" 
+                                                                : "Total Resit (Biasa)"}
+                                                        </p>
+                                                        <p className="text-[9px] font-bold opacity-60">
+                                                            {scannedExtraInfo.tax > 0 || scannedExtraInfo.service > 0 
+                                                                ? `Cukai/Servis: ${currency}${(scannedExtraInfo.tax + scannedExtraInfo.service).toFixed(2)} (Diagih automatik)` 
+                                                                : "Tiada caj cukai/servis"}
+                                                        </p>
                                                     </div>
                                                 </div>
-                                            )}
+                                                <span className="font-mono font-black text-lg">
+                                                    {currency}{resolveDetectedBillTotal({
+                                                        totalAmount: scannedExtraInfo.totalAmount,
+                                                        subtotal: scannedExtraInfo.subtotal,
+                                                        tax: scannedExtraInfo.tax,
+                                                        serviceCharge: scannedExtraInfo.service,
+                                                        discount: scannedExtraInfo.discount,
+                                                        deposit: scannedExtraInfo.deposit,
+                                                        itemsSum: scannedItems.filter(i => i.selected).reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0),
+                                                    }).toFixed(2)}
+                                                </span>
+                                            </div>
+
                                             {(scannedExtraInfo.discount > 0 || scannedExtraInfo.deposit > 0) && (
                                                 <div className={`p-2 rounded-xl border-2 border-dashed flex items-start gap-2 ${darkMode ? "border-green-500/50 bg-green-500/10" : "border-green-600/30 bg-green-50"}`}>
                                                     <Tag size={14} className="mt-0.5 text-green-500" />
@@ -1869,7 +2131,7 @@ function SplitItContent() {
                                             )}
                                         </div>
                                         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                                            {scannedItems.length === 0 ? (<div className="text-center py-10 opacity-50"><p className="text-xs font-bold">Tak jumpa item. Cuba scan lagi.</p></div>) : (scannedItems.map(item => (<div key={item.id} className={`p-3 rounded-xl border-2 transition-all ${item.selected ? (darkMode ? "border-green-400 bg-green-400/5" : "border-green-500 bg-green-50/30") : "opacity-40 grayscale"}`}><div className="flex items-start gap-2 mb-3"><input type="checkbox" checked={item.selected} onChange={() => toggleScanItem(item.id)} className="mt-1 accent-green-500 w-4 h-4" /><div className="flex-1"><input value={item.name} onChange={e => updateScannedItem(item.id, 'name', e.target.value)} className="w-full bg-transparent font-bold text-xs outline-none border-b border-dashed border-current/20 focus:border-green-500 mb-1" /><div className="flex items-center gap-1"><span className="text-[10px] opacity-50">{currency}</span><input type="number" value={item.price} onChange={e => updateScannedItem(item.id, 'price', e.target.value)} className="w-20 bg-transparent font-mono font-black text-sm outline-none" /></div></div><button onClick={() => deleteScannedItem(item.id)} className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={14} /></button></div><div className="flex flex-wrap gap-1 pt-2 border-t border-dashed border-current/10">{people.map(p => { const isAssigned = item.sharedBy.includes(p.id); return (<button key={p.id} onClick={() => togglePersonInScan(item.id, p.id)} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase border transition-all ${isAssigned ? (darkMode ? "bg-blue-500 border-blue-400 text-white" : "bg-blue-600 border-black text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]") : (darkMode ? "border-white/20 text-white/40" : "border-black/20 text-black/40")}`}>{p.name}</button>); })}</div></div>)))}
+                                            {scannedItems.length === 0 ? (<div className="text-center py-10 opacity-50"><p className="text-xs font-bold">Tak jumpa item. Cuba scan lagi.</p></div>) : (scannedItems.map(item => (<div key={item.id} className={`p-3 rounded-xl border-2 transition-all ${item.selected ? (darkMode ? "border-green-400 bg-green-400/5" : "border-green-500 bg-green-50/30") : "opacity-40 grayscale"}`}><div className="flex items-start gap-2 mb-3"><input type="checkbox" checked={item.selected} onChange={() => toggleScanItem(item.id)} className="mt-1 accent-green-500 w-4 h-4" /><div className="flex-1"><input value={item.name} onChange={e => updateScannedItem(item.id, 'name', e.target.value)} className="w-full bg-transparent font-bold text-xs outline-none border-b border-dashed border-current/20 focus:border-green-500 mb-1" /><div className="flex items-center gap-1"><span className="text-[10px] opacity-50">{currency}</span><input type="number" value={item.price} onChange={e => updateScannedItem(item.id, 'price', e.target.value)} className="w-20 bg-transparent font-mono font-black text-sm outline-none" /></div></div><button onClick={() => deleteScannedItem(item.id)} className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={14} /></button></div><div className="flex flex-wrap items-center gap-1 pt-2 border-t border-dashed border-current/10"><span className="text-[9px] font-bold opacity-50 mr-1">Kongsi/Bayar:</span>{people.map(p => { const isAssigned = item.sharedBy.includes(p.id); return (<button key={p.id} onClick={() => togglePersonInScan(item.id, p.id)} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase border transition-all ${isAssigned ? (darkMode ? "bg-blue-500 border-blue-400 text-white" : "bg-blue-600 border-black text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]") : (darkMode ? "border-white/20 text-white/40 hover:text-white" : "border-black/20 text-black/40 hover:text-black")}`}>{p.name}</button>); })}</div></div>)))}
                                         </div>
                                         <div className="p-4 border-t border-current border-opacity-10 bg-current/5">
                                             <button onClick={addSelectedScannedItems} className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all`}>Masukkan {scannedItems.filter(i => i.selected).length} Item Ke Bill</button>

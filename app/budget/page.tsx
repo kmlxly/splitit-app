@@ -162,6 +162,7 @@ export default function BudgetPage() {
 
     // Sync Status State
     const [syncStatus, setSyncStatus] = useState<"SAVED" | "SAVING" | "ERROR" | "OFFLINE">("OFFLINE");
+    const lastSyncedBudgetHashRef = useRef<string>("");
 
     // Feature 1: Ghost Mode State
     const [isGhostMode, setIsGhostMode] = useState(false);
@@ -227,7 +228,18 @@ export default function BudgetPage() {
             if (!user) return;
             try {
                 const cloudTx = await getBudgetTransactions();
-                if (cloudTx.length > 0) setTransactions(cloudTx as any);
+                if (cloudTx && cloudTx.length > 0) {
+                    setTransactions(cloudTx as any);
+                    lastSyncedBudgetHashRef.current = JSON.stringify(cloudTx.map(t => ({
+                        id: t.id,
+                        title: t.title,
+                        amount: t.amount,
+                        category: t.category,
+                        date: t.date,
+                        iso_date: t.isoDate,
+                        items: t.items || [],
+                    })));
+                }
             } catch (e) {
                 console.error("Failed to load budget:", e);
             }
@@ -245,45 +257,70 @@ export default function BudgetPage() {
         return () => cancelAnimationFrame(frame);
     }, [scrollToMonth]);
 
-    // 0.2 Polling Sync (replaces Supabase Realtime)
+    // 0.2 Sync on Tab Focus / Visibility (Penjimatan Compute Neon: Hanya bila tab aktif)
     useEffect(() => {
         if (!user) return;
-        const interval = setInterval(async () => {
+
+        const syncFromCloud = async () => {
+            if (document.visibilityState !== "visible") return;
             try {
                 const cloudTx = await getBudgetTransactions();
-                if (cloudTx) setTransactions(cloudTx as any);
+                if (cloudTx && Array.isArray(cloudTx)) {
+                    setTransactions(prev => {
+                        const hashPrev = JSON.stringify(prev);
+                        const hashCloud = JSON.stringify(cloudTx);
+                        if (hashPrev === hashCloud) {
+                            return prev;
+                        }
+                        lastSyncedBudgetHashRef.current = hashCloud;
+                        return cloudTx as any;
+                    });
+                }
             } catch (e) {
-                console.error("Poll sync error:", e);
+                console.error("Focus sync error:", e);
             }
-        }, 15000);
-        return () => clearInterval(interval);
+        };
+
+        window.addEventListener("focus", syncFromCloud);
+        document.addEventListener("visibilitychange", syncFromCloud);
+        return () => {
+            window.removeEventListener("focus", syncFromCloud);
+            document.removeEventListener("visibilitychange", syncFromCloud);
+        };
     }, [user]);
 
-    // 0.1 SYNC TO CLOUD (Auto-Save)
+    // 0.1 SYNC TO CLOUD (Auto-Save dengan Hash Check — Elak Overwrite & Pembaziran Compute)
     useEffect(() => {
+        if (!user || transactions.length === 0 || !isDataLoaded) return;
+
+        const payload = transactions.map(t => ({
+            id: t.id,
+            title: t.title,
+            amount: t.amount,
+            category: t.category,
+            date: t.date,
+            iso_date: t.isoDate,
+            items: t.items || [],
+        }));
+
+        const hash = JSON.stringify(payload);
+        if (hash === lastSyncedBudgetHashRef.current) return;
+
+        setSyncStatus("SAVING");
         const syncToCloud = async () => {
-            if (!user || transactions.length === 0) return;
-
-            const payload = transactions.map(t => ({
-                id: t.id,
-                title: t.title,
-                amount: t.amount,
-                category: t.category,
-                date: t.date,
-                iso_date: t.isoDate,
-                items: t.items || [],
-            }));
-
             try {
                 await upsertBudgetTransactions(payload);
+                lastSyncedBudgetHashRef.current = hash;
+                setSyncStatus("SAVED");
             } catch (e) {
                 console.error("Sync Error:", e);
+                setSyncStatus("ERROR");
             }
         };
 
         const timeout = setTimeout(syncToCloud, 2000);
         return () => clearTimeout(timeout);
-    }, [transactions, user]);
+    }, [transactions, user, isDataLoaded]);
 
     // 1. Load data bila app mula buka (Run sekali je)
     useEffect(() => {

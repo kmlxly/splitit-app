@@ -40,6 +40,7 @@ export async function getMySessionsAndBills() {
     SELECT id, owner_id, name, currency, people, paid_status, created_at
     FROM public.sessions
     WHERE owner_id = ${user.id}
+    ORDER BY created_at DESC
   `;
 
   // 2. Shared sessions via session_members
@@ -48,6 +49,7 @@ export async function getMySessionsAndBills() {
     FROM public.sessions s
     INNER JOIN public.session_members sm ON sm.session_id = s.id
     WHERE sm.user_id = ${user.id} AND s.owner_id != ${user.id}
+    ORDER BY s.created_at DESC
   `;
 
   const allSessions = [...myRows, ...sharedRows];
@@ -61,6 +63,7 @@ export async function getMySessionsAndBills() {
     SELECT *
     FROM public.bills
     WHERE session_id = ANY(${sessionIds}::text[])
+    ORDER BY created_at DESC
   `;
 
   return { sessions: allSessions, bills: billRows };
@@ -89,6 +92,7 @@ export async function getBillsForSession(sessionId: string) {
   const rows = await sql`
     SELECT * FROM public.bills
     WHERE session_id = ${sessionId}
+    ORDER BY created_at DESC
   `;
   return rows;
 }
