@@ -130,7 +130,7 @@ export default function TripListPage() {
     }, []);
 
     const uploadImage = async (fileOrBlob: File | Blob, mode: 'create' | 'edit') => {
-        if (!user) return alert("Sila log masuk semula.");
+        if (!user) return alert("Please sign in first.");
 
         try {
             setUploading(true);
@@ -140,8 +140,8 @@ export default function TripListPage() {
             else setEditCoverImage(publicUrl);
 
         } catch (error: any) {
-            console.error("Ralat penuh muat naik:", error);
-            alert('Gagal muat naik: ' + (error.message || "Sila cuba lagi."));
+            console.error("Upload error:", error);
+            alert('Upload failed: ' + (error.message || "Please try again."));
         } finally {
             setUploading(false);
             setImageToCrop(null);
@@ -157,7 +157,7 @@ export default function TripListPage() {
             }
         } catch (e) {
             console.error(e);
-            alert("Gagal memproses gambar cropping.");
+            alert("Failed to process cropped image.");
         }
     };
 
@@ -216,7 +216,7 @@ export default function TripListPage() {
 
     const handleCreateTrip = async () => {
         if (!user) return setShowAuthModal(true);
-        if (!newTripName || !newStartDate) return alert("Sila isi Nama & Tarikh Mula!");
+        if (!newTripName || !newStartDate) return alert("Please enter Trip Name & Start Date!");
 
         const defaultImages = [
             "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=2021&auto=format&fit=crop",
@@ -243,7 +243,7 @@ export default function TripListPage() {
             setNewBudget("");
             setNewCoverImage("");
         } catch (e: any) {
-            alert("Gagal create trip: " + (e.message || ""));
+            alert("Failed to create trip: " + (e.message || ""));
         }
     };
 
@@ -285,20 +285,20 @@ export default function TripListPage() {
             } : t));
             setShowEditModal(false);
         } catch (e: any) {
-            alert("Gagal update trip: " + (e.message || ""));
+            alert("Failed to update trip: " + (e.message || ""));
         }
     };
 
     const handleDeleteTrip = async (e: React.MouseEvent, id: string) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!confirm("Adakah anda pasti mahu memadam trip ini? Semua data itinerary juga akan dipadam.")) return;
+        if (!confirm("Are you sure you want to delete this trip? All itinerary data will also be deleted.")) return;
 
         try {
             await deleteTripAction(id);
             setTrips(trips.filter(t => t.id !== id));
         } catch (err: any) {
-            alert("Gagal delete trip: " + (err.message || ""));
+            alert("Failed to delete trip: " + (err.message || ""));
         }
     };
 
@@ -502,7 +502,7 @@ export default function TripListPage() {
                                 {/* Image Preview & Upload */}
                                 <div className={`relative h-24 rounded-xl border-2 border-dashed mb-3 overflow-hidden flex items-center justify-center ${darkMode ? "border-white/20" : "border-black/10"}`}>
                                     {newCoverImage ? (
-                                        <img src={newCoverImage} alt="Preview cover trip baharu" className="w-full h-full object-cover" />
+                                        <img src={newCoverImage} alt="Preview new trip cover" className="w-full h-full object-cover" />
                                     ) : (
                                         <p className="text-[10px] font-bold opacity-40 uppercase">No Image Selected</p>
                                     )}
@@ -543,7 +543,7 @@ export default function TripListPage() {
                                             onClick={() => setNewCoverImage(url)}
                                             className={`flex-shrink-0 w-16 h-12 rounded-lg border-2 overflow-hidden transition-all ${newCoverImage === url ? "border-blue-500 scale-110" : "border-transparent opacity-60"}`}
                                         >
-                                            <img src={url} alt={`Pilihan cover ${i + 1}`} className="w-full h-full object-cover" />
+                                            <img src={url} alt={`Cover option ${i + 1}`} className="w-full h-full object-cover" />
                                         </button>
                                     ))}
                                 </div>
@@ -654,7 +654,7 @@ export default function TripListPage() {
                                 {/* Image Preview & Upload */}
                                 <div className={`relative h-24 rounded-xl border-2 border-dashed mb-3 overflow-hidden flex items-center justify-center ${darkMode ? "border-white/20" : "border-black/10"}`}>
                                     {editCoverImage ? (
-                                        <img src={editCoverImage} alt="Preview cover trip" className="w-full h-full object-cover" />
+                                        <img src={editCoverImage} alt="Preview trip cover" className="w-full h-full object-cover" />
                                     ) : (
                                         <p className="text-[10px] font-bold opacity-40 uppercase">No Image Selected</p>
                                     )}
@@ -695,7 +695,7 @@ export default function TripListPage() {
                                             onClick={() => setEditCoverImage(url)}
                                             className={`flex-shrink-0 w-16 h-12 rounded-lg border-2 overflow-hidden transition-all ${editCoverImage === url ? "border-blue-500 scale-110" : "border-transparent opacity-60"}`}
                                         >
-                                            <img src={url} alt={`Pilihan cover ${i + 1}`} className="w-full h-full object-cover" />
+                                            <img src={url} alt={`Cover option ${i + 1}`} className="w-full h-full object-cover" />
                                         </button>
                                     ))}
                                 </div>

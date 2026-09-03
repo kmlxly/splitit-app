@@ -15,107 +15,107 @@ export const APP_ONBOARDING_STEPS = {
     splitit: [
         {
             target: "splitit-event",
-            kicker: "Langkah pertama",
-            title: "Pilih event",
-            description: "Tekan kad ini untuk bertukar atau mencipta ruang bil yang berasingan.",
-            bullets: ["Satu event untuk satu makan, rumah atau trip.", "Mata wang boleh ditukar melalui butang di header."],
+            kicker: "Step 1",
+            title: "Select Event",
+            description: "Tap this card to switch between or create isolated bill sessions.",
+            bullets: ["One session per meal, house, or group trip.", "Change currency via the top header button."],
         },
         {
             target: "splitit-people",
-            kicker: "Bina kumpulan",
-            title: "Tambah peserta",
-            description: "Masukkan semua nama yang terlibat sebelum anda mula membahagikan bil.",
-            bullets: ["Taip nama pada kotak Tambah dan tekan +.", "Tekan nama untuk edit peserta."],
+            kicker: "Build Crew",
+            title: "Add Members",
+            description: "Add everyone who is participating before splitting the bill.",
+            bullets: ["Type a name in the Add box and tap +.", "Tap any member name to edit."],
         },
         {
             target: "splitit-bills",
-            kicker: "Kira & agih",
-            title: "Tambah bil",
-            description: "Buka borang bil, masukkan item secara manual atau gunakan Scan Resit.",
-            bullets: ["Pilih siapa berkongsi setiap item.", "Simpan untuk melihat jumlah dan settlement."],
+            kicker: "Calculate & Split",
+            title: "Add Bills",
+            description: "Open the bill form to add items manually or use AI Scan.",
+            bullets: ["Select who is sharing each item.", "Save to calculate balances and settlements."],
         },
     ],
     budget: [
         {
             target: "budget-month",
-            kicker: "Pilih tempoh",
-            title: "Tukar bulan",
-            description: "Leret senarai bulan untuk melihat rekod dan baki bagi tempoh berlainan.",
-            bullets: ["Bulan yang aktif ditandakan dengan jelas."],
+            kicker: "Time Period",
+            title: "Switch Month",
+            description: "Swipe across the month picker to view records from different months.",
+            bullets: ["Active month is clearly highlighted."],
         },
         {
             target: "budget-limit",
-            kicker: "Tetapkan sasaran",
-            title: "Set monthly limit",
-            description: "Tekan kad ini untuk menetapkan had perbelanjaan bulanan anda.",
-            bullets: ["Bar akan berubah warna apabila belanja menghampiri had."],
+            kicker: "Set Goals",
+            title: "Set Monthly Limit",
+            description: "Tap this card to establish your monthly spending boundary.",
+            bullets: ["The progress bar changes color as you approach your limit."],
         },
         {
             target: "budget-manual",
-            kicker: "Rekod duit",
-            title: "Tambah transaksi",
-            description: "Gunakan Manual Input untuk merekod income atau expense dengan tepat.",
-            bullets: ["Isi jumlah, kategori dan tarikh transaksi."],
+            kicker: "Record Money",
+            title: "Add Transaction",
+            description: "Use Manual Input to log income or expenses accurately.",
+            bullets: ["Enter amount, category, and transaction date."],
         },
         {
             target: "budget-scan",
-            kicker: "Jimat masa",
-            title: "Scan resit",
-            description: "AI Scan boleh membaca gambar resit atau transaksi daripada PDF.",
-            bullets: ["Semak hasil scan sebelum menyimpannya."],
+            kicker: "Save Time",
+            title: "Scan Receipt",
+            description: "AI Scan extracts transactions from receipt photos or bank statement PDFs.",
+            bullets: ["Review scanned line items before saving."],
         },
         {
             target: "budget-analytics",
-            kicker: "Baca corak",
-            title: "Buka analitik",
-            description: "Lihat pecahan kategori, kalendar harian dan penggunaan bajet anda.",
-            bullets: ["Tekan sekali lagi untuk kembali ke transaksi terkini."],
+            kicker: "Read Patterns",
+            title: "Open Analytics",
+            description: "View category breakdowns, daily calendar heatmaps, and budget usage.",
+            bullets: ["Tap again to return to recent transactions."],
         },
     ],
     subTracker: [
         {
             target: "sub-yearly",
-            kicker: "Realiti sebenar",
-            title: "Semak kos setahun",
-            description: "Kad ini menukar semua komitmen kepada jumlah tahunan supaya impaknya mudah difahami.",
-            bullets: ["Bandingkan angka tahunan dengan jumlah bulanan."],
+            kicker: "True Reality",
+            title: "Check Yearly Cost",
+            description: "This card converts all monthly commitments into annual totals.",
+            bullets: ["Compare your yearly cost against monthly payments."],
         },
         {
             target: "sub-add-commitment",
-            kicker: "Kos wajib",
-            title: "Tambah komitmen",
-            description: "Gunakan butang ini untuk loan, bil, insurans, simpanan dan utiliti.",
-            bullets: ["Isi harga, kitaran dan tarikh bayaran seterusnya."],
+            kicker: "Fixed Costs",
+            title: "Add Commitment",
+            description: "Use this for loans, bills, insurance, savings, and utilities.",
+            bullets: ["Set amount, billing cycle, and next due date."],
         },
         {
             target: "sub-add-lifestyle",
-            kicker: "Kos pilihan",
-            title: "Tambah subscription",
-            description: "Rekod hiburan, servis digital, gym dan komitmen gaya hidup di sini.",
-            bullets: ["Tambah pautan pembatalan sebagai Kill Switch jika ada."],
+            kicker: "Lifestyle Costs",
+            title: "Add Subscription",
+            description: "Track entertainment, digital services, gyms, and memberships.",
+            bullets: ["Add cancellation URLs as quick Kill Switches."],
         },
         {
             target: "sub-sync",
-            kicker: "Pautan pintar",
+            kicker: "Smart Link",
             title: "Auto-sync Budget",
-            description: "Apabila aktif, butang Bayar turut menghantar rekod belanja ke Budget.AI.",
-            bullets: ["Tekan ikon ini untuk hidup atau matikan sync."],
+            description: "When enabled, tapping Pay also logs an expense in Budget.AI.",
+            bullets: ["Tap this icon to toggle synchronization."],
         },
     ],
     tripit: [
         {
             target: "tripit-create",
-            kicker: "Mulakan perjalanan",
-            title: "Cipta trip",
-            description: "Tekan di sini untuk menetapkan nama, tarikh, mata wang, bajet dan gambar cover.",
-            bullets: ["Login diperlukan untuk menyimpan trip."],
+            kicker: "Start Adventure",
+            title: "Create Trip",
+            description: "Tap here to set trip name, dates, currency, budget, and cover photo.",
+            bullets: ["Sign in required to persist trips."],
         },
         {
             target: "tripit-list",
-            kicker: "Masuk workspace",
-            title: "Buka kad trip",
-            description: "Kad trip membawa anda ke itinerary, budget, expense dan fungsi split bill.",
-            bullets: ["Tekan kad untuk buka; gunakan ikon pensel untuk edit."],
+            kicker: "Open Workspace",
+            title: "Open Trip Card",
+            description: "Trip cards give access to itinerary, budget, expenses, and split bill.",
+            bullets: ["Tap to open; use pencil icon to edit."],
         },
     ],
 } satisfies Record<string, readonly OnboardingStep[]>;
@@ -259,14 +259,14 @@ export default function AppOnboarding({
                 ref={triggerRef}
                 type="button"
                 onClick={openTour}
-                aria-label={`Buka cara guna ${appName}`}
-                title={`Cara guna ${appName}`}
+                aria-label={`Open ${appName} guide`}
+                title={`${appName} guide`}
                 className={`fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-30 flex min-h-11 items-center gap-2 rounded-xl border-2 px-3 text-[10px] font-black uppercase tracking-wider transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none ${darkMode
                     ? "border-white bg-white text-black shadow-none hover:bg-zinc-200"
                     : "border-black bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5"
                     }`}
             >
-                <CircleHelp size={16} aria-hidden="true" /> Cara guna
+                <CircleHelp size={16} aria-hidden="true" /> Guide
             </button>
 
             {isOpen && (
@@ -320,7 +320,7 @@ export default function AppOnboarding({
                                 ref={closeButtonRef}
                                 type="button"
                                 onClick={closeTour}
-                                aria-label="Tutup panduan"
+                                aria-label="Close guide"
                                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 active:scale-95 ${darkMode ? "border-white bg-white text-black" : "border-black bg-white"}`}
                             >
                                 <X size={16} aria-hidden="true" />
@@ -347,7 +347,7 @@ export default function AppOnboarding({
                         </div>
 
                         <div className="mt-4 flex items-center gap-2 border-t border-dashed border-current/20 pt-3">
-                            <button type="button" onClick={closeTour} className="min-h-10 px-1 text-[9px] font-black uppercase opacity-50 hover:opacity-100">Langkau</button>
+                            <button type="button" onClick={closeTour} className="min-h-10 px-1 text-[9px] font-black uppercase opacity-50 hover:opacity-100">Skip</button>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -355,7 +355,7 @@ export default function AppOnboarding({
                                     setActiveStep((step) => Math.max(0, step - 1));
                                 }}
                                 disabled={activeStep === 0}
-                                aria-label="Langkah sebelumnya"
+                                aria-label="Previous step"
                                 className={`ml-auto flex min-h-10 items-center gap-1 rounded-lg border-2 px-2 text-[9px] font-black uppercase disabled:pointer-events-none disabled:opacity-25 ${darkMode ? "border-white" : "border-black bg-white"}`}
                             >
                                 <ArrowLeft size={13} aria-hidden="true" /> Back
@@ -372,7 +372,7 @@ export default function AppOnboarding({
                                 }}
                                 className={`flex min-h-10 items-center gap-1 rounded-lg border-2 border-black px-3 text-[9px] font-black uppercase text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none ${accentClassName}`}
                             >
-                                {isLastStep ? <>Faham <Check size={13} aria-hidden="true" /></> : <>Next <ArrowRight size={13} aria-hidden="true" /></>}
+                                {isLastStep ? <>Got it <Check size={13} aria-hidden="true" /></> : <>Next <ArrowRight size={13} aria-hidden="true" /></>}
                             </button>
                         </div>
                     </div>

@@ -22,8 +22,8 @@ export default function WelcomeScreen({
     {
       id: "splitit",
       title: "SPLITIT",
-      tagline: "Kira & Split Bil Makan",
-      desc: "OCR scan resit pintar, sokong multiplayer live & agih tax mengikut % makan.",
+      tagline: "Bill & Receipt Splitting",
+      desc: "Smart OCR receipt scanner, live multiplayer sync & proportional tax distribution.",
       accent: "bg-[#FF6B55] text-black",
       border: isDarkMode ? "border-white" : "border-black",
       badge: "AI SCANNER",
@@ -32,8 +32,8 @@ export default function WelcomeScreen({
     {
       id: "budget",
       title: "BUDGET.AI",
-      tagline: "Track Duit Poket Harian",
-      desc: "Kawal had harian, auto-kategori belanja & pantau 'Safe-To-Spend' tanpa stres.",
+      tagline: "Daily Pocket Tracker",
+      desc: "Control daily spending limits, auto-categorize expenses & monitor your Safe-to-Spend balance.",
       accent: "bg-[#FBBF24] text-black",
       border: isDarkMode ? "border-white" : "border-black",
       badge: "AUTO TRACK",
@@ -42,8 +42,8 @@ export default function WelcomeScreen({
     {
       id: "tripit",
       title: "TRIPIT",
-      tagline: "Perjalanan & Percutian",
-      desc: "Kongsi itinerary, catat perbelanjaan kumpulan & auto-settle hutang travel.",
+      tagline: "Travel & Itinerary Planner",
+      desc: "Share travel schedules, log group expenses & auto-settle balances with travel buddies.",
       accent: "bg-[#6366F1] text-white",
       border: isDarkMode ? "border-white" : "border-black",
       badge: "GROUP SYNC",
@@ -52,8 +52,8 @@ export default function WelcomeScreen({
     {
       id: "subtracker",
       title: "SUB.TRACKER",
-      tagline: "Radar Langganan Tetap",
-      desc: "Kawal komitmen bulanan, alert tarikh renew & semak realiti kos setahun.",
+      tagline: "Recurring Commitments Radar",
+      desc: "Track monthly subscriptions, renewal alerts & see your 1-year total reality check.",
       accent: "bg-[#10B981] text-black",
       border: isDarkMode ? "border-white" : "border-black",
       badge: "RENEW RADAR",
@@ -97,15 +97,15 @@ export default function WelcomeScreen({
         </h1>
 
         <p className="text-xs font-semibold opacity-70 leading-relaxed max-w-sm">
-          Aplikasi pengurusan bil restoran, belanja harian, trip percutian dan komitmen langganan berkuasa AI dalam satu ekosistem kemas.
+          AI-powered dining bills, daily pocket tracking, travel itineraries, and recurring commitments in one sleek ecosystem.
         </p>
       </div>
 
-      {/* STACKED CARDS DECK (INSPIRED BY DRIBBLE REFERENCE) */}
+      {/* STACKED CARDS DECK (INSPIRED BY DRIBBBLE REFERENCE) */}
       <div className="my-2">
         <div className="flex items-center justify-between mb-2 px-1">
-          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">PILIH & JELAJAH MODUL</span>
-          <span className="text-[10px] font-bold opacity-40">Tekan tab untuk tukar</span>
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">EXPLORE MODULES</span>
+          <span className="text-[10px] font-bold opacity-40">Tap tab to switch</span>
         </div>
 
         {/* Tab Pills */}
@@ -133,7 +133,6 @@ export default function WelcomeScreen({
             <div
               className={`p-5 rounded-3xl border-2 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${current.accent} ${current.border} relative overflow-hidden`}
             >
-              {/* Watermark / Background Accent Circle */}
               <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-black/10 pointer-events-none" />
 
               <div className="flex items-start justify-between mb-3">
@@ -182,7 +181,7 @@ export default function WelcomeScreen({
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span>Masuk Pantas Dengan Google</span>
+          <span>Quick Sign In with Google</span>
         </button>
 
         {/* Email Login Button */}
@@ -194,7 +193,7 @@ export default function WelcomeScreen({
               : "bg-white text-black border-black/30 hover:border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]"
           }`}
         >
-          <span>Guna Emel & Kata Laluan</span>
+          <span>Use Email & Password</span>
           <ChevronRight size={14} className="opacity-60" />
         </button>
 
@@ -205,14 +204,14 @@ export default function WelcomeScreen({
             isDarkMode ? "text-white/80" : "text-black/80"
           }`}
         >
-          <span>Terus Sebagai Tetamu (Offline Mode)</span>
+          <span>Continue as Guest (Offline Mode)</span>
           <ArrowRight size={12} />
         </button>
 
-        {/* Small Trust Microcopy */}
+        {/* Trust Microcopy */}
         <div className="flex items-center justify-center gap-1.5 pt-1 text-[9px] font-medium opacity-40">
           <Shield size={10} />
-          <span>Data disimpan dengan enkripsi selamat & sokongan mod offline</span>
+          <span>Data secured with encryption & offline mode supported</span>
         </div>
       </div>
     </div>

@@ -75,11 +75,11 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
         callbackURL,
       });
       if (error) {
-        setFeedback({ type: "error", text: error.message || "Gagal login dengan Google." });
+        setFeedback({ type: "error", text: error.message || "Failed to sign in with Google." });
         setGoogleLoading(false);
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Gagal login dengan Google.";
+      const message = error instanceof Error ? error.message : "Failed to sign in with Google.";
       setFeedback({ type: "error", text: message });
       setGoogleLoading(false);
     }
@@ -99,7 +99,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
           name: name || email.split("@")[0],
         });
         if (error) {
-          setFeedback({ type: "error", text: error.message || "Daftar gagal." });
+          setFeedback({ type: "error", text: error.message || "Sign up failed." });
           setLoading(false);
           return;
         }
@@ -107,7 +107,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
         setIsSignUp(false);
         setFeedback({
           type: "success",
-          text: "Daftar berjaya. Anda kini boleh log masuk menggunakan emel & kata laluan.",
+          text: "Account created successfully. You can now sign in with your email and password.",
         });
         return;
       } else {
@@ -116,7 +116,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
           password,
         });
         if (error) {
-          setFeedback({ type: "error", text: error.message || "Login gagal. Sila periksa emel atau kata laluan." });
+          setFeedback({ type: "error", text: error.message || "Sign in failed. Please check your credentials." });
           setLoading(false);
           return;
         }
@@ -129,7 +129,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
       setLoading(false);
       setFeedback({
         type: "error",
-        text: error instanceof Error ? error.message : "Ralat pengesahan.",
+        text: error instanceof Error ? error.message : "Authentication error occurred.",
       });
     }
   };
@@ -161,7 +161,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
             </div>
             <div>
               <h2 id="auth-title" className="text-base font-black uppercase tracking-tight leading-none">
-                {isSignUp ? "Daftar Akaun" : "Akses Akaun"}
+                {isSignUp ? "Create Account" : "Sign In"}
               </h2>
               <p className="text-[10px] font-bold opacity-50 uppercase tracking-wider mt-0.5">Kmlxly Suite Cloud</p>
             </div>
@@ -169,7 +169,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
 
           <button
             onClick={onClose}
-            aria-label="Tutup"
+            aria-label="Close"
             className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-transform active:scale-90 ${
               isDarkMode ? "border-white/30 hover:border-white text-white" : "border-black/30 hover:border-black text-black"
             }`}
@@ -189,7 +189,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                 : "opacity-60 hover:opacity-100"
             }`}
           >
-            Log Masuk
+            Sign In
           </button>
           <button
             type="button"
@@ -200,7 +200,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                 : "opacity-60 hover:opacity-100"
             }`}
           >
-            Daftar Baru
+            Sign Up
           </button>
         </div>
 
@@ -238,7 +238,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                <span>Terus dengan Google</span>
+                <span>Continue with Google</span>
               </>
             )}
           </button>
@@ -246,7 +246,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
           {/* DIVIDER */}
           <div className="flex items-center gap-3">
             <div className="h-[1.5px] bg-current opacity-15 flex-1" />
-            <span className="text-[10px] font-black uppercase opacity-40">ATAU EMEL</span>
+            <span className="text-[10px] font-black uppercase opacity-40">OR EMAIL</span>
             <div className="h-[1.5px] bg-current opacity-15 flex-1" />
           </div>
 
@@ -254,7 +254,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
           <form onSubmit={handleAuth} className="space-y-3">
             {isSignUp && (
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-wider opacity-70">Nama</label>
+                <label className="text-[10px] font-black uppercase tracking-wider opacity-70">Name</label>
                 <div className={`flex items-center border-2 rounded-2xl overflow-hidden px-3 py-2.5 transition-all ${
                   isDarkMode ? "bg-[#121214] border-white/20 focus-within:border-white" : "bg-neutral-50 border-black/20 focus-within:border-black"
                 }`}>
@@ -262,7 +262,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                   <input
                     type="text"
                     autoComplete="name"
-                    placeholder="Nama panggilan anda"
+                    placeholder="Your name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
@@ -273,7 +273,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
             )}
 
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-wider opacity-70">Alamat Emel</label>
+              <label className="text-[10px] font-black uppercase tracking-wider opacity-70">Email Address</label>
               <div className={`flex items-center border-2 rounded-2xl overflow-hidden px-3 py-2.5 transition-all ${
                 isDarkMode ? "bg-[#121214] border-white/20 focus-within:border-white" : "bg-neutral-50 border-black/20 focus-within:border-black"
               }`}>
@@ -281,7 +281,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                 <input
                   type="email"
                   autoComplete="email"
-                  placeholder="nama@email.com"
+                  placeholder="name@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -291,7 +291,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-wider opacity-70">Kata Laluan</label>
+              <label className="text-[10px] font-black uppercase tracking-wider opacity-70">Password</label>
               <div className={`flex items-center border-2 rounded-2xl overflow-hidden px-3 py-2.5 transition-all ${
                 isDarkMode ? "bg-[#121214] border-white/20 focus-within:border-white" : "bg-neutral-50 border-black/20 focus-within:border-black"
               }`}>
@@ -300,7 +300,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                   type="password"
                   autoComplete={isSignUp ? "new-password" : "current-password"}
                   minLength={8}
-                  placeholder="Minimum 8 aksara"
+                  placeholder="Minimum 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -332,7 +332,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
                 <Loader2 className="animate-spin w-4 h-4" />
               ) : (
                 <>
-                  <span>{isSignUp ? "Daftar Akaun Sekarang" : "Masuk Akaun"}</span>
+                  <span>{isSignUp ? "Create Account Now" : "Sign In Now"}</span>
                   <ArrowRight size={14} />
                 </>
               )}
@@ -346,7 +346,7 @@ export default function AuthModal({ isOpen, onClose, isDarkMode }: AuthModalProp
               onClick={onClose}
               className="text-[11px] font-bold uppercase tracking-wider opacity-60 hover:opacity-100 transition-opacity"
             >
-              Terus sebagai tetamu (Mod Offline)
+              Continue as guest (Offline Mode)
             </button>
           </div>
         </div>

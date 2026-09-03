@@ -230,13 +230,13 @@ export default function SubTrackerPage() {
     // Handler: Save Subscription
     const handleSaveSubscription = () => {
         if (!formName.trim() || !formPrice || !formNextDate) {
-            alert("Sila isi semua maklumat yang diperlukan!");
+            alert("Please fill in all required fields!");
             return;
         }
 
         const price = parseFloat(formPrice);
         if (isNaN(price) || price <= 0) {
-            alert("Sila masukkan harga yang sah!");
+            alert("Please enter a valid price!");
             return;
         }
 
@@ -253,10 +253,10 @@ export default function SubTrackerPage() {
 
         if (editingId) {
             setSubs(subs.map(s => s.id === editingId ? newSub : s));
-            alert("Komitmen berjaya dikemaskini!");
+            alert("Commitment updated successfully!");
         } else {
             setSubs([...subs, newSub]);
-            alert("Komitmen berjaya ditambah!");
+            alert("Commitment added successfully!");
         }
 
         setShowAddModal(false);
@@ -265,13 +265,13 @@ export default function SubTrackerPage() {
 
     // Handler: Delete Subscription
     const handleDelete = async (id: number) => {
-        if (confirm("Betul nak buang komitmen ni?")) {
+        if (confirm("Are you sure you want to delete this commitment?")) {
             setSubs(subs.filter(s => s.id !== id));
             if (user) {
                 try {
                     await deleteSubscription(id);
                 } catch (e) {
-                    console.error("Gagal padam cloud:", e);
+                    console.error("Failed to delete from cloud:", e);
                 }
             }
         }
@@ -322,9 +322,9 @@ export default function SubTrackerPage() {
                 const newTx = {
                     id: createNumericId(),
                     user_id: user?.id, // Link to user if logged in
-                    title: `Bayar: ${sub.name}`,
-                    amount: -Math.abs(sub.price), // Mesti negatif
-                    category: sub.category === "Gym/Health" ? "Lifestyle" : sub.category, // Map category
+                    title: `Paid: ${sub.name}`,
+                    amount: -Math.abs(sub.price),
+                    category: sub.category === "Gym/Health" ? "Lifestyle" : sub.category,
                     date: displayDate,
                     isoDate: isoDate,
                     items: [{ id: createNumericId(), title: sub.name, amount: -Math.abs(sub.price) }]
@@ -347,23 +347,23 @@ export default function SubTrackerPage() {
                             items: newTx.items,
                         });
                     } catch (e) {
-                        console.error("Gagal sync transaksi ke cloud:", e);
+                        console.error("Failed to sync transaction to cloud:", e);
                     }
                 }
 
-                alert(`Berjaya! Tarikh updated ke ${nextDateStr} & Transaksi direkod dalam Budget.AI (${newTx.category})`);
+                alert(`Success! Next payment date updated to ${nextDateStr} & recorded in Budget.AI (${newTx.category})`);
             } catch (e) {
                 console.error("Failed to sync with budget:", e);
-                alert("Tarikh updated, tapi gagal sync ke Budget.AI");
+                alert("Date updated, but failed to sync to Budget.AI");
             }
         } else {
-            alert(`Tarikh updated ke ${nextDateStr} (Tanpa Sync)`);
+            alert(`Date updated to ${nextDateStr} (Without Sync)`);
         }
     };
 
     // Helper: Reset Data
     const handleResetData = () => {
-        if (confirm("⚠️ AMARAN KRITIKAL:\n\nAdakah anda pasti nak RESET semua data?")) {
+        if (confirm("⚠️ CRITICAL WARNING:\n\nAre you sure you want to RESET all data?")) {
             localStorage.removeItem("subtracker_data");
             window.location.reload();
         }
@@ -443,7 +443,7 @@ export default function SubTrackerPage() {
                             {user ? (
                                 <button
                                     onClick={async () => {
-                                        if (confirm("Nak logout ke?") && stackUser) {
+                                        if (confirm("Do you want to sign out?") && stackUser) {
                                             await stackUser.signOut();
                                         }
                                     }}
@@ -478,15 +478,15 @@ export default function SubTrackerPage() {
                     <section data-guide="sub-yearly" className={`p-4 border-2 rounded-2xl ${shadowStyle} relative overflow-hidden ${darkMode ? "bg-[#222] border-white text-white" : "bg-red-500 border-black text-white"}`}>
                         <div className="relative z-10 text-center">
                             <p className={`text-[9px] font-black uppercase tracking-widest border-2 inline-block px-2 py-0.5 rounded mb-1.5 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-white"}`}>
-                                REALITI CHECK
+                                REALITY CHECK
                             </p>
-                            <h2 className="text-xs font-bold uppercase mb-0.5 text-white">Total Komitmen Setahun</h2>
+                            <h2 className="text-xs font-bold uppercase mb-0.5 text-white">Total Annual Commitments</h2>
                             {/* The Shocking Number */}
                             <h1 className="text-3xl font-mono font-black tracking-tighter leading-none mb-1 text-white">
-                                {isGhostMode ? "RM ****" : `RM${totalYearly.toLocaleString("en-MY", { maximumFractionDigits: 0 })}`}
+                                {isGhostMode ? "RM ****" : `RM${totalYearly.toLocaleString("en-MY", { minimumFractionDigits: 0 })}`}
                             </h1>
                             <p className="text-[9px] font-bold uppercase inline-block px-2 py-0.5 rounded-sm bg-white text-black">
-                                {isGhostMode ? "RM ****" : `RM${totalMonthly.toFixed(0)}`} / Bulan
+                                {isGhostMode ? "RM ****" : `RM${totalMonthly.toFixed(0)}`} / Month
                             </p>
                         </div>
                         {/* Background Deco */}
@@ -499,14 +499,14 @@ export default function SubTrackerPage() {
                     <section>
                         <div className="flex items-center justify-between mb-3">
                             <h2 className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${darkMode ? "text-white" : "text-black"}`}>
-                                <Shield size={14} className={darkMode ? "text-gray-400" : "text-gray-700"} /> Komitmen Wajib
+                                <Shield size={14} className={darkMode ? "text-gray-400" : "text-gray-700"} /> Fixed Commitments
                             </h2>
                             <button
                                 data-guide="sub-add-commitment"
                                 onClick={() => openAddModal("commitment")}
                                 className={`text-[9px] font-bold px-2 py-1 border-2 rounded transition-all active:scale-95 ${darkMode ? "border-white bg-white text-black hover:bg-white/80" : "border-black bg-black text-white hover:bg-black/80"}`}
                             >
-                                + TAMBAH
+                                + ADD
                             </button>
                         </div>
 
@@ -517,7 +517,7 @@ export default function SubTrackerPage() {
                                     className={`w-full p-6 border-2 border-dashed rounded-2xl text-center opacity-60 hover:opacity-100 hover:border-solid transition flex flex-col items-center gap-2 ${darkMode ? "border-white" : "border-black"}`}
                                 >
                                     <Plus size={24} className="mb-1" />
-                                    <p className="text-sm font-bold">Tiada komitmen wajib. Tambah komitmen pertama!</p>
+                                    <p className="text-sm font-bold">No fixed commitments yet. Add your first commitment!</p>
                                 </button>
                             ) : (
                                 fixedCommitments.map((sub) => {
@@ -545,7 +545,7 @@ export default function SubTrackerPage() {
                                                                 {sub.name}
                                                             </h3>
                                                             {isAutoRenew && (
-                                                                <span title="Auto-renew bulan depan" className="flex-shrink-0">
+                                                                <span title="Auto-renews next month" className="flex-shrink-0">
                                                                     <RefreshCw size={10} className={darkMode ? "text-blue-400" : "text-blue-600"} />
                                                                 </span>
                                                             )}
@@ -564,7 +564,7 @@ export default function SubTrackerPage() {
                                                 </div>
 
                                                 <div className="text-right ml-2">
-                                                    {/* Butang Bayar (Wajib) */}
+                                                    {/* Pay Button */}
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -572,20 +572,20 @@ export default function SubTrackerPage() {
                                                         }}
                                                         className={`mb-1 px-2 py-0.5 rounded border text-[8px] font-black uppercase transition-all active:scale-90 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
                                                     >
-                                                        BAYAR
+                                                        PAY
                                                     </button>
                                                     <h3 className={`text-base font-mono font-black ${isUrgent && !darkMode ? "text-black" : darkMode ? "text-white" : "text-black"}`}>
                                                         {formatPrice(sub.price)}
                                                     </h3>
-                                                    {/* Countdown Badge - Compact dengan Auto-renew indicator */}
+                                                    {/* Countdown Badge - Compact with Auto-renew indicator */}
                                                     <div className="flex items-center justify-end gap-1 mt-0.5">
                                                         {isAutoRenew && (
-                                                            <span title="Tarikh auto-renew bulan depan" className="flex-shrink-0">
+                                                            <span title="Auto-renews next month" className="flex-shrink-0">
                                                                 <RefreshCw size={8} className={darkMode ? "text-blue-400" : "text-blue-600"} />
                                                             </span>
                                                         )}
                                                         <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border inline-block ${isUrgent ? "bg-red-600 text-white border-red-600 animate-pulse" : (darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black")}`}>
-                                                            {daysLeft < 0 ? "OVERDUE" : daysLeft === 0 ? "HARI NI!" : `${daysLeft} Hari`}
+                                                            {daysLeft < 0 ? "OVERDUE" : daysLeft === 0 ? "TODAY!" : `${daysLeft} Days`}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -608,7 +608,7 @@ export default function SubTrackerPage() {
                                 onClick={() => openAddModal("lifestyle")}
                                 className={`text-[9px] font-bold px-2 py-1 border-2 rounded transition-all active:scale-95 ${darkMode ? "border-white bg-white text-black hover:bg-white/80" : "border-black bg-black text-white hover:bg-black/80"}`}
                             >
-                                + SUBS BARU
+                                + NEW SUB
                             </button>
                         </div>
 
@@ -619,7 +619,7 @@ export default function SubTrackerPage() {
                                     className={`w-full p-6 border-2 border-dashed rounded-2xl text-center opacity-60 hover:opacity-100 hover:border-solid transition flex flex-col items-center gap-2 ${darkMode ? "border-white" : "border-black"}`}
                                 >
                                     <Plus size={24} className="mb-1" />
-                                    <p className="text-sm font-bold">Tiada subscription hiburan. Tambah subscription pertama!</p>
+                                    <p className="text-sm font-bold">No subscriptions yet. Add your first subscription!</p>
                                 </button>
                             ) : (
                                 subscriptionList.map((sub) => {
@@ -629,10 +629,10 @@ export default function SubTrackerPage() {
                                     const isAutoRenew = isOriginalDatePassed(sub.nextPaymentDate, sub.cycle);
 
                                     return (
-                                        // TICKET CARD STYLE (Kekalkan design asal dengan lubang/garisan putus-putus)
+                                        // TICKET CARD STYLE
                                         <div key={sub.id} className={`relative group transition-transform active:scale-95 ${cardStyle} ${isUrgent ? (darkMode ? "border-red-500 bg-red-900/20" : "border-red-600 bg-red-50") : ""}`}>
 
-                                            {/* Bahagian Atas: Info Utama */}
+                                            {/* Top info */}
                                             <div className="p-3 flex justify-between items-start">
                                                 <div className="flex gap-2.5">
                                                     {/* Logo Box - Compact */}
@@ -643,7 +643,7 @@ export default function SubTrackerPage() {
                                                         <div className="flex items-center gap-1">
                                                             <h3 className={`text-xs font-black uppercase leading-tight ${isUrgent && !darkMode ? "text-black" : darkMode ? "text-white" : "text-black"}`}>{sub.name}</h3>
                                                             {isAutoRenew && (
-                                                                <span title="Auto-renew bulan depan" className="flex-shrink-0">
+                                                                <span title="Auto-renews next month" className="flex-shrink-0">
                                                                     <RefreshCw size={10} className={darkMode ? "text-blue-400" : "text-blue-600"} />
                                                                 </span>
                                                             )}
@@ -666,10 +666,10 @@ export default function SubTrackerPage() {
                                                     <div className="flex items-center justify-end gap-1.5 mt-1.5">
                                                         {/* Countdown Badge */}
                                                         <span className={`text-[8px] font-black uppercase px-2 py-1 rounded border inline-block ${isUrgent ? "bg-red-600 text-white border-red-600 animate-pulse" : (darkMode ? "bg-white/10 text-white border-white/20" : "bg-gray-100 text-black border-black/10")}`}>
-                                                            {daysLeft < 0 ? "OVERDUE" : daysLeft === 0 ? "HARI NI!" : `${daysLeft} Hari`}
+                                                            {daysLeft < 0 ? "OVERDUE" : daysLeft === 0 ? "TODAY!" : `${daysLeft} Days`}
                                                         </span>
 
-                                                        {/* Butang Bayar (Clean & Linked Design) */}
+                                                        {/* Pay button */}
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -679,23 +679,23 @@ export default function SubTrackerPage() {
                                                                 ? "bg-green-500 border-white text-black hover:bg-green-400"
                                                                 : "bg-green-400 border-black text-black hover:bg-green-500"
                                                                 }`}
-                                                            title={syncWithBudget ? "Bayar & Rekod ke Budget.AI" : "Bayar (Tanpa Sync)"}
+                                                            title={syncWithBudget ? "Pay & Record to Budget.AI" : "Pay (Without Sync)"}
                                                         >
                                                             {syncWithBudget && <LinkIcon size={8} />}
-                                                            BAYAR
+                                                            PAY
                                                         </button>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Garisan Putus-putus (Ticket Tear Line) */}
+                                            {/* Ticket Tear Line */}
                                             <div className="relative flex items-center justify-between px-2">
-                                                <div className={`w-2.5 h-2.5 rounded-full border-r-2 border-b-2 border-t-0 border-l-0 rotate-45 -ml-3 ${darkMode ? "border-white bg-[#1E1E1E]" : "border-black bg-white"}`}></div> {/* Lubang Kiri */}
+                                                <div className={`w-2.5 h-2.5 rounded-full border-r-2 border-b-2 border-t-0 border-l-0 rotate-45 -ml-3 ${darkMode ? "border-white bg-[#1E1E1E]" : "border-black bg-white"}`}></div>
                                                 <div className={`flex-1 border-t border-dashed border-current opacity-30 h-px mx-2`}></div>
-                                                <div className={`w-2.5 h-2.5 rounded-full border-l-2 border-b-2 border-t-0 border-r-0 -rotate-45 -mr-3 ${darkMode ? "border-white bg-[#1E1E1E]" : "border-black bg-white"}`}></div> {/* Lubang Kanan */}
+                                                <div className={`w-2.5 h-2.5 rounded-full border-l-2 border-b-2 border-t-0 border-r-0 -rotate-45 -mr-3 ${darkMode ? "border-white bg-[#1E1E1E]" : "border-black bg-white"}`}></div>
                                             </div>
 
-                                            {/* Bahagian Bawah: Actions */}
+                                            {/* Bottom actions */}
                                             <div className="px-3 py-2 flex justify-between items-center">
                                                 <button
                                                     onClick={(e) => {
@@ -704,7 +704,7 @@ export default function SubTrackerPage() {
                                                     }}
                                                     className={`text-[9px] font-bold uppercase flex items-center gap-1 hover:text-red-500 hover:underline transition-colors ${darkMode ? "text-white" : "text-black"}`}
                                                 >
-                                                    <Trash2 size={10} /> Padam
+                                                    <Trash2 size={10} /> Delete
                                                 </button>
 
                                                 {sub.link && (
@@ -774,18 +774,18 @@ export default function SubTrackerPage() {
                                 </div>
                                 <h2 className="text-xl font-black uppercase leading-tight">Auto-Sync Budget</h2>
                                 <p className="text-[10px] font-bold opacity-60 mt-2 leading-relaxed uppercase tracking-wider">
-                                    Pautan Pintar antara Sub.Tracker & Budget.AI
+                                    Smart Link between Sub.Tracker & Budget.AI
                                 </p>
                             </div>
 
                             <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-left space-y-3 ${darkMode ? "bg-black/30 border-white/20" : "bg-blue-50 border-blue-200"}`}>
                                 <div className="flex items-start gap-3">
                                     <div className="mt-1"><Check size={14} className="text-green-500" /></div>
-                                    <p className="text-xs font-bold leading-tight">Bila anda tekan butang <span className="underline">BAYAR</span>, rekod belanja akan dihantar ke Budget.AI secara automatik.</p>
+                                    <p className="text-xs font-bold leading-tight">When you tap <span className="underline">PAY</span>, the expense is automatically logged to Budget.AI.</p>
                                 </div>
                                 <div className="flex items-start gap-3">
                                     <div className="mt-1"><Check size={14} className="text-green-500" /></div>
-                                    <p className="text-xs font-bold leading-tight">Menjimatkan masa anda daripada memasukkan data yang sama dua kali.</p>
+                                    <p className="text-xs font-bold leading-tight">Saves time and eliminates double entry.</p>
                                 </div>
                             </div>
 
@@ -797,7 +797,7 @@ export default function SubTrackerPage() {
                                     }}
                                     className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white" : "bg-green-500 text-white border-black"}`}
                                 >
-                                    AKTIFKAN AUTO-SYNC <LinkIcon size={14} />
+                                    ENABLE AUTO-SYNC <LinkIcon size={14} />
                                 </button>
                                 <button
                                     onClick={() => {
@@ -806,7 +806,7 @@ export default function SubTrackerPage() {
                                     }}
                                     className={`w-full py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 transition-all active:scale-95 ${darkMode ? "bg-transparent text-white border-white/20 hover:border-white" : "bg-white text-gray-400 border-gray-200 hover:border-gray-400"}`}
                                 >
-                                    MATIKAN SYNC
+                                    DISABLE SYNC
                                 </button>
                             </div>
                         </div>
@@ -820,7 +820,7 @@ export default function SubTrackerPage() {
 
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-lg font-black uppercase italic">
-                                    {editingId ? "Edit Komitmen" : formType === "commitment" ? "Tambah Komitmen" : "Tambah Subscription"}
+                                    {editingId ? "Edit Commitment" : formType === "commitment" ? "Add Commitment" : "Add Subscription"}
                                 </h2>
                                 <button onClick={() => { setShowAddModal(false); resetForm(); }} className="opacity-50 hover:opacity-100">
                                     <X size={20} />
@@ -836,7 +836,7 @@ export default function SubTrackerPage() {
                                     }}
                                     className={`flex-1 py-1.5 text-[9px] font-black uppercase border-2 rounded-lg transition-all ${formType === "commitment" ? (darkMode ? "bg-blue-500 border-blue-500 text-white" : "bg-blue-500 border-black text-white") : "opacity-50 border-current"}`}
                                 >
-                                    Komitmen Wajib
+                                    Fixed Commitments
                                 </button>
                                 <button
                                     onClick={() => {
@@ -851,18 +851,18 @@ export default function SubTrackerPage() {
 
                             <div className="space-y-2.5">
                                 <div>
-                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Nama</label>
+                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Name</label>
                                     <input
                                         type="text"
                                         value={formName}
                                         onChange={(e) => setFormName(e.target.value)}
-                                        placeholder="Cth: Loan Rumah, Netflix"
+                                        placeholder="e.g. Home Loan, Netflix"
                                         className={`${inputStyle}`}
                                         autoFocus
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Harga (RM)</label>
+                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Price (RM)</label>
                                     <input
                                         type="number"
                                         value={formPrice}
@@ -873,7 +873,7 @@ export default function SubTrackerPage() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Kitaran</label>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Billing Cycle</label>
                                         <div className="relative">
                                             <select
                                                 value={formCycle}
@@ -887,7 +887,7 @@ export default function SubTrackerPage() {
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Tarikh Bayar</label>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Due Date</label>
                                         <input
                                             type="date"
                                             value={formNextDate}
@@ -897,7 +897,7 @@ export default function SubTrackerPage() {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Kategori</label>
+                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Category</label>
                                     <div className="relative">
                                         <select
                                             value={formCategory}
@@ -912,18 +912,18 @@ export default function SubTrackerPage() {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Kongsi Dengan (Optional)</label>
+                                    <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Share With (Optional)</label>
                                     <input
                                         type="text"
                                         value={formShareWith}
                                         onChange={(e) => setFormShareWith(e.target.value)}
-                                        placeholder="Cth: Ali, Abu"
+                                        placeholder="e.g. Alex, Sam"
                                         className={`${inputStyle}`}
                                     />
                                 </div>
                                 {formType === "lifestyle" && (
                                     <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Link Kill Switch (Optional)</label>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-0.5 block">Kill Switch Link (Optional)</label>
                                         <input
                                             type="url"
                                             value={formLink}
@@ -942,7 +942,7 @@ export default function SubTrackerPage() {
                                         }}
                                         className={`w-full py-2.5 mt-2 text-[10px] font-black uppercase rounded-xl border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-95`}
                                     >
-                                        <Trash2 size={12} className="inline mr-1" /> PADAM KOMITMEN
+                                        <Trash2 size={12} className="inline mr-1" /> DELETE COMMITMENT
                                     </button>
                                 )}
 
@@ -950,7 +950,7 @@ export default function SubTrackerPage() {
                                     onClick={handleSaveSubscription}
                                     className={`w-full py-2.5 mt-2 text-xs ${buttonBase} ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
                                 >
-                                    {editingId ? "KEMASKINI" : "SIMPAN"}
+                                    {editingId ? "UPDATE" : "SAVE"}
                                 </button>
                             </div>
 

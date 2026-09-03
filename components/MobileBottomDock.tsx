@@ -52,7 +52,7 @@ export default function MobileBottomDock({ activeTab, darkMode }: MobileBottomDo
 
   return (
     <nav
-      aria-label="Navigasi Utama Mudah Alih"
+      aria-label="Mobile Bottom Navigation"
       className={`fixed bottom-[calc(env(safe-area-inset-bottom)+0.6rem)] left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm py-1.5 px-2.5 rounded-full border-2 backdrop-blur-xl flex items-center justify-between z-40 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
         darkMode ? "bg-[#18181B]/95 border-white text-white" : "bg-white/95 border-black text-black"
       }`}

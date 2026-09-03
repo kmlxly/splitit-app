@@ -39,13 +39,13 @@ function JoinTripContent() {
                     }, 1500);
                 } else {
                     setStatus("error");
-                    setMessage(data?.message || "Gagal sertai trip. Token mungkin tidak sah.");
+                    setMessage(data?.message || "Failed to join trip. Token might be invalid.");
                 }
             } catch (error: unknown) {
                 if (cancelled) return;
                 console.error(error);
                 setStatus("error");
-                setMessage(error instanceof Error ? `Error: ${error.message}` : "Gagal sertai trip.");
+                setMessage(error instanceof Error ? `Error: ${error.message}` : "Failed to join trip.");
             }
         };
 
@@ -60,7 +60,7 @@ function JoinTripContent() {
     const displayMessage = !token
         ? "Invitation link is invalid (missing token)."
         : stackUser === null
-            ? "Sila log masuk terlebih dahulu untuk sertai trip ini."
+            ? "Please log in first to join this trip."
             : message;
 
     return (
@@ -103,7 +103,7 @@ function JoinTripContent() {
                     {displayStatus === "success" && (
                         <div className="space-y-4">
                             <div className="flex items-center gap-2 text-green-600 font-bold justify-center">
-                                <p className="text-sm uppercase tracking-wider">Berjaya! Membawa anda ke dashboard...</p>
+                                <p className="text-sm uppercase tracking-wider">Success! Redirecting you to trip dashboard...</p>
                             </div>
                             <Loader2 size={24} className="animate-spin text-green-600 mx-auto" />
                         </div>

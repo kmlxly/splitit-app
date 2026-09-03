@@ -30,12 +30,12 @@ export const metadata: Metadata = {
     default: "Kmlxly Apps",
     template: "%s · Kmlxly Apps",
   },
-  description: "Urus bil, bajet, langganan dan perjalanan dalam satu tempat.",
+  description: "Manage bills, daily budgets, subscriptions, and travel expenses in one place.",
   applicationName: "Kmlxly Apps",
-  manifest: "/manifest.json", // Link ke fail manifest tadi
+  manifest: "/manifest.json",
   icons: {
-    icon: "/apple-icon.png",  // Menggunakan logo grid (apple-icon.png) untuk favicon
-    apple: "/apple-icon.png", // Ini KHAS untuk iPhone 
+    icon: "/apple-icon.png",
+    apple: "/apple-icon.png",
   },
   appleWebApp: {
     capable: true,
@@ -50,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ms">
+    <html lang="en">
       <body
         suppressHydrationWarning
         className={`${bodyFont.variable} ${displayFont.variable}`}

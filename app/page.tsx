@@ -88,7 +88,7 @@ export default function Home() {
   };
 
   const handleLogout = async () => {
-    const confirm = window.confirm("Adakah anda pasti mahu log keluar?");
+    const confirm = window.confirm("Are you sure you want to log out?");
     if (confirm && user) {
       await user.signOut();
       sessionStorage.removeItem("kmlxly_guest_dismissed");
@@ -144,7 +144,7 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-sm font-black uppercase tracking-tight leading-none">
-                {session ? `Hi, ${session.user.email.split("@")[0]}!` : "Hai, Geng!"}
+                {session ? `Hi, ${session.user.email.split("@")[0]}!` : "Hey there!"}
               </h1>
               <p className="text-[10px] font-bold opacity-50 uppercase tracking-wider mt-0.5">
                 {session ? "Cloud Synced" : "Guest Mode"}
@@ -164,7 +164,7 @@ export default function Home() {
                 className={`px-2.5 py-1.5 rounded-full border-2 text-[10px] font-black uppercase flex items-center gap-1 transition-all active:scale-95 ${
                   darkMode ? "border-white/30 hover:border-white text-white" : "border-black/30 hover:border-black text-black"
                 }`}
-                title="Log Keluar"
+                title="Log Out"
               >
                 <User size={12} />
                 <LogOut size={11} className="opacity-60" />
@@ -174,7 +174,7 @@ export default function Home() {
                 onClick={() => setShowLoginModal(true)}
                 className="px-3 py-1.5 rounded-full border-2 text-[10px] font-black uppercase bg-[#FF6B55] text-black border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
               >
-                MASUK
+                SIGN IN
               </button>
             )}
 
@@ -184,7 +184,7 @@ export default function Home() {
               className={`p-2 rounded-full border-2 transition-all active:scale-95 ${
                 darkMode ? "border-white/30 text-white hover:border-white" : "border-black/30 text-black hover:border-black"
               }`}
-              aria-label="Bantuan"
+              aria-label="Help"
             >
               <HelpCircle size={15} />
             </button>
@@ -195,7 +195,7 @@ export default function Home() {
               className={`p-2 rounded-full border-2 transition-all active:scale-95 ${
                 darkMode ? "border-white/30 text-white hover:border-white" : "border-black/30 text-black hover:border-black"
               }`}
-              aria-label="Tukar tema"
+              aria-label="Toggle theme"
             >
               {darkMode ? <Sun size={15} /> : <Moon size={15} />}
             </button>
@@ -219,9 +219,9 @@ export default function Home() {
                 <p className="text-xs font-bold leading-tight mt-0.5">
                   {session
                     ? (stats.toCollect !== 0
-                        ? (stats.toCollect > 0 ? `RM ${stats.toCollect.toFixed(0)} perlu dikutip dari rakan.` : `Ada baki perlu dibayar.`)
-                        : "Semua bil & baki kewangan diselaraskan.")
-                    : "Mod Tetamu: Akses SplitIt & Budget tanpa internet."}
+                        ? (stats.toCollect > 0 ? `RM ${stats.toCollect.toFixed(0)} to collect from friends.` : `Outstanding balance to settle.`)
+                        : "All bills & balances are in sync.")
+                    : "Guest Mode: SplitIt & Budget available offline."}
                 </p>
               </div>
             </div>
@@ -229,7 +229,7 @@ export default function Home() {
             <Link
               href="/splitit"
               className="w-8 h-8 rounded-full border-2 border-white/30 hover:border-white flex items-center justify-center text-white transition-transform active:scale-90"
-              title="Pergi ke SplitIt"
+              title="Go to SplitIt"
             >
               <ArrowUpRight size={15} />
             </Link>
@@ -240,7 +240,7 @@ export default function Home() {
         <div className="p-5 rounded-3xl border-2 border-black bg-[#FF6B55] text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest opacity-80">BAKI DUIT POKET</p>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-80">POCKET BALANCE</p>
               <h2 className="text-3xl font-black tracking-tight font-mono mt-0.5">
                 {session ? `RM ${stats.pocketBalance.toFixed(2)}` : "RM 0.00"}
               </h2>
@@ -252,15 +252,15 @@ export default function Home() {
 
           <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-black/15">
             <div className="bg-black/10 rounded-2xl p-2.5">
-              <span className="text-[9px] font-black uppercase opacity-70 block">KUTIP BIL (SPLITIT)</span>
+              <span className="text-[9px] font-black uppercase opacity-70 block">TO COLLECT (SPLITIT)</span>
               <span className="text-sm font-black font-mono">
-                {session ? `RM ${Math.abs(stats.toCollect).toFixed(0)}` : "LOG MASUK"}
+                {session ? `RM ${Math.abs(stats.toCollect).toFixed(0)}` : "SIGN IN"}
               </span>
             </div>
             <div className="bg-black/10 rounded-2xl p-2.5">
-              <span className="text-[9px] font-black uppercase opacity-70 block">BIL TERDEKAT</span>
+              <span className="text-[9px] font-black uppercase opacity-70 block">UPCOMING BILL</span>
               <span className="text-xs font-black uppercase truncate block">
-                {session ? stats.nextBill.split(' (')[0] : "LOG MASUK"}
+                {session ? stats.nextBill.split(' (')[0] : "SIGN IN"}
               </span>
             </div>
           </div>
@@ -269,9 +269,9 @@ export default function Home() {
         {/* CORE MINI-APPS SECTION */}
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-black uppercase tracking-wider opacity-80">Aplikasi Pilihan</h3>
+            <h3 className="text-xs font-black uppercase tracking-wider opacity-80">Featured Apps</h3>
             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full border border-current opacity-60">
-              4 Modul
+              4 Modules
             </span>
           </div>
 
@@ -290,7 +290,7 @@ export default function Home() {
                   </div>
                   <div>
                     <h4 className="text-base font-black uppercase tracking-tight">SplitIt v5.2</h4>
-                    <p className="text-[11px] font-bold opacity-60">Kira bil makan, OCR scan resit & multiplayer</p>
+                    <p className="text-[11px] font-bold opacity-60">Split dining bills, OCR receipt scan & multiplayer</p>
                   </div>
                 </div>
                 <div className="w-8 h-8 rounded-full border-2 border-current opacity-50 group-hover:opacity-100 flex items-center justify-center transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
@@ -318,7 +318,7 @@ export default function Home() {
                   </div>
                   <div>
                     <h4 className="text-base font-black uppercase tracking-tight">Budget.AI</h4>
-                    <p className="text-[11px] font-bold opacity-60">Track perbelanjaan harian & baki poket</p>
+                    <p className="text-[11px] font-bold opacity-60">Track daily spending & pocket balance</p>
                   </div>
                 </div>
                 <div className="w-8 h-8 rounded-full border-2 border-current opacity-50 group-hover:opacity-100 flex items-center justify-center transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
@@ -326,9 +326,9 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex gap-1.5 mt-3 pt-2.5 border-t border-dashed border-current/10">
-                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#FBBF24]/15 text-[#D97706] border border-[#FBBF24]/40">Duit Poket</span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#FBBF24]/15 text-[#D97706] border border-[#FBBF24]/40">Pocket Balance</span>
                 <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Auto-Category</span>
-                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Analitik</span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Analytics</span>
               </div>
             </Link>
 
@@ -349,7 +349,7 @@ export default function Home() {
                       <h4 className="text-base font-black uppercase tracking-tight">TripIt</h4>
                       <span className="px-1.5 py-0.2 rounded-md bg-[#6366F1] text-white text-[8px] font-black uppercase">NEW</span>
                     </div>
-                    <p className="text-[11px] font-bold opacity-60">Itinerary trip & perbelanjaan kumpulan</p>
+                    <p className="text-[11px] font-bold opacity-60">Trip itinerary & group expenses</p>
                   </div>
                 </div>
                 <div className="w-8 h-8 rounded-full border-2 border-current opacity-50 group-hover:opacity-100 flex items-center justify-center transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
@@ -376,7 +376,7 @@ export default function Home() {
                   </div>
                   <div>
                     <h4 className="text-base font-black uppercase tracking-tight">Sub.Tracker</h4>
-                    <p className="text-[11px] font-bold opacity-60">Radar langganan & semakan kos setahun</p>
+                    <p className="text-[11px] font-bold opacity-60">Subscription radar & 1-year cost check</p>
                   </div>
                 </div>
                 <div className="w-8 h-8 rounded-full border-2 border-current opacity-50 group-hover:opacity-100 flex items-center justify-center transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
@@ -384,7 +384,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex gap-1.5 mt-3 pt-2.5 border-t border-dashed border-current/10">
-                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#10B981]/15 text-[#059669] border border-[#10B981]/40">Komitmen Wajib</span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#10B981]/15 text-[#059669] border border-[#10B981]/40">Fixed Commitments</span>
                 <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-current/20 opacity-70">Yearly Shock</span>
               </div>
             </Link>
@@ -441,16 +441,16 @@ export default function Home() {
                 <button
                   onClick={() => setShowHelpModal(false)}
                   className="p-1.5 opacity-60 hover:opacity-100 transition-opacity"
-                  aria-label="Tutup bantuan"
+                  aria-label="Close help"
                 >
                   <X size={20} />
                 </button>
               </div>
               <h2 id="help-title" className="text-xl font-black uppercase leading-tight tracking-tight">
-                Panduan Pengguna
+                User Guide
               </h2>
               <p className="text-[10px] font-bold opacity-50 uppercase tracking-wider mt-0.5">
-                Tip ringkas fungsi aplikasi
+                Quick tips & feature walkthroughs
               </p>
             </div>
 
@@ -464,15 +464,15 @@ export default function Home() {
                     activeGuideTab === "splitit" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""
                   }`}
                 >
-                  <span>1. SplitIt (Bil Kedai Makan)</span>
+                  <span>1. SplitIt (Dining Bills)</span>
                   {activeGuideTab === "splitit" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {activeGuideTab === "splitit" && (
                   <div className="px-3.5 py-2.5 space-y-1.5 text-[10px] font-bold leading-snug border-t-2 border-current/10">
-                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Snap resit panjang guna kamera AI.</p>
-                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Agih item individu & kongsi ramai-ramai.</p>
-                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Auto-agih SST & Service Charge ikut % makan.</p>
-                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Kongsi resit ke WhatsApp.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Snap long receipts with the AI camera scanner.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Assign individual items or share them with friends.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Auto-distribute tax & service charge proportionally by amount spent.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FF6B55]">▶</span> Share detailed receipt summaries directly to WhatsApp.</p>
                   </div>
                 )}
               </div>
@@ -485,14 +485,14 @@ export default function Home() {
                     activeGuideTab === "budget" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""
                   }`}
                 >
-                  <span>2. Budget.AI (Duit Poket)</span>
+                  <span>2. Budget.AI (Pocket Balance)</span>
                   {activeGuideTab === "budget" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {activeGuideTab === "budget" && (
                   <div className="px-3.5 py-2.5 space-y-1.5 text-[10px] font-bold leading-snug border-t-2 border-current/10">
-                    <p className="flex gap-2 items-start"><span className="text-[#FBBF24]">▶</span> Catat belanja harian dengan AI/Manual.</p>
-                    <p className="flex gap-2 items-start"><span className="text-[#FBBF24]">▶</span> Pantau Safe-To-Spend harian.</p>
-                    <p className="flex gap-2 items-start"><span className="text-[#FBBF24]">▶</span> Analisis pecahan kategori bulanan.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FBBF24]">▶</span> Log daily expenses with AI scanner or manual entry.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FBBF24]">▶</span> Monitor your daily Safe-to-Spend limit.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#FBBF24]">▶</span> Analyze monthly categorical breakdowns & insights.</p>
                   </div>
                 )}
               </div>
@@ -505,14 +505,14 @@ export default function Home() {
                     activeGuideTab === "tripit" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""
                   }`}
                 >
-                  <span>3. TripIt (Percutian)</span>
+                  <span>3. TripIt (Travel & Trips)</span>
                   {activeGuideTab === "tripit" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {activeGuideTab === "tripit" && (
                   <div className="px-3.5 py-2.5 space-y-1.5 text-[10px] font-bold leading-snug border-t-2 border-current/10">
-                    <p className="flex gap-2 items-start"><span className="text-[#6366F1]">▶</span> Rancang jadual & kos perjalanan trip.</p>
-                    <p className="flex gap-2 items-start"><span className="text-[#6366F1]">▶</span> Catat belanja berkumpulan semasa travel.</p>
-                    <p className="flex gap-2 items-start"><span className="text-[#6366F1]">▶</span> Auto-kira hutang akhir kembara.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#6366F1]">▶</span> Plan trip schedules, destinations & budget targets.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#6366F1]">▶</span> Log shared group expenses while traveling.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#6366F1]">▶</span> Auto-settle final debt balances between travel companions.</p>
                   </div>
                 )}
               </div>
@@ -525,14 +525,14 @@ export default function Home() {
                     activeGuideTab === "subtracker" ? (darkMode ? "bg-white text-black" : "bg-black text-white") : ""
                   }`}
                 >
-                  <span>4. Sub.Tracker (Komitmen)</span>
+                  <span>4. Sub.Tracker (Commitments)</span>
                   {activeGuideTab === "subtracker" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {activeGuideTab === "subtracker" && (
                   <div className="px-3.5 py-2.5 space-y-1.5 text-[10px] font-bold leading-snug border-t-2 border-current/10">
-                    <p className="flex gap-2 items-start"><span className="text-[#10B981]">▶</span> Pantau komitmen & bil langganan tetap.</p>
-                    <p className="flex gap-2 items-start"><span className="text-[#10B981]">▶</span> Yearly Shock: Semak kos terkumpul 1 tahun.</p>
-                    <p className="flex gap-2 items-start"><span className="text-[#10B981]">▶</span> Peringatan tarikh pembaharuan automatik.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#10B981]">▶</span> Monitor recurring commitments and subscriptions.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#10B981]">▶</span> Yearly Shock: Review accumulated 1-year total cost.</p>
+                    <p className="flex gap-2 items-start"><span className="text-[#10B981]">▶</span> Receive automated renewal reminders before billing.</p>
                   </div>
                 )}
               </div>
@@ -548,7 +548,7 @@ export default function Home() {
                     : "bg-black text-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                 }`}
               >
-                FAHAM & TUTUP
+                GOT IT & CLOSE
               </button>
             </div>
           </div>

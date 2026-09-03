@@ -491,7 +491,7 @@ export default function TripDetailPage({
                 ),
             );
         } catch (e: any) {
-            alert("Gagal update status: " + e.message);
+            alert("Failed to update status: " + e.message);
         }
     };
 
@@ -585,7 +585,7 @@ export default function TripDetailPage({
     const uploadImage = async (fileOrBlob: File | Blob) => {
         try {
             setUploading(true);
-            if (!user) return alert("Sila log masuk semula.");
+            if (!user) return alert("Please sign in again.");
 
             const fileName = `trip-${Date.now()}.jpg`;
             const publicUrl = await uploadFileToBlob(fileOrBlob, fileName, "trips");
@@ -595,8 +595,8 @@ export default function TripDetailPage({
             setTrip({ ...trip, cover_image: publicUrl });
             setEditCoverImage(publicUrl); // Sync if edit modal is open
         } catch (error: any) {
-            console.error("Ralat muat naik:", error);
-            alert("Gagal muat naik: " + (error.message || "Sila cuba lagi."));
+            console.error("Upload error:", error);
+            alert("Upload failed: " + (error.message || "Please try again."));
         } finally {
             setUploading(false);
             setImageToCrop(null);
@@ -615,7 +615,7 @@ export default function TripDetailPage({
             }
         } catch (e) {
             console.error(e);
-            alert("Gagal memproses gambar cropping.");
+            alert("Failed to process cropped image.");
         }
     };
 
@@ -667,7 +667,7 @@ export default function TripDetailPage({
             });
             setShowEditModal(false);
         } catch (e: any) {
-            alert("Gagal update trip: " + e.message);
+            alert("Failed to update trip: " + e.message);
         }
     };
 
@@ -770,7 +770,7 @@ export default function TripDetailPage({
     };
 
     const handleAddPlan = async () => {
-        if (!planTitle || !planDate) return alert("Sila isi Tajuk & Tarikh!");
+        if (!planTitle || !planDate) return alert("Please fill in Title & Date!");
 
         try {
             const data = await addTripItem({
@@ -801,7 +801,7 @@ export default function TripDetailPage({
             setPlanTime("");
             setPlanCost("0");
         } catch (e: any) {
-            alert("Gagal tambah plan: " + e.message);
+            alert("Failed to add plan: " + e.message);
         }
     };
 
@@ -824,7 +824,7 @@ export default function TripDetailPage({
 
     const handleUpdatePlan = async () => {
         if (!editPlanTitle || !editPlanDate)
-            return alert("Sila isi Tajuk & Tarikh!");
+            return alert("Please fill in Title & Date!");
 
         try {
             await updateTripItem(editPlanId!, {
@@ -865,17 +865,17 @@ export default function TripDetailPage({
             setItems(updatedItems);
             setShowEditPlanModal(false);
         } catch (e: any) {
-            alert("Gagal update plan: " + e.message);
+            alert("Failed to update plan: " + e.message);
         }
     };
 
     const handleDeleteItem = async (itemId: string) => {
-        if (!confirm("Padam plan ini?")) return;
+        if (!confirm("Delete this plan?")) return;
         try {
             await deleteTripItem(itemId);
             setItems(items.filter((i) => i.id !== itemId));
         } catch (e: any) {
-            alert("Gagal padam: " + e.message);
+            alert("Failed to delete: " + e.message);
         }
     };
 
@@ -910,7 +910,7 @@ export default function TripDetailPage({
 
     const handleAddDocument = async () => {
         if (!docTitle || !docFile || !user)
-            return alert("Sila isi tajuk & pilih fail!");
+            return alert("Please enter a title and select a file!");
 
         setUploading(true);
         try {
@@ -932,19 +932,19 @@ export default function TripDetailPage({
             setDocType("other");
             setDocIsPrivate(false);
         } catch (e: any) {
-            alert("Gagal simpan dokumen: " + e.message);
+            alert("Failed to save document: " + e.message);
         } finally {
             setUploading(false);
         }
     };
 
     const handleDeleteDocument = async (doc: any) => {
-        if (!confirm("Padam dokumen ini?")) return;
+        if (!confirm("Delete this document?")) return;
         try {
             await deleteTripDocument(doc.id);
             setDocuments(documents.filter((d) => d.id !== doc.id));
         } catch (e: any) {
-            alert("Gagal padam: " + e.message);
+            alert("Failed to delete: " + e.message);
         }
     };
 
@@ -956,7 +956,7 @@ export default function TripDetailPage({
             setNewChecklistTitle("");
             setShowAddChecklistModal(false);
         } catch (e: any) {
-            alert("Gagal tambah senarai: " + e.message);
+            alert("Failed to add list: " + e.message);
         }
     };
 
@@ -981,7 +981,7 @@ export default function TripDetailPage({
                 ),
             );
         } catch (e: any) {
-            alert("Gagal tambah item: " + e.message);
+            alert("Failed to add item: " + e.message);
         }
     };
 
@@ -1007,25 +1007,25 @@ export default function TripDetailPage({
                 }),
             );
         } catch (e: any) {
-            alert("Gagal kemaskini item: " + e.message);
+            alert("Failed to update item: " + e.message);
         }
     };
 
     const handleDeleteChecklist = async (checklistId: string) => {
-        if (!confirm("Padam senarai ini? Semua item akan hilang.")) return;
+        if (!confirm("Delete this list? All items will be lost.")) return;
         try {
             await deleteChecklist(checklistId);
             setChecklists(checklists.filter((cl) => cl.id !== checklistId));
         } catch (e: any) {
-            alert("Gagal padam: " + e.message);
+            alert("Failed to delete: " + e.message);
         }
     };
 
     const handleAddPersonalExpense = async () => {
         if (!personalTitle || !personalAmount)
-            return alert("Sila isi semua maklumat!");
+            return alert("Please fill in all details!");
         try {
-            if (!user) return alert("Sila log masuk.");
+            if (!user) return alert("Please sign in.");
 
             const data = await addPersonalExpense({
                 trip_id: id,
@@ -1042,17 +1042,17 @@ export default function TripDetailPage({
             setPersonalTitle("");
             setPersonalAmount("");
         } catch (e: any) {
-            alert("Gagal tambah belanja: " + e.message);
+            alert("Failed to add expense: " + e.message);
         }
     };
 
     const handleDeletePersonal = async (expenseId: string) => {
-        if (!confirm("Padam belanja peribadi ini?")) return;
+        if (!confirm("Delete this personal expense?")) return;
         try {
             await deletePersonalExpense(expenseId);
             setPersonalExpenses(personalExpenses.filter((e) => e.id !== expenseId));
         } catch (e: any) {
-            alert("Gagal padam: " + e.message);
+            alert("Failed to delete: " + e.message);
         }
     };
 
@@ -1063,20 +1063,20 @@ export default function TripDetailPage({
             setMembers([...members, data]);
             setAddMemberName("");
         } catch (e: any) {
-            alert("Gagal tambah ahli: " + e.message);
+            alert("Failed to add member: " + e.message);
         }
     };
 
     const handleRemoveMember = async (memberId: string) => {
         const member = members.find((m) => m.id === memberId);
-        if (member?.role === "owner") return alert("Tuan tanah tak boleh dibuang!");
-        if (!confirm(`Padam ${member?.name} dari trip ini?`)) return;
+        if (member?.role === "owner") return alert("The trip owner cannot be removed!");
+        if (!confirm(`Remove ${member?.name} from this trip?`)) return;
 
         try {
             await removeTripMember(memberId);
             setMembers(members.filter((m) => m.id !== memberId));
         } catch (e: any) {
-            alert("Gagal padam ahli: " + e.message);
+            alert("Failed to remove member: " + e.message);
         }
     };
 
@@ -2105,7 +2105,7 @@ export default function TripDetailPage({
                                                         </div>
                                                         <button
                                                             onClick={async () => {
-                                                                if (!confirm("Padam item ini?")) return;
+                                                                if (!confirm("Delete this item?")) return;
                                                                 try {
                                                                     await deleteChecklistItem(item.id);
                                                                     setChecklists(
@@ -2122,7 +2122,7 @@ export default function TripDetailPage({
                                                                         ),
                                                                     );
                                                                 } catch (e: any) {
-                                                                    alert("Gagal padam item: " + e.message);
+                                                                    alert("Failed to delete item: " + e.message);
                                                                 }
                                                             }}
                                                             className="opacity-20 hover:opacity-100 p-2 text-red-500 transition-all"
@@ -3258,7 +3258,7 @@ export default function TripDetailPage({
                                     Title
                                 </label>
                                 <input
-                                    placeholder="CTH: SOUVENIR UNTUK MAK"
+                                    placeholder="E.G. SOUVENIRS FOR FAMILY"
                                     value={personalTitle}
                                     onChange={(e) => setPersonalTitle(e.target.value)}
                                     className={`w-full p-4 rounded-xl border-2 font-black uppercase outline-none transition-all ${darkMode ? "bg-white/5 border-white focus:bg-white/10" : "bg-gray-50 border-black focus:bg-white"}`}

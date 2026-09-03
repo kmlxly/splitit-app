@@ -26,8 +26,8 @@ import { createNumericId } from "@/lib/clientIds";
 const APP_NAME = "Budget.AI";
 const APP_VERSION = "v1.2.0-polish";
 const MONTH_LABELS = [
-    "Jan", "Feb", "Mac", "Apr", "Mei", "Jun",
-    "Jul", "Ogo", "Sep", "Okt", "Nov", "Dis",
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ] as const;
 
 // Helper: Compress Image
@@ -81,9 +81,10 @@ const convertFileToBase64 = (file: File): Promise<{ base64: string; mimeType: st
     });
 };
 
-// Helper: Pilih Icon ikut Kategori
+// Helper: Category Icons
 const getCategoryIcon = (category: string) => {
     switch (category) {
+        case "Food":
         case "Makan": return <Utensils size={16} />;
         case "Transport": return <Car size={16} />;
         case "Shopping": return <ShoppingBag size={16} />;
@@ -101,9 +102,10 @@ const getCategoryIcon = (category: string) => {
     }
 };
 
-// Helper: Pilih Warna ikut Kategori (New Brutalism Style)
+// Helper: Category Colors (New Brutalism Style)
 const getCategoryColor = (category: string) => {
     switch (category) {
+        case "Food":
         case "Makan": return { bg: "bg-pink-300", text: "text-pink-700", border: "border-pink-700" };
         case "Transport": return { bg: "bg-blue-300", text: "text-blue-700", border: "border-blue-700" };
         case "Shopping": return { bg: "bg-purple-300", text: "text-purple-700", border: "border-purple-700" };
@@ -117,6 +119,7 @@ const getCategoryColor = (category: string) => {
         case "Digital Service": return { bg: "bg-sky-300", text: "text-sky-700", border: "border-sky-700" };
         case "Lifestyle": return { bg: "bg-rose-300", text: "text-rose-700", border: "border-rose-700" };
         case "Education": return { bg: "bg-amber-300", text: "text-amber-700", border: "border-amber-700" };
+        case "Others":
         case "Lain-lain": return { bg: "bg-gray-300", text: "text-gray-700", border: "border-gray-700" };
         default: return { bg: "bg-gray-300", text: "text-gray-700", border: "border-gray-700" };
     }
@@ -187,15 +190,15 @@ export default function BudgetPage() {
 
     const [showWrappedModal, setShowWrappedModal] = useState(false);
 
-    // Senarai Kategori (Kita extract keluar supaya senang nak map)
-    const EXPENSE_CATEGORIES = ["Makan", "Transport", "Shopping", "Bills", "Utility", "Loan", "Insurance", "Savings", "Entertainment", "Digital Service", "Lifestyle", "Education", "Lain-lain"];
-    const INCOME_CATEGORIES = ["Income", "Lain-lain"];
-    const ALL_CATEGORIES = ["Makan", "Transport", "Shopping", "Bills", "Income", "Utility", "Loan", "Insurance", "Savings", "Entertainment", "Digital Service", "Lifestyle", "Education", "Lain-lain"];
+    // Categories
+    const EXPENSE_CATEGORIES = ["Food", "Transport", "Shopping", "Bills", "Utility", "Loan", "Insurance", "Savings", "Entertainment", "Digital Service", "Lifestyle", "Education", "Others"];
+    const INCOME_CATEGORIES = ["Income", "Others"];
+    const ALL_CATEGORIES = ["Food", "Transport", "Shopping", "Bills", "Income", "Utility", "Loan", "Insurance", "Savings", "Entertainment", "Digital Service", "Lifestyle", "Education", "Others"];
 
-    // Form State (Untuk Manual Input)
+    // Form State (Manual Input)
     const [newTitle, setNewTitle] = useState("");
     const [newAmount, setNewAmount] = useState("");
-    const [newCategory, setNewCategory] = useState("Makan");
+    const [newCategory, setNewCategory] = useState("Food");
     const [newType, setNewType] = useState("expense"); // 'expense' or 'income'
     const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]); // Default: Today
     const [newItems, setNewItems] = useState<TransactionItem[]>([]); // Items for grouping
@@ -418,7 +421,7 @@ export default function BudgetPage() {
     // Feature: Settle All Commitments (Bulk Pay)
     const handleSettleAllCommitments = async () => {
         if (unpaidItemsList.length === 0) return;
-        if (!confirm(`Selesaikan ${unpaidItemsList.length} komitmen berjumlah ${formatCurrency(unpaidCommitments)}?`)) return;
+        if (!confirm(`Settle ${unpaidItemsList.length} commitments totaling ${formatCurrency(unpaidCommitments)}?`)) return;
 
         try {
             const today = new Date();
@@ -483,10 +486,10 @@ export default function BudgetPage() {
                 }
             }
 
-            alert("Semua komitmen berjaya diselesaikan!");
+            alert("All commitments marked as settled!");
         } catch (e) {
             console.error("Settle All Error:", e);
-            alert("Gagal menyelesaikan komitmen.");
+            alert("Failed to settle commitments.");
         }
     };
 
@@ -597,18 +600,18 @@ export default function BudgetPage() {
     const handleSaveTransaction = () => {
         // Validation: Check title and amount
         if (!newTitle || !newTitle.trim()) {
-            alert("Sila isi tajuk/kedai!");
+            alert("Please enter title or merchant!");
             return;
         }
 
         if (!newAmount || newAmount.trim() === "") {
-            alert("Sila isi jumlah!");
+            alert("Please enter an amount!");
             return;
         }
 
         const amountVal = parseFloat(newAmount);
         if (isNaN(amountVal) || amountVal <= 0) {
-            alert("Sila masukkan jumlah yang sah (lebih dari 0)!");
+            alert("Please enter a valid amount (greater than 0)!");
             return;
         }
 
@@ -628,9 +631,9 @@ export default function BudgetPage() {
                     : t
             );
             setTransactions(updatedList);
-            alert("Rekod berjaya dikemaskini!");
+            alert("Record updated successfully!");
         } else {
-            // --- MODE BARU: Tambah item baru ---
+            // --- NEW MODE: Add new item ---
             const newTx: Transaction = {
                 id: createNumericId(),
                 title: newTitle.trim(),
@@ -642,27 +645,26 @@ export default function BudgetPage() {
             };
             setTransactions([newTx, ...transactions]);
 
-            // Auto-switch selectedDate ke bulan rekod baru (bulan semasa) untuk memastikan rekod muncul
+            // Auto-switch selectedDate to new record's month (current month)
             const today = new Date();
             const currentYear = today.getFullYear();
             const currentMonth = today.getMonth();
             const selectedYear = selectedDate.getFullYear();
             const selectedMonth = selectedDate.getMonth();
 
-            // Kalau selectedDate bukan bulan semasa, switch ke bulan semasa
             if (selectedYear !== currentYear || selectedMonth !== currentMonth) {
                 setSelectedDate(new Date(currentYear, currentMonth, 1));
             }
 
-            alert("Rekod berjaya disimpan!");
+            alert("Record saved successfully!");
         }
 
-        // Reset & Tutup
+        // Reset & Close
         setShowManualModal(false);
-        setEditingId(null); // Reset ID
+        setEditingId(null);
         setNewTitle("");
         setNewAmount("");
-        setNewCategory("Makan");
+        setNewCategory("Food");
         setNewType("expense");
         setNewDate(new Date().toISOString().split('T')[0]);
         setNewItems([]);
@@ -670,26 +672,23 @@ export default function BudgetPage() {
 
     // 2. Delete Handler
     const handleDelete = async (id: number) => {
-        // Tanya user dulu (Safety)
-        if (confirm("Betul nak buang rekod ni?")) {
-            // 1. Padam dari local state
+        if (confirm("Are you sure you want to delete this record?")) {
             const updatedList = transactions.filter(t => t.id !== id);
             setTransactions(updatedList);
 
-            // 2. Padam dari cloud (Jika user login)
             if (user) {
                 try {
                     await deleteBudgetTransaction(id);
                 } catch (e) {
-                    console.error("Gagal padam rekod di cloud:", e);
+                    console.error("Failed to delete record from cloud:", e);
                 }
             }
         }
     };
 
-    // 4. Reset All Data Handler (Macam SplitIt)
+    // 4. Reset All Data Handler
     const handleResetData = () => {
-        if (confirm("⚠️ AMARAN KRITIKAL:\n\nAdakah anda pasti nak RESET semua data?")) {
+        if (confirm("⚠️ CRITICAL WARNING:\n\nAre you sure you want to RESET all data?")) {
             localStorage.clear();
             window.location.reload();
         }
@@ -719,7 +718,7 @@ export default function BudgetPage() {
                 mimeType = "image/jpeg";
             }
 
-            setScanStatus(isPDF ? "AI Analisis Bank..." : "AI Analisis Resit...");
+            setScanStatus(isPDF ? "AI Analyzing Bank Statement..." : "AI Analyzing Receipt...");
 
             const res = await fetch("/api/scan", {
                 method: "POST",
@@ -728,18 +727,20 @@ export default function BudgetPage() {
             });
             if (!res.ok) {
                 const err = await res.json();
-                throw new Error(err.error || "Gagal hubungi AI.");
+                throw new Error(err.error || "Failed to contact AI service.");
             }
             const parsedData = await res.json();
 
             // Handle multiple transactions (PDF) or single transaction (Image)
             if (isPDF && parsedData.transactions && Array.isArray(parsedData.transactions)) {
                 // Multiple transactions from PDF
-                const validCategories = ["Makan", "Transport", "Shopping", "Bills", "Income", "Utility", "Lain-lain"];
+                const validCategories = ["Food", "Transport", "Shopping", "Bills", "Income", "Utility", "Others", "Makan", "Lain-lain"];
 
                 const mappedTransactions: Transaction[] = parsedData.transactions.map((tx: any, idx: number) => {
                     const amount = parseFloat(tx.amount) || 0;
-                    const category = (tx.category === "Income" || validCategories.includes(tx.category)) ? tx.category : "Lain-lain";
+                    let category = (tx.category === "Income" || validCategories.includes(tx.category)) ? tx.category : "Others";
+                    if (category === "Makan") category = "Food";
+                    if (category === "Lain-lain") category = "Others";
                     const isIncome = category === "Income";
 
                     // Parse date from AI or use current date
@@ -789,13 +790,15 @@ export default function BudgetPage() {
                 setShowScanResultModal(true);
             } else {
                 // Single transaction from image
-                const title = parsedData.title || "Resit (AI Scan)";
+                const title = parsedData.title || "Receipt (AI Scan)";
                 const amount = parseFloat(parsedData.amount) || 0;
-                const category = parsedData.category || "Lain-lain";
+                let category = parsedData.category || "Others";
+                if (category === "Makan") category = "Food";
+                if (category === "Lain-lain") category = "Others";
 
                 // Validate category
-                const validCategories = ["Makan", "Transport", "Shopping", "Bills", "Income", "Utility", "Lain-lain"];
-                const finalCategory = validCategories.includes(category) ? category : "Lain-lain";
+                const validCategories = ["Food", "Transport", "Shopping", "Bills", "Income", "Utility", "Others"];
+                const finalCategory = validCategories.includes(category) ? category : "Others";
 
                 // Create preview transaction (user can edit before saving)
                 const today = new Date();
@@ -848,16 +851,16 @@ export default function BudgetPage() {
             setShowScanResultModal(true);
         } catch (err: any) {
             console.error(err);
-            alert(`Gagal scan: ${err.message}`);
+            alert(`Scan failed: ${err.message}`);
             setIsScanning(false);
         }
     };
 
-    // Helper: Buka Modal Edit
+    // Helper: Open Edit Modal
     const openEditModal = (t: Transaction) => {
         setEditingId(t.id);
         setNewTitle(t.title);
-        setNewAmount(String(Math.abs(t.amount))); // Buang tanda negatif untuk display
+        setNewAmount(String(Math.abs(t.amount)));
         setNewCategory(t.category);
         setNewType(t.amount < 0 ? "expense" : "income");
         setNewDate(t.isoDate || new Date().toISOString().split('T')[0]);
@@ -865,19 +868,19 @@ export default function BudgetPage() {
         setShowManualModal(true);
     };
 
-    // Helper: Buka Modal Baru (Reset Form)
+    // Helper: Open New Modal (Reset Form)
     const openNewModal = () => {
-        setEditingId(null); // Pastikan mod baru
+        setEditingId(null);
         setNewTitle("");
         setNewAmount("");
-        setNewCategory("Makan");
+        setNewCategory("Food");
         setNewType("expense");
         setNewDate(new Date().toISOString().split('T')[0]);
         setNewItems([]);
         setShowManualModal(true);
     };
 
-    // Feature 1: Helper untuk format currency (Ghost Mode)
+    // Feature 1: Currency formatter (Ghost Mode)
     const formatCurrency = (amount: number): string => {
         if (isGhostMode) {
             return "RM ****";
@@ -885,7 +888,7 @@ export default function BudgetPage() {
         return `RM${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
     };
 
-    // Feature 2: Handler untuk set Budget Limit
+    // Feature 2: Handler for Budget Limit
     const handleSetBudgetLimit = () => {
         setTempBudgetLimit(budgetLimit > 0 ? String(budgetLimit) : "");
         setShowBudgetLimitModal(true);
@@ -904,7 +907,7 @@ export default function BudgetPage() {
             setBudgetLimit(limit);
             setShowBudgetLimitModal(false);
         } else {
-            alert("Sila masukkan nombor yang sah!");
+            alert("Please enter a valid number!");
         }
     };
 
@@ -1054,13 +1057,13 @@ export default function BudgetPage() {
                             {user ? (
                                 <button
                                     onClick={async () => {
-                                        if (confirm("Nak logout ke?") && stackUser) {
+                                        if (confirm("Do you want to sign out?") && stackUser) {
                                             await stackUser.signOut();
                                         }
                                     }}
                                     className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-green-600 border-white text-white shadow-none" : "bg-green-500 border-black text-white"}`}
                                     title={user.email || "User"}
-                                    aria-label="Log keluar"
+                                    aria-label="Sign out"
                                 >
                                     <User size={16} />
                                 </button>
@@ -1073,7 +1076,7 @@ export default function BudgetPage() {
                             {/* CALENDAR BUTTON */}
                             <button
                                 onClick={() => setShowCalendarModal(true)}
-                                aria-label="Buka kalendar"
+                                aria-label="Open calendar"
                                 className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-transparent text-white shadow-none hover:bg-white hover:text-black" : "border-black bg-white text-black"}`}
                             >
                                 <Calendar size={16} />
@@ -1089,7 +1092,7 @@ export default function BudgetPage() {
                             </button>
 
                             {/* DARK MODE BUTTON */}
-                            <button onClick={() => setDarkMode(!darkMode)} aria-label={darkMode ? "Guna tema cerah" : "Guna tema gelap"} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-white text-black shadow-none" : "border-black bg-black text-white"}`}>
+                            <button onClick={() => setDarkMode(!darkMode)} aria-label={darkMode ? "Switch to light theme" : "Switch to dark theme"} className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "border-white bg-white text-black shadow-none" : "border-black bg-black text-white"}`}>
                                 {darkMode ? <Sun size={16} /> : <Moon size={16} />}
                             </button>
                         </div>
@@ -1103,7 +1106,7 @@ export default function BudgetPage() {
                     <section className="flex flex-col gap-3 lg:col-start-1 lg:row-start-1">
                         <div className="flex items-center justify-between">
                             <h2 className="text-[10px] font-black uppercase tracking-widest opacity-60 flex items-center gap-2">
-                                <Calendar size={12} /> Review Belanja
+                                <Calendar size={12} /> Spending Review
                             </h2>
                             <div className="flex items-center gap-2">
                                 <div className="relative group">
@@ -1125,7 +1128,7 @@ export default function BudgetPage() {
                                     }}
                                     className={`text-[8px] font-black uppercase px-2 py-1 rounded border-2 transition-all active:scale-95 ${darkMode ? "border-white/20 hover:border-white" : "border-black/20 hover:border-black"}`}
                                 >
-                                    Bulan Ini
+                                    This Month
                                 </button>
                             </div>
                         </div>
@@ -1211,11 +1214,11 @@ export default function BudgetPage() {
 
                         <div className="relative z-10">
                             {!showSafeToSpend ? (
-                                /* MODE BIASA: Baki Wallet Sahaja */
+                                /* NORMAL MODE: Wallet Balance Only */
                                 <div className="animate-in fade-in slide-in-from-left-4 duration-300">
                                     <div className="flex justify-between items-center mb-4">
                                         <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                                            Baki Wallet • {MONTH_LABELS[selectedDate.getMonth()].toUpperCase()} {selectedDate.getFullYear()}
+                                            Wallet Balance • {MONTH_LABELS[selectedDate.getMonth()].toUpperCase()} {selectedDate.getFullYear()}
                                         </span>
 
                                         <button
@@ -1230,11 +1233,11 @@ export default function BudgetPage() {
                                         {formatCurrency(balance)}
                                     </h2>
                                     <p className="text-xs font-bold opacity-70 uppercase">
-                                        Belanja Bulan Ini: {formatCurrency(expenseMonth)}
+                                        Spent This Month: {formatCurrency(expenseMonth)}
                                     </p>
                                 </div>
                             ) : (
-                                /* MODE SAFE-TO-SPEND: Kiraan Bersih */
+                                /* SAFE-TO-SPEND MODE: Net Balance */
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border-2 ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
@@ -1252,11 +1255,11 @@ export default function BudgetPage() {
 
                                     <div className="space-y-1 mb-3">
                                         <div className="flex justify-between items-center text-[10px] font-bold opacity-80 uppercase tracking-tight">
-                                            <span>Baki Wallet:</span>
+                                            <span>Wallet Balance:</span>
                                             <span>{formatCurrency(balance)}</span>
                                         </div>
                                         <div className="flex justify-between items-center text-[10px] font-bold text-red-700 uppercase tracking-tight">
-                                            <span>Tolak Komitmen:</span>
+                                            <span>Less Commitments:</span>
                                             <span>- {formatCurrency(totalCommitments)}</span>
                                         </div>
                                         <div className="border-t border-black/10 my-1"></div>
@@ -1266,7 +1269,7 @@ export default function BudgetPage() {
                                         {formatCurrency(balance - totalCommitments)}
                                     </h2>
                                     <p className="text-[10px] font-black opacity-70 uppercase tracking-widest">
-                                        Baki Bersih Selepas Komitmen
+                                        Net Balance After Commitments
                                     </p>
                                 </div>
                             )}
@@ -1363,10 +1366,10 @@ export default function BudgetPage() {
                                     <div className="w-48 h-1 bg-white/20 rounded-full mt-1 overflow-hidden">
                                         <div className="h-full bg-white animate-progress-indefinite rounded-full w-1/2"></div>
                                     </div>
-                                    <p className="text-[7px] font-bold opacity-70 uppercase tracking-tighter mt-1">AI sedang memproses data mendalam, mohon tunggu sebentar...</p>
+                                    <p className="text-[7px] font-bold opacity-70 uppercase tracking-tighter mt-1">AI is analyzing receipt details, please wait...</p>
                                 </div>
                             ) : (
-                                <><Camera size={20} /> SNAP RESIT (AI)</>
+                                <><Camera size={20} /> SNAP RECEIPT (AI)</>
                             )}
                         </button>
 
@@ -1374,7 +1377,7 @@ export default function BudgetPage() {
                             <Plus size={14} /> MANUAL INPUT
                         </button>
                         <button data-guide="budget-analytics" onClick={() => setShowAnalytics(!showAnalytics)} className={`py-3 text-[10px] ${buttonBase} ${darkMode ? "bg-[#333]" : "bg-white"} ${showAnalytics ? "bg-yellow-300 text-black border-black" : ""}`}>
-                            {showAnalytics ? "TUTUP DATA" : "ANALITIK"} <ScanLine size={14} />
+                            {showAnalytics ? "CLOSE DATA" : "ANALYTICS"} <ScanLine size={14} />
                         </button>
                     </section>
 
@@ -1383,14 +1386,14 @@ export default function BudgetPage() {
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                                 {showAnalytics ? <TrendingDown size={16} /> : <ShoppingBag size={16} />}
-                                {showAnalytics ? "Analitik Belanja" : "Transaksi Terkini"}
+                                {showAnalytics ? "Spending Analytics" : "Recent Transactions"}
                             </h2>
                             {!showAnalytics && (
                                 <button
                                     onClick={() => setShowAllTransactions(true)}
                                     className="text-[10px] font-bold underline decoration-2 underline-offset-2 opacity-60 hover:opacity-100"
                                 >
-                                    LIHAT SEMUA
+                                    VIEW ALL
                                 </button>
                             )}
                         </div>
@@ -1406,7 +1409,7 @@ export default function BudgetPage() {
                                         type="text"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder="Cari transaksi..."
+                                        placeholder="Search transactions..."
                                         className={`w-full py-2 pl-9 pr-9 rounded-full border-2 text-sm font-bold transition-all outline-none ${darkMode
                                             ? "bg-[#1E1E1E] border-white/30 text-white placeholder:text-white/40 focus:border-white focus:bg-[#2a2a2a] focus:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.5)]"
                                             : "bg-white/80 border-black/20 text-black placeholder:text-black/40 focus:border-black focus:bg-white focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)]"
@@ -1424,12 +1427,11 @@ export default function BudgetPage() {
                             </div>
                         )}
 
-                        {/* --- NEW: CATEGORY FILTER (Grid Style - Multi-select) --- */}
+                        {/* --- CATEGORY FILTER (Grid Style - Multi-select) --- */}
                         {!showAnalytics && (
                             <div className="mb-6">
-                                {/* Header dengan Tajuk dan Clear Button */}
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-xs font-black uppercase tracking-widest opacity-70">KATEGORI</h3>
+                                    <h3 className="text-xs font-black uppercase tracking-widest opacity-70">CATEGORIES</h3>
                                     {activeFilters.length > 0 && (
                                         <button
                                             onClick={() => setActiveFilters([])}
@@ -1533,7 +1535,7 @@ export default function BudgetPage() {
                                                             <div className="flex justify-between items-center mb-2">
                                                                 <p className="text-[10px] font-black uppercase opacity-60">Financial Health Score</p>
                                                                 <span className={`text-xs font-black uppercase ${isHealthy ? "text-green-500" : isDanger ? "text-red-500" : "text-yellow-500"}`}>
-                                                                    {isHealthy ? "Sihat" : isDanger ? "Bahaya" : "Sederhana"}
+                                                                    {isHealthy ? "Healthy" : isDanger ? "Critical" : "Moderate"}
                                                                 </span>
                                                             </div>
                                                             <div className="flex items-center gap-4">
@@ -1556,7 +1558,7 @@ export default function BudgetPage() {
                                                             {unpaidCommitments > 0 ? <AlertTriangle size={20} /> : <ShieldCheck size={20} />}
                                                             <div>
                                                                 <p className="text-[10px] font-black uppercase tracking-tight">
-                                                                    {unpaidCommitments > 0 ? "Komitmen Belum Settle" : "Semua Komitmen Selesai"}
+                                                                    {unpaidCommitments > 0 ? "Pending Commitments" : "All Commitments Settled"}
                                                                 </p>
                                                                 <p className="text-sm font-mono font-black">
                                                                     {unpaidCommitments > 0 ? formatCurrency(unpaidCommitments) : "RM 0.00"}
@@ -1568,7 +1570,7 @@ export default function BudgetPage() {
                                                                 onClick={handleSettleAllCommitments}
                                                                 className={`px-3 py-1.5 rounded-lg border-2 text-[9px] font-black uppercase transition-all active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
                                                             >
-                                                                Bayar Semua
+                                                                Pay All
                                                             </button>
                                                         )}
                                                     </div>
@@ -1593,21 +1595,21 @@ export default function BudgetPage() {
                                 ) : (
                                     /* Nudge to link */
                                     <div className={`p-4 rounded-xl border-2 border-dashed mb-6 text-center opacity-60 ${darkMode ? "border-white/20" : "border-black/20"}`}>
-                                        <p className="text-[10px] font-bold uppercase tracking-widest mb-1">Dapatkan Gambaran Penuh?</p>
-                                        <p className="text-[9px] font-medium opacity-70 mb-2">Aktifkan butang Link (penjuru kanan atas kad baki) untuk Full Financial Health.</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest mb-1">Get Full Picture?</p>
+                                        <p className="text-[9px] font-medium opacity-70 mb-2">Enable the Link icon (top-right of balance card) for Full Financial Health.</p>
                                     </div>
                                 )}
 
                                 {/* Summary Cards (Optimized for Large Amounts) */}
                                 <div className="grid grid-cols-2 gap-3 mb-6">
                                     <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-[#222] border-white" : "bg-orange-100 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}>
-                                        <p className="text-[8px] font-black uppercase opacity-60 mb-1">Total Belanja</p>
+                                        <p className="text-[8px] font-black uppercase opacity-60 mb-1">Total Spent</p>
                                         <p className="text-sm sm:text-base font-mono font-black truncate" title={formatCurrency(expenseMonth)}>
                                             {formatCurrency(expenseMonth)}
                                         </p>
                                     </div>
                                     <div className={`p-3 rounded-xl border-2 ${darkMode ? "bg-[#222] border-white" : "bg-green-100 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"}`}>
-                                        <p className="text-[8px] font-black uppercase opacity-60 mb-1">Baki Wallet</p>
+                                        <p className="text-[8px] font-black uppercase opacity-60 mb-1">Wallet Balance</p>
                                         <p className="text-sm sm:text-base font-mono font-black truncate" title={formatCurrency(balance)}>
                                             {formatCurrency(balance)}
                                         </p>
@@ -1616,7 +1618,7 @@ export default function BudgetPage() {
 
                                 {/* Category Breakdown */}
                                 <div className="mb-6">
-                                    <h4 className="text-xs font-black uppercase mb-3 opacity-70">Belanja Ikut Kategori</h4>
+                                    <h4 className="text-xs font-black uppercase mb-3 opacity-70">Spending by Category</h4>
                                     <div className="space-y-3">
                                         {EXPENSE_CATEGORIES.map(cat => {
                                             const filtered = getFilteredTransactions();
@@ -1655,7 +1657,7 @@ export default function BudgetPage() {
                                 {/* Spending Ratio */}
                                 <div className={`p-4 rounded-xl border-2 border-dashed ${darkMode ? "border-white/30 bg-white/5" : "border-black/20 bg-gray-50"}`}>
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-[10px] font-black uppercase opacity-70">Nisbah Belanja</span>
+                                        <span className="text-[10px] font-black uppercase opacity-70">Spending Ratio</span>
                                         <span className="text-lg font-mono font-black">
                                             {expenseMonth > 0 && balance + expenseMonth > 0
                                                 ? ((expenseMonth / (balance + expenseMonth)) * 100).toFixed(0)
@@ -1676,14 +1678,14 @@ export default function BudgetPage() {
 
                                 {/* Calendar Heatmap */}
                                 <div className="mt-6">
-                                    <h4 className="text-xs font-black uppercase mb-3 opacity-70">Kalendar Belanja Harian</h4>
+                                    <h4 className="text-xs font-black uppercase mb-3 opacity-70">Daily Spending Calendar</h4>
                                     {(() => {
                                         const { dailyData, firstDayMonday } = getDailyExpenses();
-                                        const weekDays = ['I', 'S', 'R', 'K', 'J', 'S', 'A']; // Isnin-Ahad
+                                        const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S']; // Monday-Sunday
 
                                         return (
                                             <div className="space-y-2">
-                                                {/* Header: Hari Minggu */}
+                                                {/* Header: Weekdays */}
                                                 <div className="grid grid-cols-7 gap-1">
                                                     {weekDays.map((day, idx) => (
                                                         <div
@@ -1695,23 +1697,23 @@ export default function BudgetPage() {
                                                     ))}
                                                 </div>
 
-                                                {/* Grid: Kotak Hari */}
+                                                {/* Grid: Day Cells */}
                                                 <div className="grid grid-cols-7 gap-1">
-                                                    {/* Empty cells untuk hari sebelum bulan bermula */}
+                                                    {/* Empty cells before month start */}
                                                     {Array.from({ length: firstDayMonday }).map((_, idx) => (
                                                         <div key={`empty-${idx}`} className="aspect-square"></div>
                                                     ))}
 
-                                                    {/* Kotak untuk setiap hari dalam bulan */}
+                                                    {/* Day boxes */}
                                                     {dailyData.map((item) => (
                                                         <div
                                                             key={item.day}
                                                             className={`aspect-square rounded-sm border transition-all cursor-pointer relative group ${darkMode ? "border-white/30" : "border-black"} ${getHeatmapColor(item.amount)}`}
-                                                            title={`${item.date}: ${item.amount > 0 ? `RM${item.amount.toFixed(2)}` : "Tiada belanja"}`}
+                                                            title={`${item.date}: ${item.amount > 0 ? `RM${item.amount.toFixed(2)}` : "No spending"}`}
                                                         >
                                                             {/* Tooltip on hover */}
                                                             <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded border-2 ${darkMode ? "bg-white text-black border-white" : "bg-white text-black border-black"} text-[9px] font-black uppercase whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
-                                                                {item.date}: {item.amount > 0 ? `RM${item.amount.toFixed(2)}` : "Tiada belanja"}
+                                                                {item.date}: {item.amount > 0 ? `RM${item.amount.toFixed(2)}` : "No spending"}
                                                                 <div className={`absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${darkMode ? "border-t-white" : "border-t-black"}`}></div>
                                                             </div>
                                                         </div>
@@ -1762,17 +1764,17 @@ export default function BudgetPage() {
                                     return (
                                         <div className={`${cardStyle} p-4 bg-indigo-50 border-indigo-200 mb-4 animate-in fade-in zoom-in-95`}>
                                             <div className="flex justify-between items-center mb-3">
-                                                <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-900">Ringkasan {MONTH_LABELS[selectedDate.getMonth()]}</h3>
+                                                <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-900">{MONTH_LABELS[selectedDate.getMonth()]} Summary</h3>
                                                 <TrendingDown size={14} className="text-indigo-600" />
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
-                                                    <p className="text-[8px] font-bold uppercase opacity-60">Total Belanja</p>
+                                                    <p className="text-[8px] font-bold uppercase opacity-60">Total Spent</p>
                                                     <p className="text-sm font-black text-indigo-900">RM {totalOut.toFixed(2)}</p>
                                                 </div>
                                                 {topCat && (
                                                     <div>
-                                                        <p className="text-[8px] font-bold uppercase opacity-60">Top Kategori</p>
+                                                        <p className="text-[8px] font-bold uppercase opacity-60">Top Category</p>
                                                         <p className="text-sm font-black text-indigo-900 truncate">{topCat[0]}</p>
                                                     </div>
                                                 )}
@@ -1834,7 +1836,7 @@ export default function BudgetPage() {
                                             >
                                                 <Plus size={32} className="mb-2" />
                                                 <p className="text-base font-bold">
-                                                    {searchQuery.trim() ? "Tiada hasil carian." : "Tiada rekod. Tambah transaksi pertama!"}
+                                                    {searchQuery.trim() ? "No search results found." : "No records yet. Add your first transaction!"}
                                                 </p>
                                             </button>
                                         );
@@ -1956,7 +1958,7 @@ export default function BudgetPage() {
 
                                 <div className="flex justify-between items-center mb-6">
                                     <h2 className="text-xl font-black uppercase italic">
-                                        {editingId ? "Edit Rekod" : "Tambah Rekod"}
+                                        {editingId ? "Edit Record" : "Add Record"}
                                     </h2>
                                     <button onClick={() => setShowManualModal(false)} className="opacity-50 hover:opacity-100"><X size={24} /></button>
                                 </div>
@@ -1966,7 +1968,7 @@ export default function BudgetPage() {
                                     <button
                                         onClick={() => {
                                             setNewType("expense");
-                                            if (newCategory === "Income") setNewCategory("Makan");
+                                            if (newCategory === "Income") setNewCategory("Food");
                                         }}
                                         className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg ${newType === "expense" ? (darkMode ? "bg-red-500 border-red-500 text-white" : "bg-red-500 border-black text-white") : "opacity-50 border-current"}`}
                                     >
@@ -1985,12 +1987,12 @@ export default function BudgetPage() {
 
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Tajuk / Kedai</label>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Title / Merchant</label>
                                         <input
                                             type="text"
                                             value={newTitle}
                                             onChange={(e) => setNewTitle(e.target.value)}
-                                            placeholder="Cth: Nasi Lemak, Gaji"
+                                            placeholder="e.g. Lunch, Salary"
                                             className={`${inputStyle} !mb-0 h-12 !text-sm !font-black`}
                                             autoFocus
                                         />
@@ -1998,12 +2000,12 @@ export default function BudgetPage() {
 
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="w-full">
-                                            <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Tarikh</label>
+                                            <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Date</label>
                                             <div className="relative">
                                                 <div className={`${inputStyle} !mb-0 h-12 flex items-center gap-2 !px-3 !py-0 cursor-pointer overflow-hidden`}>
                                                     <Calendar size={14} className="opacity-40 flex-shrink-0" />
                                                     <span className="text-[10px] font-black uppercase whitespace-nowrap">
-                                                        {newDate ? new Date(newDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }) : "Pilih"}
+                                                        {newDate ? new Date(newDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }) : "Select"}
                                                     </span>
                                                 </div>
                                                 <input
@@ -2015,7 +2017,7 @@ export default function BudgetPage() {
                                             </div>
                                         </div>
                                         <div className="w-full">
-                                            <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Kategori</label>
+                                            <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Category</label>
                                             <div className="relative">
                                                 <select
                                                     value={newCategory}
@@ -2034,7 +2036,7 @@ export default function BudgetPage() {
                                     </div>
 
                                     <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Jumlah (RM)</label>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1.5 block pl-1 tracking-widest">Amount (RM)</label>
                                         <input
                                             type="number"
                                             value={newAmount}
@@ -2049,7 +2051,7 @@ export default function BudgetPage() {
                                         <div className="flex justify-between items-center mb-4">
                                             <div className="flex items-center gap-2">
                                                 <ListTree size={14} className="opacity-60" />
-                                                <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Pecahan Item</label>
+                                                <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Item Breakdown</label>
                                             </div>
                                             <button
                                                 onClick={() => {
@@ -2057,7 +2059,7 @@ export default function BudgetPage() {
                                                 }}
                                                 className="px-2 py-1 rounded-lg border-2 border-blue-500 text-blue-500 text-[9px] font-black uppercase hover:bg-blue-500 hover:text-white transition-all flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(59,130,246,0.3)]"
                                             >
-                                                <Plus size={10} /> Tambah
+                                                <Plus size={10} /> Add
                                             </button>
                                         </div>
 
@@ -2072,7 +2074,7 @@ export default function BudgetPage() {
                                                             updated[idx].title = e.target.value;
                                                             setNewItems(updated);
                                                         }}
-                                                        placeholder="Cth: Bawang"
+                                                        placeholder="e.g. Coffee"
                                                         className={`${inputStyle} !p-2 !text-[11px] !mb-0 h-9`}
                                                     />
                                                     <input
@@ -2105,13 +2107,13 @@ export default function BudgetPage() {
                                             ))}
                                             {newItems.length === 0 && (
                                                 <div className="text-center py-4 border-2 border-dotted border-current border-opacity-10 rounded-lg">
-                                                    <p className="text-[9px] font-bold opacity-30 uppercase tracking-widest italic">Tiada pecahan item disimpan.</p>
+                                                    <p className="text-[9px] font-bold opacity-30 uppercase tracking-widest italic">No item breakdown saved.</p>
                                                 </div>
                                             )}
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Kategori</label>
+                                        <label className="text-[9px] font-bold opacity-60 uppercase mb-1 block">Category</label>
                                         <div className="relative">
                                             <select
                                                 value={newCategory}
@@ -2129,7 +2131,7 @@ export default function BudgetPage() {
                                     </div>
 
                                     <button onClick={handleSaveTransaction} className={`w-full py-4 mt-2 text-sm ${buttonBase} ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}>
-                                        {editingId ? "UPDATE DATA" : "SIMPAN REKOD"}
+                                        {editingId ? "UPDATE DATA" : "SAVE RECORD"}
                                     </button>
                                 </div>
 
@@ -2145,13 +2147,13 @@ export default function BudgetPage() {
                             <div className={`w-full max-w-sm max-h-[80vh] flex flex-col rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl animate-in slide-in-from-bottom-10`}>
 
                                 <div className="flex justify-between items-center p-6 border-b-2 border-current border-opacity-20">
-                                    <h2 className="text-xl font-black uppercase italic">Semua Transaksi</h2>
+                                    <h2 className="text-xl font-black uppercase italic">All Transactions</h2>
                                     <button onClick={() => setShowAllTransactions(false)} className="opacity-50 hover:opacity-100"><X size={24} /></button>
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-6 space-y-3">
                                     {transactions.length === 0 ? (
-                                        <div className="text-center py-10 opacity-50 font-bold text-xs uppercase">Belum ada data.</div>
+                                        <div className="text-center py-10 opacity-50 font-bold text-xs uppercase">No transactions yet.</div>
                                     ) : transactions.map((t) => (
                                         <div
                                             key={t.id}
@@ -2259,7 +2261,7 @@ export default function BudgetPage() {
                                                                 setScannedTransactions(updated);
                                                             }}
                                                             className={`${inputStyle} text-sm font-bold py-1.5 h-auto flex-1`}
-                                                            placeholder="Sila isi tajuk..."
+                                                            placeholder="Enter title..."
                                                         />
                                                     </div>
 
@@ -2268,7 +2270,7 @@ export default function BudgetPage() {
                                                         <div className="space-y-1">
                                                             <div className="flex items-center gap-1.5 opacity-50 pl-1">
                                                                 <Calendar size={10} />
-                                                                <label className="text-[8px] font-black uppercase tracking-wider">Tarikh</label>
+                                                                <label className="text-[8px] font-black uppercase tracking-wider">Date</label>
                                                             </div>
                                                             <input
                                                                 type="date"
@@ -2287,7 +2289,7 @@ export default function BudgetPage() {
                                                         <div className="space-y-1">
                                                             <div className="flex items-center gap-1.5 opacity-50 pl-1">
                                                                 <Zap size={10} />
-                                                                <label className="text-[8px] font-black uppercase tracking-wider">Kategori</label>
+                                                                <label className="text-[8px] font-black uppercase tracking-wider">Category</label>
                                                             </div>
                                                             <select
                                                                 value={tx.category}
@@ -2309,7 +2311,7 @@ export default function BudgetPage() {
                                                     <div className="space-y-1">
                                                         <div className="flex items-center gap-1.5 opacity-50 pl-1">
                                                             <Wallet size={10} />
-                                                            <label className="text-[8px] font-black uppercase tracking-wider">Jumlah (RM)</label>
+                                                            <label className="text-[8px] font-black uppercase tracking-wider">Amount (RM)</label>
                                                         </div>
                                                         <div className="flex gap-2">
                                                             <input
@@ -2329,7 +2331,7 @@ export default function BudgetPage() {
                                                                     setScannedTransactions(updated);
                                                                 }}
                                                                 className="w-10 h-10 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 border-2 border-red-500/20 hover:bg-red-500 hover:text-white transition-all active:scale-90"
-                                                                title="Buang Item"
+                                                                title="Remove item"
                                                             >
                                                                 <Trash2 size={16} />
                                                             </button>
@@ -2417,7 +2419,7 @@ export default function BudgetPage() {
                                                 <div className={`p-4 rounded-xl border-2 border-dashed ${darkMode ? "border-white/20 bg-white/5" : "border-black/20 bg-gray-50"}`}>
                                                     <div className="flex items-center gap-2 mb-3">
                                                         <Sparkles size={12} className="text-blue-500" />
-                                                        <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Pecahan Item (AI)</label>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest opacity-60">Item Breakdown (AI)</label>
                                                     </div>
                                                     <div className={`space-y-2 rounded-lg p-3 ${darkMode ? "bg-black/20" : "bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)] border border-black/5"}`}>
                                                         {scannedTransaction.items.map((item) => (
@@ -2446,30 +2448,25 @@ export default function BudgetPage() {
                                     </button>
                                     <button
                                         onClick={() => {
-                                            // Logic Baru: Auto-jump ke bulan transaksi tersebut
                                             const targetTx = scannedTransactions.length > 0 ? scannedTransactions[0] : scannedTransaction;
 
                                             if (targetTx && targetTx.isoDate) {
                                                 const txDate = new Date(targetTx.isoDate);
-                                                // Check valid date
                                                 if (!isNaN(txDate.getTime())) {
-                                                    // Set SelectedDate kepada 1hb bulan transaksi tersebut supaya ia visible dalam list
                                                     setSelectedDate(new Date(txDate.getFullYear(), txDate.getMonth(), 1));
                                                 }
                                             }
 
                                             if (scannedTransactions.length > 0) {
-                                                // Save all multiple transactions
                                                 setTransactions([...scannedTransactions, ...transactions]);
                                                 setShowScanResultModal(false);
                                                 setScannedTransactions([]);
-                                                alert(`${scannedTransactions.length} transaksi berjaya disimpan!`);
+                                                alert(`${scannedTransactions.length} transactions saved successfully!`);
                                             } else if (scannedTransaction) {
-                                                // Save single transaction
                                                 setTransactions([scannedTransaction, ...transactions]);
                                                 setShowScanResultModal(false);
                                                 setScannedTransaction(null);
-                                                alert("Transaksi berjaya disimpan!");
+                                                alert("Transaction saved successfully!");
                                             }
                                         }}
                                         className={`flex-1 py-3.5 rounded-xl border-2 text-xs font-black uppercase transition-all active:scale-95 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${darkMode ? "bg-white text-black border-white" : "bg-black text-white border-black"}`}
@@ -2483,25 +2480,25 @@ export default function BudgetPage() {
                     )
                 }
 
-                {/* --- MODAL: PILIH SUMBER RESIT --- */}
+                {/* --- MODAL: SELECT RECEIPT SOURCE --- */}
                 {
                     showScanMethodModal && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                             <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
                                 <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-lg font-black uppercase flex items-center gap-2"><Camera size={20} /> Pilih Sumber Resit</h3>
+                                    <h3 className="text-lg font-black uppercase flex items-center gap-2"><Camera size={20} /> Select Receipt Source</h3>
                                     <button onClick={() => setShowScanMethodModal(false)}><X size={20} /></button>
                                 </div>
                                 <div className="space-y-4">
                                     <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" : "border-indigo-600 bg-indigo-50 hover:bg-indigo-100"}`}>
                                         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanReceipt} />
                                         <Camera size={32} className={`mx-auto mb-2 ${darkMode ? "text-indigo-400" : "text-indigo-600"}`} />
-                                        <span className="block font-black uppercase text-sm">Ambil Gambar (Camera)</span>
+                                        <span className="block font-black uppercase text-sm">Take Photo (Camera)</span>
                                     </label>
                                     <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-white/30 bg-white/5 hover:bg-white/10" : "border-black/20 bg-gray-50 hover:bg-gray-100"}`}>
                                         <input type="file" accept="image/*" className="hidden" onChange={handleScanReceipt} />
                                         <ImageIcon size={32} className="mx-auto mb-2 opacity-50" />
-                                        <span className="block font-black uppercase text-sm opacity-70">Pilih Dari Gallery</span>
+                                        <span className="block font-black uppercase text-sm opacity-70">Choose from Gallery</span>
                                     </label>
                                     <label className={`block w-full p-4 rounded-xl border-2 text-center cursor-pointer transition-all active:scale-95 hover:bg-opacity-10 ${darkMode ? "border-blue-400 bg-blue-500/10 hover:bg-blue-500/20" : "border-blue-600 bg-blue-50 hover:bg-blue-100"}`}>
                                         <input type="file" accept="application/pdf" className="hidden" onChange={handleScanReceipt} />
@@ -2521,14 +2518,14 @@ export default function BudgetPage() {
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
                             <div className={`w-full max-w-[320px] p-6 rounded-2xl border-2 ${darkMode ? "bg-[#1E1E1E] border-white text-white" : "bg-white border-black text-black"} shadow-2xl relative animate-in zoom-in-95`}>
                                 <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-lg font-black uppercase flex items-center gap-2"><Calendar size={20} /> Pilih Bulan/Tahun</h3>
+                                    <h3 className="text-lg font-black uppercase flex items-center gap-2"><Calendar size={20} /> Select Month/Year</h3>
                                     <button onClick={() => setShowCalendarModal(false)}><X size={20} /></button>
                                 </div>
 
                                 <div className="space-y-4">
                                     {/* Month Selector */}
                                     <div>
-                                        <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Bulan</label>
+                                        <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Month</label>
                                         <div className="relative">
                                             <select
                                                 value={selectedDate.getMonth()}
@@ -2539,18 +2536,18 @@ export default function BudgetPage() {
                                                 }}
                                                 className={`w-full p-3 pr-10 rounded-xl border-2 outline-none font-bold appearance-none cursor-pointer ${darkMode ? "bg-black border-white text-white" : "bg-white border-black text-black"}`}
                                             >
-                                                <option value={0}>Januari</option>
-                                                <option value={1}>Februari</option>
-                                                <option value={2}>Mac</option>
+                                                <option value={0}>January</option>
+                                                <option value={1}>February</option>
+                                                <option value={2}>March</option>
                                                 <option value={3}>April</option>
-                                                <option value={4}>Mei</option>
-                                                <option value={5}>Jun</option>
-                                                <option value={6}>Julai</option>
-                                                <option value={7}>Ogos</option>
+                                                <option value={4}>May</option>
+                                                <option value={5}>June</option>
+                                                <option value={6}>July</option>
+                                                <option value={7}>August</option>
                                                 <option value={8}>September</option>
-                                                <option value={9}>Oktober</option>
+                                                <option value={9}>October</option>
                                                 <option value={10}>November</option>
-                                                <option value={11}>Disember</option>
+                                                <option value={11}>December</option>
                                             </select>
                                             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
                                                 <ChevronDown size={18} />
@@ -2560,7 +2557,7 @@ export default function BudgetPage() {
 
                                     {/* Year Selector */}
                                     <div>
-                                        <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Tahun</label>
+                                        <label className="text-[10px] font-bold uppercase opacity-70 block mb-2">Year</label>
                                         <div className="relative">
                                             <select
                                                 value={selectedDate.getFullYear()}
@@ -2590,7 +2587,7 @@ export default function BudgetPage() {
                                             }}
                                             className={`flex-1 py-2 text-[10px] font-black uppercase border-2 rounded-lg transition-all ${darkMode ? "border-white hover:bg-white hover:text-black" : "border-black hover:bg-black hover:text-white"}`}
                                         >
-                                            Bulan Ini
+                                            This Month
                                         </button>
                                         <button
                                             onClick={() => setShowCalendarModal(false)}
@@ -2630,7 +2627,7 @@ export default function BudgetPage() {
                                 <div className="space-y-6">
                                     <div>
                                         <label className={`text-[10px] font-black uppercase tracking-widest opacity-60 block mb-2 ${darkMode ? "text-white" : "text-black"}`}>
-                                            Limit Belanja (RM)
+                                            Spending Limit (RM)
                                         </label>
                                         <div className="relative">
                                             <input
@@ -2643,7 +2640,7 @@ export default function BudgetPage() {
                                             />
                                         </div>
                                         <p className={`text-[9px] font-bold text-center mt-3 uppercase tracking-widest opacity-40 ${darkMode ? "text-white" : "text-black"}`}>
-                                            Kosongkan untuk reset limit
+                                            Leave blank to reset limit
                                         </p>
                                     </div>
 
@@ -2652,13 +2649,13 @@ export default function BudgetPage() {
                                             onClick={handleSaveBudgetLimit}
                                             className={`w-full py-4 text-xs ${buttonBase} ${darkMode ? "bg-white text-black border-white shadow-none" : "bg-black text-white border-black"}`}
                                         >
-                                            SIMPAN HAD BELANJA
+                                            SAVE BUDGET LIMIT
                                         </button>
                                         <button
                                             onClick={() => setShowBudgetLimitModal(false)}
                                             className={`w-full py-3 text-[10px] font-black uppercase transition-all hover:underline opacity-60 hover:opacity-100 ${darkMode ? "text-white" : "text-black"}`}
                                         >
-                                            KEMBALI
+                                            BACK
                                         </button>
                                     </div>
                                 </div>
@@ -2729,7 +2726,7 @@ export default function BudgetPage() {
                                                 monthTotals[m] = (monthTotals[m] || 0) + Math.abs(t.amount);
                                             });
                                             const peakMonthIdx = Object.entries(monthTotals).sort((a, b) => b[1] - a[1])[0];
-                                            const peakMonthName = peakMonthIdx ? new Date(2025, parseInt(peakMonthIdx[0]), 1).toLocaleDateString('default', { month: 'long' }) : "Tiada Data";
+                                            const peakMonthName = peakMonthIdx ? new Date(2025, parseInt(peakMonthIdx[0]), 1).toLocaleDateString('default', { month: 'long' }) : "No Data";
 
                                             // Category stats
                                             const catTotals: Record<string, number> = {};
@@ -2757,7 +2754,7 @@ export default function BudgetPage() {
                                                     <div className="space-y-3">
                                                         {/* Stat 1: Total Spent */}
                                                         <div className="text-center p-4 rounded-xl border-2 border-indigo-500 bg-indigo-500/5">
-                                                            <p className="text-[9px] font-black uppercase opacity-60 mb-1">Duit Keluar Setahun</p>
+                                                            <p className="text-[9px] font-black uppercase opacity-60 mb-1">Total Annual Spent</p>
                                                             <h3 className="text-3xl font-mono font-black tracking-tighter">RM {totalYearOut.toLocaleString("en-MY", { minimumFractionDigits: 0 })}</h3>
                                                         </div>
 
@@ -2767,8 +2764,8 @@ export default function BudgetPage() {
                                                                 <TrendingUp size={20} />
                                                             </div>
                                                             <div>
-                                                                <p className="text-[9px] font-black uppercase opacity-60">Paling Kuat Belanja</p>
-                                                                <h4 className="text-sm font-black uppercase">{topCat ? topCat[0] : "Lain-lain"}</h4>
+                                                                <p className="text-[9px] font-black uppercase opacity-60">Top Expense Category</p>
+                                                                <h4 className="text-sm font-black uppercase">{topCat ? topCat[0] : "Others"}</h4>
                                                                 <p className="text-[10px] font-bold">RM {topCat ? Math.abs(topCat[1]).toFixed(0) : "0"}</p>
                                                             </div>
                                                         </div>
@@ -2779,9 +2776,9 @@ export default function BudgetPage() {
                                                                 <Calendar size={20} />
                                                             </div>
                                                             <div>
-                                                                <p className="text-[9px] font-black uppercase opacity-60">Bulan Paling “Parah”</p>
+                                                                <p className="text-[9px] font-black uppercase opacity-60">Peak Spending Month</p>
                                                                 <h4 className="text-sm font-black uppercase">{peakMonthName}</h4>
-                                                                <p className="text-[10px] font-bold">Terpaksa lepaskan RM {peakMonthIdx ? Math.abs(peakMonthIdx[1]).toFixed(0) : "0"}</p>
+                                                                <p className="text-[10px] font-bold">Total spent: RM {peakMonthIdx ? Math.abs(peakMonthIdx[1]).toFixed(0) : "0"}</p>
                                                             </div>
                                                         </div>
 
@@ -2811,7 +2808,7 @@ export default function BudgetPage() {
                                                         onClick={() => setShowWrappedModal(false)}
                                                         className="w-full py-3 bg-indigo-600 text-white border-2 border-indigo-700 rounded-xl font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all active:shadow-none active:translate-x-1 active:translate-y-1 text-xs"
                                                     >
-                                                        MANTAP, TERUSKAN SIMPAN!
+                                                        AWESOME, KEEP SAVING!
                                                     </button>
                                                 </motion.div>
                                             );
